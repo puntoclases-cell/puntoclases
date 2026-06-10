@@ -4164,7 +4164,7 @@ function Personas({ alumnos, setAlumnos, profes, setProfes, reservas }) {
                     {a.suspendido && <Badge bg="#fff5f5" col="#dc2626">🚫 Suspendido</Badge>}
                     <Badge bg={a.saldo>0?GRL:PL} col={a.saldo>0?GR:P}>{a.saldo}hs</Badge>
                     <Badge bg={dias<=5?"#fff5f5":dias<=10?AML:"#f8fafc"} col={dias<=5?"#dc2626":dias<=10?AM:"#94a3b8"}>
-                      vence {fmt(a.vence)}
+                      vence {a.vence ? fmt(a.vence) : "—"}
                     </Badge>
                     <Badge bg="#f8fafc" col="#64748b">{a.clases} clases</Badge>
                   </div>
