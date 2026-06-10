@@ -5821,26 +5821,7 @@ function LoginScreen({ onLogin, onRegistroProfe, onRegistroAlumno }) {
           Olvidé mi contraseña
         </button>
 
-        <div style={{display:"flex",alignItems:"center",gap:12,margin:"4px 0"}}>
-          <div style={{flex:1,height:1,background:"#e2e8f0"}}/>
-          <span style={{fontSize:11,color:"#94a3b8"}}>accesos rápidos de prueba</span>
-          <div style={{flex:1,height:1,background:"#e2e8f0"}}/>
-        </div>
 
-        <div style={{display:"flex",flexDirection:"column",gap:8}}>
-          {[
-            {label:"👩‍🎓 Alumno",mail:"lucia@gmail.com",pass:"1234",bg:PL,col:P,border:PB},
-            {label:"👨‍🏫 Profe",mail:"david@puntoclases.com",pass:"profe123",bg:"#f0f6fa",col:BL,border:"#a8d4e8"},
-            {label:"👨‍🏫 Profe nuevo",mail:"nuevo@profe.com",pass:"nuevo123",bg:"#f0fdf4",col:"#15803d",border:"#bbf7d0"},
-            {label:"⚙️ Admin",mail:"admin@puntoclases.com",pass:"admin123",bg:"#fefce8",col:"#92400e",border:"#fde68a"},
-          ].map(u=>(
-            <button key={u.mail} onClick={()=>{setMail(u.mail);setPass(u.pass);setError("");}}
-              style={{background:u.bg,border:`1.5px solid ${u.border}`,borderRadius:10,padding:"10px 14px",cursor:"pointer",textAlign:"left",fontSize:13,fontWeight:600,color:u.col,display:"flex",justifyContent:"space-between"}}>
-              <span>{u.label}</span>
-              <span style={{opacity:0.6,fontWeight:400}}>{u.mail}</span>
-            </button>
-          ))}
-        </div>
 
         <div style={{borderTop:"1px solid #e2e8f0",margin:"4px 0 0",paddingTop:14,display:"flex",flexDirection:"column",gap:8}}>
           <button onClick={onRegistroAlumno} style={{background:PL,border:`1.5px solid ${PB}`,borderRadius:12,padding:"13px",cursor:"pointer",color:P,fontWeight:800,fontSize:14}}>
