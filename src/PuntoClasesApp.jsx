@@ -1016,7 +1016,7 @@ function Comprar({ onComprar, compras }) {
               },
               body: JSON.stringify({
                 items: [{ title: `${seleccion.horas} horas PuntoClases`, quantity: 1, unit_price: seleccion.precio, currency_id: "ARS" }],
-                back_urls: { success: "http://localhost:5173", failure: "http://localhost:5173", pending: "http://localhost:5173" },
+                back_urls: { success: "https://puntoclases.vercel.app", failure: "https://puntoclases.vercel.app", pending: "https://puntoclases.vercel.app" },
               }),
             });
             const pref = await res.json();
