@@ -5712,13 +5712,6 @@ function ModalReprogramar({ reserva, onCerrar, onConfirmar, onCancelar }) {
 // ════════════════════════════════════════════════════════════════════════════
 // LOGIN UNIFICADO
 // ════════════════════════════════════════════════════════════════════════════
-const USUARIOS = [ // @seed — usuarios/login
-  { mail:"lucia@gmail.com",       pass:"1234",      rol:"alumno",  nombre:"Lucía Fernández",  esNuevo:false },
-  { mail:"tomas@gmail.com",       pass:"1234",      rol:"alumno",  nombre:"Tomás Rodríguez",  esNuevo:false },
-  { mail:"david@puntoclases.com", pass:"profe123",  rol:"profe",   nombre:"David González",   esNuevo:false },
-  { mail:"nuevo@profe.com",       pass:"nuevo123",  rol:"profe",   nombre:"Nuevo Profe",      esNuevo:true  },
-  { mail:"admin@puntoclases.com", pass:"admin123",  rol:"admin",   nombre:"Admin",            esNuevo:false },
-];
 
 function LoginScreen({ onLogin, onRegistroProfe, onRegistroAlumno }) {
   const [mail, setMail]       = useState("");
