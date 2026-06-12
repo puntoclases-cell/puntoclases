@@ -42,13 +42,30 @@ export async function logout() {
 export async function getUsuarioActual() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
-  const { data: perfil } = await supabase.from("profiles").select("rol,nombre,mail").eq("id", user.id).single();
+  const { data: perfil, error: perfilError } = await supabase.from("profiles").select("rol,nombre,mail").eq("id", user.id).single();
+  if (perfilError || !perfil) throw new Error("Perfil no encontrado");
   return { id: user.id, mail: user.email, ...perfil };
 }
 
 // Escuchar cambios de sesión (login/logout) para actualizar la UI.
 export function onAuthChange(callback) {
   return supabase.auth.onAuthStateChange((_event, session) => callback(session?.user ?? null));
+}
+
+export async function enviarRecuperacion(mail) {
+  const { error } = await supabase.auth.resetPasswordForEmail(mail);
+  if (error) throw error;
+}
+
+export async function actualizarPassword(newPass) {
+  const { error } = await supabase.auth.updateUser({ password: newPass });
+  if (error) throw error;
+}
+
+export function onPasswordRecovery(callback) {
+  return supabase.auth.onAuthStateChange((event) => {
+    if (event === "PASSWORD_RECOVERY") callback();
+  });
 }
 
 // ── CONFIG Y PACKS ───────────────────────────────────────────────────────────
@@ -138,6 +155,16 @@ export async function getProfesAdmin() {
   const { data, error } = await supabase.from("profes").select("*, profiles(nombre, mail)");
   if (error) throw error;
   return data;
+}
+
+export async function registrarProfe({ mail, pass, nombre, tel }) {
+  const { data, error } = await supabase.auth.signUp({
+    email: mail,
+    password: pass,
+    options: { data: { rol: "profe", nombre, tel } },
+  });
+  if (error) throw error;
+  return data.user;
 }
 
 export async function crearProfe({ nombre, mail, materias, monotributo }) {

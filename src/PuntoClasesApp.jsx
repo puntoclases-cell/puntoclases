@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { login, getUsuarioActual, onAuthChange, logout, getAlumno, getCompras, getReservasAlumno, getProfes, getProfesAdmin, getDisponibilidad, getReservasProfe, marcarReserva, cargarDevolucion, reprogramarReserva, setBloque, borrarBloque, getAlumnos, getTodasLasReservas, actualizarAlumno, actualizarProfe, actualizarPerfil, crearCompra, buscarCompraPorPaymentId, crearReserva, verificarBloqueOcupado, getMensajes, enviarMensaje, suscribirMensajes } from "./db";
+import { login, getUsuarioActual, onAuthChange, logout, getAlumno, getCompras, getReservasAlumno, getProfes, getProfesAdmin, getDisponibilidad, getReservasProfe, marcarReserva, cargarDevolucion, reprogramarReserva, setBloque, borrarBloque, getAlumnos, getTodasLasReservas, actualizarAlumno, actualizarProfe, actualizarPerfil, crearCompra, buscarCompraPorPaymentId, crearReserva, verificarBloqueOcupado, getMensajes, enviarMensaje, suscribirMensajes, registrarAlumno, registrarProfe, enviarRecuperacion, actualizarPassword, onPasswordRecovery } from "./db";
 
 // ════════════════════════════════════════════════════════════════════════════
 // PUNTOCLASES — APP UNIFICADA
@@ -240,7 +240,7 @@ function Inicio({onNav, saldo, nombre, reservas}) {
       {/* Hero saldo */}
       <div style={{background:`linear-gradient(135deg, ${DK} 0%, #3d3d3d 100%)`,borderRadius:20,padding:"22px 20px",color:"#fff",position:"relative",overflow:"hidden"}}>
         <div style={{position:"absolute",top:-20,right:-20,width:120,height:120,borderRadius:"50%",background:"rgba(217,79,61,0.15)"}}/>
-        <h2 style={{margin:"0 0 14px",fontSize:22,fontWeight:700}}>¡Bienvenido a PuntoClases, {nombre.split(" ")[0]}! 👋</h2>
+        <h2 style={{margin:"0 0 14px",fontSize:22,fontWeight:700}}>¡Hola, {nombre.split(" ")[0]}! 👋</h2>
         <div style={{background:"rgba(255,255,255,0.1)",borderRadius:12,padding:"12px 16px"}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
             <div>
@@ -981,23 +981,6 @@ function Comprar({ onComprar, compras }) {
           ))}
         </div>
       </>)}
-
-      {/* Resumen final y botón pago */}
-      {seleccion && (
-        <Card style={{background:PL,border:`1.5px solid ${PB}`}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-            <div>
-              <p style={{margin:0,fontWeight:700,fontSize:15,color:DK}}>
-                {seleccion.horas}hs{tab==="packs"?" (pack)":"" }
-              </p>
-              <p style={{margin:"2px 0 0",fontSize:12,color:"#64748b"}}>
-                Vence en {CFG.vencimientoDias} días · ${(seleccion.precio/seleccion.horas).toLocaleString("es-AR")}/hs
-              </p>
-            </div>
-            <p style={{margin:0,fontWeight:800,fontSize:22,color:P}}>${seleccion.precio.toLocaleString("es-AR")}</p>
-          </div>
-        </Card>
-      )}
 
       <Btn disabled={!seleccion || pago==="procesando"}
         onClick={async ()=>{
@@ -3443,10 +3426,11 @@ function ChatProfe({ reservas, userId }) {
 
 
 // ── TOOLTIP ONBOARDING PROFE ──────────────────────────────────────────────────
-function OnboardingProfe({ onTerminar }) {
+function OnboardingProfe({ onTerminar, profeNombre="" }) {
   const [paso, setPaso] = useState(0);
+  const primerNombre = profeNombre.split(" ")[0] || "profe";
   const pasos = [
-    { icon:"👋", titulo:"¡Bienvenido, David!", desc:"Este es tu panel de profe. Desde acá vas a gestionar tus clases, disponibilidad, alumnos e ingresos.", color:P },
+    { icon:"👋", titulo:`¡Bienvenido, ${primerNombre}!`, desc:"Este es tu panel de profe. Desde acá vas a gestionar tus clases, disponibilidad, alumnos e ingresos.", color:P },
     { icon:"🗓️", titulo:"Cargá tu disponibilidad", desc:"Andá a Horarios y marcá los bloques en que podés dar clases. Podés elegir si son individuales, grupales o ambas. También podés usar la recurrencia semanal.", color:BL },
     { icon:"📋", titulo:"Tus reservas", desc:"Cuando un alumno reserva una clase, te aparece acá. Podés ver qué necesita trabajar, marcar la clase como realizada y cargar la devolución después.", color:"#15803d" },
     { icon:"✍️", titulo:"Las devoluciones son clave", desc:"Después de cada clase, cargá la devolución del alumno. Los padres y alumnos la ven en su perfil. Genera confianza y fideliza.", color:"#92400e" },
@@ -3636,7 +3620,7 @@ function AppProfeMain({ user, onLogout }) {
       </div>
 
       <div style={{flex:1,padding:"16px 16px 80px"}}>
-        {!onboardingVisto && <OnboardingProfe onTerminar={()=>setOnboardingVisto(true)}/>}
+        {!onboardingVisto && <OnboardingProfe onTerminar={()=>setOnboardingVisto(true)} profeNombre={profeData?.profiles?.nombre||""}/>}
         {screen==="inicio" && <ProfeInicioPanel onNav={setScreen} reservas={reservas} profeNombre={profeData?.profiles?.nombre||""}/>}
         {screen==="reservas" && <Reservas reservas={reservas} onDevolucion={r=>setModalR(r)} onMarcar={marcarRealizada} onAusente={r=>setModalAusente(r)} onReprogramar={r=>setModalReprogProfe(r)}/>}
         {screen==="disponibilidad" && <Disponibilidad dispon={dispon} setDispon={handleDisponChange} onRecurrente={()=>setModalRecurrente(true)}/>}
@@ -4769,7 +4753,7 @@ function ModalResenia({ clase, onGuardar, onOmitir }) {
         </div>
 
         <div style={{background:"#f8fafc",borderRadius:12,padding:"12px 14px"}}>
-          <p style={{margin:0,fontSize:13,color:"#374151"}}><strong>{clase.materia}</strong> con David González · {clase.fecha}</p>
+          <p style={{margin:0,fontSize:13,color:"#374151"}}><strong>{clase.materia}</strong> con {clase.profes?.profiles?.nombre?.split(" ")[0] || "el profe"} · {clase.fecha}</p>
         </div>
 
         {/* Estrellas */}
@@ -5115,17 +5099,32 @@ function OnboardingRegistroAlumno({ onTerminar }) {
     nombre:"", mail:"", tel:"", nivel:"", pass:"", pass2:"",
     terminos:false,
   });
+  const [errReg, setErrReg] = useState("");
+  const [cargandoReg, setCargandoReg] = useState(false);
   const NIVELES = ["Primario","Secundario","Universitario / Terciario","Adulto / Otro"];
   const set = (k,v)=>setForm(p=>({...p,[k]:v}));
   const mailOk = /^\S+@\S+\.\S+$/.test(form.mail);
 
   const puedeAvanzar = () => {
-    if (paso===1) return form.nombre.trim() && mailOk && form.nivel && form.pass.length>=4 && form.pass===form.pass2;
+    if (paso===1) return form.nombre.trim() && mailOk && form.nivel && form.pass.length>=8 && form.pass===form.pass2;
     if (paso===2) return form.terminos;
     return true;
   };
 
-  const inputStyle = {width:"100%",boxSizing:"border-box",border:"1.5px solid #e2e8f0",borderRadius:10,padding:"12px",fontSize:14,color:DK,outline:"none",fontFamily:"inherit"};
+  const handleCrearCuenta = async () => {
+    setErrReg("");
+    setCargandoReg(true);
+    try {
+      await registrarAlumno({ mail: form.mail.toLowerCase().trim(), pass: form.pass, nombre: form.nombre, tel: form.tel, nivel: form.nivel });
+      setPaso(3);
+    } catch (e) {
+      setErrReg(e.message || "No se pudo crear la cuenta. Intentá de nuevo.");
+    } finally {
+      setCargandoReg(false);
+    }
+  };
+
+  const inputStyle = {width:"100%",boxSizing:"border-box",border:"1.5px solid #e2e8f0",borderRadius:10,padding:"12px",fontSize:14,color:DK,background:"#fff",outline:"none",fontFamily:"inherit"};
   const labelStyle = {display:"block",fontSize:12,color:"#64748b",fontWeight:600,marginBottom:5};
 
   if (paso === 3) return (
@@ -5199,7 +5198,7 @@ function OnboardingRegistroAlumno({ onTerminar }) {
             </div>
             <div>
               <label style={labelStyle}>Contraseña</label>
-              <input type="password" value={form.pass} onChange={e=>set("pass",e.target.value)} placeholder="Mínimo 4 caracteres" style={inputStyle}/>
+              <input type="password" value={form.pass} onChange={e=>set("pass",e.target.value)} placeholder="Mínimo 8 caracteres" style={inputStyle}/>
             </div>
             <div>
               <label style={labelStyle}>Repetir contraseña</label>
@@ -5231,9 +5230,13 @@ function OnboardingRegistroAlumno({ onTerminar }) {
         <Btn variant="secondary" onClick={()=>paso===1?onTerminar(null):setPaso(1)} style={{flex:1}}>
           {paso===1?"Cancelar":"← Volver"}
         </Btn>
-        <Btn disabled={!puedeAvanzar()} onClick={()=>paso<2?setPaso(paso+1):setPaso(3)} style={{flex:2}}>
-          {paso<2?"Continuar →":"Crear cuenta ✓"}
-        </Btn>
+        {paso<2
+          ? <Btn disabled={!puedeAvanzar()} onClick={()=>setPaso(paso+1)} style={{flex:2}}>Continuar →</Btn>
+          : <Btn disabled={!puedeAvanzar()||cargandoReg} onClick={handleCrearCuenta} style={{flex:2}}>
+              {cargandoReg?"Creando cuenta...":"Crear cuenta ✓"}
+            </Btn>
+        }
+        {errReg && <p style={{margin:"4px 0 0",fontSize:12,color:"#dc2626",width:"100%"}}>{errReg}</p>}
       </div>
     </div>
   );
@@ -5245,10 +5248,13 @@ function OnboardingRegistroProfe({ onTerminar }) {
   const [paso, setPaso] = useState(1); // 1=datos, 2=materias, 3=terminos, 4=monotributo, 5=listo
   const [form, setForm] = useState({
     nombre:"", mail:"", tel:"", titulo:"", experiencia:"",
+    pass:"", pass2:"",
     materias:[], niveles:[], modalidad:[],
     monotributo:false, categoriaMonotributo:"",
     terminosAceptados:false, politicaAceptada:false,
   });
+  const [errReg, setErrReg] = useState("");
+  const [cargandoReg, setCargandoReg] = useState(false);
 
   const MATERIAS = ["Matemática","Álgebra","Análisis Matemático","Física","Química","Biología","Lengua","Literatura","Historia","Inglés","Informática","Economía"];
   const NIVELES_REG = ["Primaria","Secundaria","Preuniversitario","Universitario"];
@@ -5259,7 +5265,7 @@ function OnboardingRegistroProfe({ onTerminar }) {
   }));
 
   const puedeAvanzar = () => {
-    if (paso===1) return form.nombre && form.mail && form.tel && form.titulo;
+    if (paso===1) return form.nombre && form.mail && form.tel && form.titulo && form.pass.length>=8 && form.pass===form.pass2;
     if (paso===2) return form.materias.length > 0 && form.niveles.length > 0 && form.modalidad.length > 0;
     if (paso===3) return form.terminosAceptados && form.politicaAceptada;
     if (paso===4) return form.monotributo && form.categoriaMonotributo;
@@ -5333,9 +5339,22 @@ function OnboardingRegistroProfe({ onTerminar }) {
                 <input type={f.type} value={form[f.key]}
                   onChange={e=>setForm(p=>({...p,[f.key]:e.target.value}))}
                   placeholder={f.placeholder}
-                  style={{border:`2px solid ${form[f.key]?P+"44":"#e2e8f0"}`,borderRadius:12,padding:"12px 16px",fontSize:14,outline:"none",fontFamily:"inherit",transition:"border 0.2s"}}/>
+                  style={{border:`2px solid ${form[f.key]?P+"44":"#e2e8f0"}`,borderRadius:12,padding:"12px 16px",fontSize:14,outline:"none",background:"#fff",color:DK,fontFamily:"inherit",transition:"border 0.2s"}}/>
               </div>
             ))}
+            <div style={{display:"flex",flexDirection:"column",gap:5}}>
+              <label style={{fontSize:12,fontWeight:700,color:"#64748b"}}>Contraseña *</label>
+              <input type="password" value={form.pass} onChange={e=>setForm(p=>({...p,pass:e.target.value}))}
+                placeholder="Mínimo 8 caracteres"
+                style={{border:`2px solid ${form.pass.length>0&&form.pass.length<8?"#fca5a5":"#e2e8f0"}`,borderRadius:12,padding:"12px 16px",fontSize:14,outline:"none",background:"#fff",color:DK,fontFamily:"inherit"}}/>
+            </div>
+            <div style={{display:"flex",flexDirection:"column",gap:5}}>
+              <label style={{fontSize:12,fontWeight:700,color:"#64748b"}}>Repetir contraseña *</label>
+              <input type="password" value={form.pass2} onChange={e=>setForm(p=>({...p,pass2:e.target.value}))}
+                placeholder="Repetí la contraseña"
+                style={{border:`2px solid ${form.pass2&&form.pass!==form.pass2?"#fca5a5":"#e2e8f0"}`,borderRadius:12,padding:"12px 16px",fontSize:14,outline:"none",background:"#fff",color:DK,fontFamily:"inherit"}}/>
+              {form.pass2 && form.pass!==form.pass2 && <p style={{margin:"2px 0 0",fontSize:11,color:"#dc2626"}}>Las contraseñas no coinciden</p>}
+            </div>
           </div>
         )}
 
@@ -5485,10 +5504,25 @@ function OnboardingRegistroProfe({ onTerminar }) {
 
       {/* Botón siguiente */}
       <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:480,background:"#fff",borderTop:"1px solid #e2e8f0",padding:"14px 20px"}}>
-        <button onClick={()=>setPaso(p=>p+1)} disabled={!puedeAvanzar()}
-          style={{width:"100%",background:puedeAvanzar()?P:"#e2e8f0",color:puedeAvanzar()?"#fff":"#94a3b8",border:"none",borderRadius:12,padding:"15px",fontSize:16,fontWeight:800,cursor:puedeAvanzar()?"pointer":"not-allowed",transition:"all 0.2s"}}>
-          {paso<4?"Continuar →":"Finalizar registro ✓"}
+        <button
+          disabled={!puedeAvanzar()||cargandoReg}
+          onClick={async ()=>{
+            if (paso<4) { setPaso(p=>p+1); return; }
+            setErrReg("");
+            setCargandoReg(true);
+            try {
+              await registrarProfe({ mail: form.mail.toLowerCase().trim(), pass: form.pass, nombre: form.nombre, tel: form.tel });
+              setPaso(5);
+            } catch(e) {
+              setErrReg(e.message || "No se pudo crear la cuenta. Intentá de nuevo.");
+            } finally {
+              setCargandoReg(false);
+            }
+          }}
+          style={{width:"100%",background:puedeAvanzar()&&!cargandoReg?P:"#e2e8f0",color:puedeAvanzar()&&!cargandoReg?"#fff":"#94a3b8",border:"none",borderRadius:12,padding:"15px",fontSize:16,fontWeight:800,cursor:puedeAvanzar()&&!cargandoReg?"pointer":"not-allowed",transition:"all 0.2s"}}>
+          {cargandoReg?"Creando cuenta...":(paso<4?"Continuar →":"Finalizar registro ✓")}
         </button>
+        {errReg && <p style={{margin:"6px 0 0",fontSize:12,color:"#dc2626",textAlign:"center"}}>{errReg}</p>}
         {paso>1 && <button onClick={()=>setPaso(p=>p-1)} style={{width:"100%",background:"none",border:"none",cursor:"pointer",fontSize:13,color:"#94a3b8",marginTop:8,textDecoration:"underline"}}>← Volver</button>}
       </div>
     </div>
@@ -5713,6 +5747,53 @@ function ModalReprogramar({ reserva, onCerrar, onConfirmar, onCancelar }) {
 // LOGIN UNIFICADO
 // ════════════════════════════════════════════════════════════════════════════
 
+function CambiarPasswordScreen({ onTerminar }) {
+  const [pass, setPass] = useState("");
+  const [pass2, setPass2] = useState("");
+  const [ok, setOk] = useState(false);
+  const [err, setErr] = useState("");
+  const [cargando, setCargando] = useState(false);
+  const puedeGuardar = pass.length>=8 && pass===pass2;
+  const inputSt = {border:"2px solid #e2e8f0",borderRadius:12,padding:"12px 16px",fontSize:14,outline:"none",background:"#fff",color:DK,fontFamily:"inherit",width:"100%",boxSizing:"border-box"};
+  return (
+    <div style={{fontFamily:"'DM Sans','Segoe UI',sans-serif",background:BG,minHeight:"100vh",maxWidth:480,margin:"0 auto",padding:"32px 24px",display:"flex",flexDirection:"column",gap:20}}>
+      <div style={{textAlign:"center"}}>
+        <span style={{fontSize:44}}>🔒</span>
+        <h2 style={{margin:"10px 0 4px",color:DK,fontSize:20,fontWeight:800}}>Nueva contraseña</h2>
+        <p style={{margin:0,fontSize:13,color:"#64748b"}}>Elegí una contraseña nueva para tu cuenta.</p>
+      </div>
+      {ok ? (
+        <div style={{background:"#f0fdf4",borderRadius:14,padding:20,textAlign:"center",border:"1.5px solid #bbf7d0",display:"flex",flexDirection:"column",gap:12}}>
+          <span style={{fontSize:36}}>✅</span>
+          <p style={{margin:0,fontWeight:700,color:"#166534"}}>¡Contraseña actualizada!</p>
+          <button onClick={onTerminar} style={{background:P,color:"#fff",border:"none",borderRadius:12,padding:"13px",fontSize:15,fontWeight:700,cursor:"pointer"}}>Ir al login →</button>
+        </div>
+      ) : (<>
+        <div style={{display:"flex",flexDirection:"column",gap:5}}>
+          <label style={{fontSize:12,fontWeight:700,color:"#64748b"}}>Nueva contraseña</label>
+          <input type="password" value={pass} onChange={e=>setPass(e.target.value)} placeholder="Mínimo 8 caracteres" style={inputSt}/>
+        </div>
+        <div style={{display:"flex",flexDirection:"column",gap:5}}>
+          <label style={{fontSize:12,fontWeight:700,color:"#64748b"}}>Repetir contraseña</label>
+          <input type="password" value={pass2} onChange={e=>setPass2(e.target.value)} placeholder="Repetí la contraseña"
+            style={{...inputSt,borderColor:pass2&&pass!==pass2?"#fca5a5":"#e2e8f0"}}/>
+          {pass2 && pass!==pass2 && <p style={{margin:"2px 0 0",fontSize:11,color:"#dc2626"}}>Las contraseñas no coinciden</p>}
+        </div>
+        {err && <p style={{margin:0,fontSize:12,color:"#dc2626"}}>{err}</p>}
+        <button onClick={async()=>{
+          setErr(""); setCargando(true);
+          try { await actualizarPassword(pass); setOk(true); }
+          catch(e) { setErr(e.message||"No se pudo actualizar. Intentá de nuevo."); }
+          finally { setCargando(false); }
+        }} disabled={!puedeGuardar||cargando}
+          style={{background:puedeGuardar&&!cargando?P:"#e2e8f0",color:puedeGuardar&&!cargando?"#fff":"#94a3b8",border:"none",borderRadius:12,padding:"14px",fontSize:15,fontWeight:700,cursor:puedeGuardar&&!cargando?"pointer":"not-allowed"}}>
+          {cargando?"Guardando...":"Guardar contraseña"}
+        </button>
+      </>)}
+    </div>
+  );
+}
+
 function LoginScreen({ onLogin, onRegistroProfe, onRegistroAlumno }) {
   const [mail, setMail]       = useState("");
   const [pass, setPass]       = useState("");
@@ -5749,9 +5830,9 @@ function LoginScreen({ onLogin, onRegistroProfe, onRegistroAlumno }) {
         <div style={{display:"flex",flexDirection:"column",gap:5}}>
           <label style={{fontSize:12,fontWeight:700,color:"#64748b"}}>Tu mail</label>
           <input type="email" value={recMail} onChange={e=>setRecMail(e.target.value)} placeholder="tu@mail.com"
-            style={{border:"2px solid #e2e8f0",borderRadius:12,padding:"12px 16px",fontSize:14,outline:"none",fontFamily:"inherit"}}/>
+            style={{border:"2px solid #e2e8f0",borderRadius:12,padding:"12px 16px",fontSize:14,outline:"none",background:"#fff",color:DK,fontFamily:"inherit"}}/>
         </div>
-        <button onClick={()=>setRecOk(true)} disabled={!recMail}
+        <button onClick={async()=>{ try { await enviarRecuperacion(recMail.toLowerCase().trim()); } catch {} setRecOk(true); }} disabled={!recMail}
           style={{background:recMail?P:"#ccc",color:"#fff",border:"none",borderRadius:12,padding:"14px",fontSize:15,fontWeight:700,cursor:recMail?"pointer":"not-allowed"}}>
           Enviar link
         </button>
@@ -5784,7 +5865,7 @@ function LoginScreen({ onLogin, onRegistroProfe, onRegistroAlumno }) {
           <label style={{fontSize:12,fontWeight:700,color:"#64748b"}}>Mail</label>
           <input type="email" value={mail} onChange={e=>{setMail(e.target.value);setError("");}}
             placeholder="tu@mail.com" onKeyDown={e=>e.key==="Enter"&&handleLogin()}
-            style={{border:`2px solid ${error?"#fca5a5":"#e2e8f0"}`,borderRadius:12,padding:"13px 16px",fontSize:15,outline:"none",fontFamily:"inherit"}}/>
+            style={{border:`2px solid ${error?"#fca5a5":"#e2e8f0"}`,borderRadius:12,padding:"13px 16px",fontSize:15,outline:"none",background:"#fff",color:DK,fontFamily:"inherit"}}/>
         </div>
 
         <div style={{display:"flex",flexDirection:"column",gap:5}}>
@@ -5792,7 +5873,7 @@ function LoginScreen({ onLogin, onRegistroProfe, onRegistroAlumno }) {
           <div style={{position:"relative"}}>
             <input type={verPass?"text":"password"} value={pass} onChange={e=>{setPass(e.target.value);setError("");}}
               placeholder="••••••••" onKeyDown={e=>e.key==="Enter"&&handleLogin()}
-              style={{width:"100%",border:`2px solid ${error?"#fca5a5":"#e2e8f0"}`,borderRadius:12,padding:"13px 48px 13px 16px",fontSize:15,outline:"none",fontFamily:"inherit",boxSizing:"border-box"}}/>
+              style={{width:"100%",border:`2px solid ${error?"#fca5a5":"#e2e8f0"}`,borderRadius:12,padding:"13px 48px 13px 16px",fontSize:15,outline:"none",background:"#fff",color:DK,fontFamily:"inherit",boxSizing:"border-box"}}/>
             <button onClick={()=>setVerPass(!verPass)} style={{position:"absolute",right:14,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",fontSize:18,color:"#94a3b8"}}>
               {verPass?"🙈":"👁️"}
             </button>
@@ -5869,14 +5950,16 @@ export default function PuntoClasesApp() {
   const [cargandoSesion, setCargandoSesion] = useState(true);
   const [registrandoProfe, setRegistrandoProfe] = useState(false);
   const [registrandoAlumno, setRegistrandoAlumno] = useState(false);
+  const [modoRecuperar, setModoRecuperar] = useState(false);
 
   // Al cargar: revisar si ya hay sesión abierta en Supabase, y escuchar cambios
   useEffect(() => {
-    getUsuarioActual().then((u) => { setUser(u); setCargandoSesion(false); });
+    getUsuarioActual().then((u) => { setUser(u); setCargandoSesion(false); }).catch(()=>setCargandoSesion(false));
     const { data } = onAuthChange(async (u) => {
-      setUser(u ? await getUsuarioActual() : null);
+      try { setUser(u ? await getUsuarioActual() : null); } catch { setUser(null); }
     });
-    return () => data.subscription.unsubscribe();
+    const { data: recData } = onPasswordRecovery(() => setModoRecuperar(true));
+    return () => { data.subscription.unsubscribe(); recData.subscription.unsubscribe(); };
   }, []);
 
   const handleLogin = (u) => {
@@ -5890,23 +5973,16 @@ export default function PuntoClasesApp() {
   
   // Registro nuevo alumno
   if (registrandoAlumno) return (
-    <OnboardingRegistroAlumno onTerminar={(datos)=>{
-      if (datos) {
-        // Alta de la cuenta y login automático (alumno nuevo → ve onboarding + pack de prueba)
-        setUser({ mail:datos.mail, rol:"alumno", nombre:datos.nombre, nivel:datos.nivel, esNuevo:true });
-      }
-      setRegistrandoAlumno(false);
-    }}/>
+    <OnboardingRegistroAlumno onTerminar={()=>setRegistrandoAlumno(false)}/>
   );
 
   // Registro nuevo profe
   if (registrandoProfe) return (
-    <OnboardingRegistroProfe onTerminar={()=>{
-      // Simular login del profe nuevo después del registro
-      setUser({ mail:"nuevo@profe.com", pass:"nuevo123", rol:"profe", nombre:"Nuevo Profe", esNuevo:false });
-      setRegistrandoProfe(false);
-    }}/>
+    <OnboardingRegistroProfe onTerminar={()=>setRegistrandoProfe(false)}/>
   );
+
+  // Cambio de contraseña (link de recuperación)
+  if (modoRecuperar) return <CambiarPasswordScreen onTerminar={()=>setModoRecuperar(false)}/>;
 
   // Login
   if (!user) return (
