@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { login, getUsuarioActual, onAuthChange, logout, getAlumno, getCompras, getReservasAlumno, getProfes, getProfesAdmin, getDisponibilidad, getReservasProfe, marcarReserva, cargarDevolucion, reprogramarReserva, setBloque, borrarBloque, getAlumnos, getTodasLasReservas, actualizarAlumno, actualizarProfe, actualizarPerfil, crearCompra, buscarCompraPorPaymentId, crearReserva, verificarBloqueOcupado, getMensajes, enviarMensaje, suscribirMensajes, registrarAlumno, registrarProfe, enviarRecuperacion, actualizarPassword, onPasswordRecovery, crearResenia, getConfig, updateConfig, getPacks } from "./db";
+import { login, getUsuarioActual, onAuthChange, logout, getAlumno, getCompras, getReservasAlumno, getProfes, getProfesAdmin, getDisponibilidad, getReservasProfe, marcarReserva, cargarDevolucion, reprogramarReserva, setBloque, borrarBloque, getAlumnos, getTodasLasReservas, actualizarAlumno, actualizarProfe, actualizarPerfil, crearCompra, crearReserva, verificarBloqueOcupado, getMensajes, enviarMensaje, suscribirMensajes, registrarAlumno, registrarProfe, enviarRecuperacion, actualizarPassword, onPasswordRecovery, crearResenia, getConfig, updateConfig, getPacks, acreditarCompra, devolverHoras, addHorasAdmin } from "./db";
 
 // ════════════════════════════════════════════════════════════════════════════
 // PUNTOCLASES — APP UNIFICADA
@@ -604,7 +604,7 @@ function Reservar({ saldo, onReservar, profes, alumnoId }) {
 }
 
 // ── PANTALLA HISTORIAL ───────────────────────────────────────────────────────
-function Historial({ reservas, onReprogramar, onCancelar, alumnoId }) {
+function Historial({ reservas, onReprogramar, onCancelar, alumnoId, cfg }) {
   const [tab,setTab] = useState("proximas");
   const [abierto,setAbierto] = useState(null);
   const [modalResenia,setModalResenia] = useState(null);
@@ -740,9 +740,10 @@ function Historial({ reservas, onReprogramar, onCancelar, alumnoId }) {
       {modalReprog && (
         <ModalReprogramar
           reserva={modalReprog}
+          cfg={cfg}
           onCerrar={()=>setModalReprog(null)}
           onConfirmar={(nuevaFecha, nuevaHora) => onReprogramar(modalReprog.id, nuevaFecha, nuevaHora)}
-          onCancelar={(horasRecup) => onCancelar(modalReprog.id, horasRecup)}
+          onCancelar={(saldoNuevo) => onCancelar(modalReprog.id, saldoNuevo)}
         />
       )}
     </div>
@@ -1718,20 +1719,17 @@ function AppAlumno({ user, onLogout }) {
     window.history.replaceState({}, "", window.location.pathname);
 
     if (collectionStatus === "approved") {
-      buscarCompraPorPaymentId(paymentId)
-        .then(existente => {
-          if (existente) return; // ya procesado, dedup
-          const nuevoSaldo = +(datosAlumno.saldo + horas).toFixed(2);
-          return Promise.all([
-            crearCompra(user.id, horas, precio, null, "aprobado", paymentId),
-            actualizarAlumno(user.id, { saldo: nuevoSaldo }),
-          ]).then(() => {
-            setSaldo(nuevoSaldo);
-            setComprasAlumno(prev => [{ alumno_id: user.id, horas, precio, medio: "mercadopago", estado_pago: "aprobado", creado_en: new Date().toISOString() }, ...(prev||[])]);
-            setCompraAprobada({ horas, precio });
-          });
+      acreditarCompra(user.id, horas, precio, paymentId)
+        .then(({ compra_id, saldo_nuevo }) => {
+          if (compra_id === null) return; // ya procesado (idempotente por payment_id)
+          setSaldo(saldo_nuevo);
+          setComprasAlumno(prev => [{ alumno_id: user.id, horas, precio, medio: "mercadopago", estado_pago: "aprobado", creado_en: new Date().toISOString() }, ...(prev||[])]);
+          setCompraAprobada({ horas, precio });
         })
-        .catch(err => console.error("Error al registrar compra aprobada:", err));
+        .catch(err => {
+          console.error("Error al registrar compra aprobada:", err);
+          alert("Error al acreditar el pago: " + (err.message || "intentá de nuevo"));
+        });
     } else {
       const estadoPago = collectionStatus === "pending" ? "pendiente" : "fallido";
       crearCompra(user.id, horas, precio, null, estadoPago, paymentId)
@@ -1775,20 +1773,17 @@ function AppAlumno({ user, onLogout }) {
           <Historial
             reservas={reservasAlumno}
             alumnoId={user?.id}
+            cfg={cfgLive}
             onReprogramar={(id, nuevaFecha, nuevaHora) => {
               setReservasAlumno(prev => (prev||[]).map(r =>
                 r.id===id ? {...r, fecha:nuevaFecha, hora:nuevaHora, estado:"confirmada"} : r
               ));
             }}
-            onCancelar={(id, horasRecup) => {
+            onCancelar={(id, saldoNuevo) => {
               setReservasAlumno(prev => (prev||[]).map(r =>
                 r.id===id ? {...r, estado:"cancelada"} : r
               ));
-              setSaldo(s => {
-                const nuevo = +(s + horasRecup).toFixed(2);
-                actualizarAlumno(user.id, { saldo: nuevo }).catch(console.error);
-                return nuevo;
-              });
+              setSaldo(saldoNuevo);
             }}
           />
         )}
@@ -3802,15 +3797,22 @@ function Personas({ alumnos, setAlumnos, profes, setProfes, reservas }) {
   const [nuevoProfe, setNuevoProfe] = useState(null); // form de alta de profe
 
   const accionAlumno = (id, accion) => {
+    if (accion === "addHoras") {
+      addHorasAdmin(id)
+        .then(saldoNuevo => {
+          setAlumnos(prev => prev.map(a => a.id === id ? {...a, saldo: saldoNuevo} : a));
+        })
+        .catch(err => {
+          console.error("Error addHoras:", err);
+          alert("Error al agregar hora: " + (err.message || "intentá de nuevo"));
+        });
+      return;
+    }
     setAlumnos(prev => prev.map(a => {
       if (a.id !== id) return a;
       if (accion === "suspender") {
         actualizarAlumno(id, {suspendido: !a.suspendido}).catch(err => console.error("Error suspender alumno:", err));
         return {...a, suspendido: !a.suspendido};
-      }
-      if (accion === "addHoras") {
-        actualizarAlumno(id, {saldo: (a.saldo || 0) + 1}).catch(err => console.error("Error addHoras:", err));
-        return {...a, saldo: a.saldo + 1};
       }
       if (accion === "extenderVenc") {
         const nueva = new Date(); nueva.setDate(nueva.getDate() + 30);
@@ -5525,7 +5527,7 @@ function OnboardingRegistroProfe({ onTerminar }) {
 // ════════════════════════════════════════════════════════════════════════════
 // MODAL REPROGRAMAR / CANCELAR — Panel del Alumno
 // ════════════════════════════════════════════════════════════════════════════
-function ModalReprogramar({ reserva, onCerrar, onConfirmar, onCancelar }) {
+function ModalReprogramar({ reserva, onCerrar, onConfirmar, onCancelar, cfg }) {
   const [accion, setAccion] = useState(null); // "reprogramar" | "cancelar"
   const [paso, setPaso] = useState(1); // 1=elegir acción, 2=confirmar
   const [nuevaFecha, setNuevaFecha] = useState(null);
@@ -5715,12 +5717,18 @@ function ModalReprogramar({ reserva, onCerrar, onConfirmar, onCancelar }) {
               Volver
             </button>
             <button onClick={async ()=>{
-              await marcarReserva(reserva.id, "cancelada").catch(err=>console.error("Error al cancelar:",err));
-              const horasRecup = conCosto
-                ? +(((reserva.horas||1) - saldoPerdido)).toFixed(2)
-                : (reserva.horas||1);
-              onCancelar(horasRecup);
-              setConfirmado(true);
+              try {
+                const result = await devolverHoras(
+                  reserva.id,
+                  cfg?.factorGrupal ?? CFG.factorGrupal,
+                  cfg?.penalizacionPct ?? CFG.penalizacionPct
+                );
+                onCancelar(result.saldo_nuevo);
+                setConfirmado(true);
+              } catch (err) {
+                console.error("Error al cancelar:", err);
+                alert("No se pudo cancelar: " + (err.message || "intentá de nuevo"));
+              }
             }} style={{flex:1,background:"#dc2626",border:"none",borderRadius:12,padding:"13px",fontSize:14,fontWeight:700,cursor:"pointer",color:"#fff"}}>
               Sí, cancelar
             </button>

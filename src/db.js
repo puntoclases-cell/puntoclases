@@ -308,3 +308,32 @@ export async function crearResenia(reservaId, alumnoId, profeId, estrellas, come
   if (error) throw error;
   return data;
 }
+
+// ── RPC ATÓMICAS ─────────────────────────────────────────────────────────────
+
+export async function acreditarCompra(alumnoId, horas, precio, paymentId, packId = null) {
+  const { data, error } = await supabase.rpc("acreditar_compra", {
+    p_alumno_id: alumnoId, p_horas: horas, p_precio: precio,
+    p_payment_id: paymentId, p_pack_id: packId,
+  });
+  if (error) throw error;
+  return data[0]; // { compra_id, saldo_nuevo }
+}
+
+export async function devolverHoras(reservaId, factorGrupal, penalizacionPct) {
+  const { data, error } = await supabase.rpc("devolver_horas", {
+    p_reserva_id: reservaId,
+    p_factor_grupal: factorGrupal,
+    p_penalizacion_pct: penalizacionPct,
+  });
+  if (error) throw error;
+  return data[0]; // { saldo_nuevo, horas_devueltas }
+}
+
+export async function addHorasAdmin(alumnoId, delta = 1) {
+  const { data, error } = await supabase.rpc("add_horas_admin", {
+    p_alumno_id: alumnoId, p_delta: delta,
+  });
+  if (error) throw error;
+  return data; // numeric saldo_nuevo
+}
