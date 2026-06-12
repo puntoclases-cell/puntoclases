@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { login, getUsuarioActual, onAuthChange, logout, getAlumno, getCompras, getReservasAlumno, getProfes, getProfesAdmin, getDisponibilidad, getReservasProfe, marcarReserva, cargarDevolucion, reprogramarReserva, setBloque, borrarBloque, getAlumnos, getTodasLasReservas, actualizarAlumno, actualizarProfe, actualizarPerfil, crearCompra, buscarCompraPorPaymentId, crearReserva, verificarBloqueOcupado, getMensajes, enviarMensaje, suscribirMensajes, registrarAlumno, registrarProfe, enviarRecuperacion, actualizarPassword, onPasswordRecovery, crearResenia } from "./db";
+import { login, getUsuarioActual, onAuthChange, logout, getAlumno, getCompras, getReservasAlumno, getProfes, getProfesAdmin, getDisponibilidad, getReservasProfe, marcarReserva, cargarDevolucion, reprogramarReserva, setBloque, borrarBloque, getAlumnos, getTodasLasReservas, actualizarAlumno, actualizarProfe, actualizarPerfil, crearCompra, buscarCompraPorPaymentId, crearReserva, verificarBloqueOcupado, getMensajes, enviarMensaje, suscribirMensajes, registrarAlumno, registrarProfe, enviarRecuperacion, actualizarPassword, onPasswordRecovery, crearResenia, getConfig, updateConfig, getPacks } from "./db";
 
 // ════════════════════════════════════════════════════════════════════════════
 // PUNTOCLASES — APP UNIFICADA
@@ -750,7 +750,7 @@ function Historial({ reservas, onReprogramar, onCancelar, alumnoId }) {
 }
 
 // ── PANTALLA COMPRAR ─────────────────────────────────────────────────────────
-function Comprar({ onComprar, compras }) {
+function Comprar({ onComprar, compras, cfg: cfgProp, packsDB }) {
   const [sel, setSel] = useState(null);
   const [tab, setTab] = useState("packs"); // "packs" | "sueltas"
   const [cantSueltas, setCantSueltas] = useState(1);
@@ -758,28 +758,36 @@ function Comprar({ onComprar, compras }) {
   // El pack de prueba solo aplica a la 1ra compra: si no hay historial, es alumno nuevo.
   const esNuevoAlumno = compras !== null && compras.length === 0;
 
-  const PRECIO_HS = CFG.precioInd; // precio full sin descuento
+  const cfgEfectiva = cfgProp || CFG; // usa config live si está disponible
+  const PRECIO_HS = cfgEfectiva.precioInd;
 
-  // Packs derivados de CFG (fuente única). El precio se calcula, no se hardcodea.
+  // Identifica pack prueba (tag con "1ra vez") y packs regulares desde DB o CFG
+  const packPruebaSource = packsDB && packsDB.length
+    ? packsDB.find(p => (p.tag || "").includes("1ra"))
+    : CFG.packPrueba;
+  const packsRegSource = packsDB && packsDB.length
+    ? packsDB.filter(p => !((p.tag || "").includes("1ra")))
+    : CFG.packs;
+
   const mkPack = (p, esNuevo = false) => ({
     id: p.id,
     horas: p.horas,
-    precio: precioPackTotal(p.horas, p.descuento),
+    precio: precioPackTotal(p.horas, p.descuento, cfgEfectiva),
     original: p.horas * PRECIO_HS,
     desc: `${p.descuento}% OFF`,
     tag: p.tag,
     esNuevo,
   });
   const packs = [
-    mkPack(CFG.packPrueba, true),
-    ...CFG.packs.map(p => mkPack(p)),
+    ...(packPruebaSource ? [mkPack(packPruebaSource, true)] : []),
+    ...packsRegSource.map(p => mkPack(p)),
   ];
 
   // Si compra sueltas, ¿cuánto le habría costado con el mejor pack que califica?
-  const packAplicable = [...CFG.packs].reverse().find(p => cantSueltas >= p.horas);
+  const packAplicable = [...packsRegSource].reverse().find(p => cantSueltas >= p.horas);
   const precioSuelto = cantSueltas * PRECIO_HS;
   const precioEquivPack = packAplicable
-    ? cantSueltas * precioHoraEquiv(packAplicable.horas, packAplicable.descuento)
+    ? cantSueltas * precioHoraEquiv(packAplicable.horas, packAplicable.descuento, cfgEfectiva)
     : null;
   const ahorroPack = precioEquivPack ? precioSuelto - precioEquivPack : 0;
 
@@ -791,7 +799,7 @@ function Comprar({ onComprar, compras }) {
     <div style={{display:"flex",flexDirection:"column",gap:14}}>
       <div>
         <h3 style={{margin:"0 0 4px",color:DK}}>Comprar horas</h3>
-        <p style={{margin:0,fontSize:13,color:"#64748b"}}>Las horas vencen a los {CFG.vencimientoDias} días desde la compra.</p>
+        <p style={{margin:0,fontSize:13,color:"#64748b"}}>Las horas vencen a los {cfgEfectiva.vencimiento||cfgEfectiva.vencimientoDias||CFG.vencimientoDias} días desde la compra.</p>
       </div>
 
       {/* Tabs */}
@@ -809,9 +817,9 @@ function Comprar({ onComprar, compras }) {
         <div style={{background:"#f0fdf4",border:"1.5px solid #bbf7d0",borderRadius:12,padding:"12px 14px"}}>
           <p style={{margin:"0 0 6px",fontWeight:700,fontSize:13,color:"#15803d"}}>💡 ¿Cómo funciona el saldo?</p>
           <div style={{fontSize:12,color:"#374151",lineHeight:1.7}}>
-            <div>• Clase <strong>individual</strong>: descuenta <strong>1 hs</strong> de saldo (${CFG.precioInd.toLocaleString("es-AR")}/hs)</div>
-            <div>• Clase <strong>grupal</strong>: descuenta <strong>{CFG.factorGrupal} hs</strong> de saldo — pagás ${precioGrpHora().toLocaleString("es-AR")} en lugar de ${CFG.precioInd.toLocaleString("es-AR")} ✓</div>
-            <div>• Las horas vencen a los <strong>{CFG.vencimientoDias} días</strong> — el residual de grupales se acumula y no vence</div>
+            <div>• Clase <strong>individual</strong>: descuenta <strong>1 hs</strong> de saldo (${cfgEfectiva.precioInd.toLocaleString("es-AR")}/hs)</div>
+            <div>• Clase <strong>grupal</strong>: descuenta <strong>{cfgEfectiva.factorGrupal} hs</strong> de saldo — pagás ${precioGrpHora(cfgEfectiva).toLocaleString("es-AR")} en lugar de ${cfgEfectiva.precioInd.toLocaleString("es-AR")} ✓</div>
+            <div>• Las horas vencen a los <strong>{cfgEfectiva.vencimiento||cfgEfectiva.vencimientoDias||CFG.vencimientoDias} días</strong> — el residual de grupales se acumula y no vence</div>
           </div>
         </div>
         {packs.filter(p=>!p.esNuevo || esNuevoAlumno).map(p=>(
@@ -1685,6 +1693,17 @@ function AppAlumno({ user, onLogout }) {
       .catch(err => console.error("Error al cargar profes:", err));
   }, []);
 
+  const [cfgLive, setCfgLive] = useState(null);
+  const [packsLive, setPacksLive] = useState(null);
+  useEffect(() => {
+    getConfig()
+      .then(row => setCfgLive(normCfg(row)))
+      .catch(() => {});
+    getPacks()
+      .then(data => setPacksLive(data || []))
+      .catch(() => {});
+  }, []);
+
   const [compraAprobada, setCompraAprobada] = useState(null);
   useEffect(() => {
     if (!user || !datosAlumno) return;
@@ -1773,7 +1792,7 @@ function AppAlumno({ user, onLogout }) {
             }}
           />
         )}
-        {screen==="comprar" && <Comprar compras={comprasAlumno} onComprar={(hs)=>setSaldo(s=>+(s+hs).toFixed(2))}/>}
+        {screen==="comprar" && <Comprar compras={comprasAlumno} cfg={cfgLive} packsDB={packsLive} onComprar={(hs)=>setSaldo(s=>+(s+hs).toFixed(2))}/>}
         {screen==="profes" && <Profes profes={profesData} onReservar={()=>setScreen("reservar")}/>}
         {screen==="perfil" && <Perfil datosAlumno={datosAlumno} reservas={reservasAlumno} compras={comprasAlumno} onLogout={onLogout} saldo={saldo}/>}
         {screen==="mensajes" && <Chat reservas={reservasAlumno} userId={user?.id}/>}
@@ -3606,6 +3625,33 @@ const CONFIG_INIT = {
   packs: CFG.packs.map(p => ({ ...p, precio: precioPackTotal(p.horas, p.descuento) })),
 };
 
+// Mapeo DB row (snake_case) → cfg state; con fallback a CFG si la columna no existe
+const normCfg = (row) => {
+  const pi = row.precio_ind ?? CFG.precioInd;
+  const fg = row.factor_grupal ?? CFG.factorGrupal;
+  return {
+    precioInd: pi,
+    precioGrp: Math.round(pi * fg),
+    factorGrupal: fg,
+    tarifaProfeInd: row.tarifa_profe_ind ?? CFG.tarifaProfeInd,
+    tarifaProfeGrp: row.tarifa_profe_grp ?? CFG.tarifaProfeGrp,
+    vencimiento: row.vencimiento_dias ?? CFG.vencimientoDias,
+    penalizacionPct: row.penalizacion_pct ?? CFG.penalizacionPct,
+    coworkPorAlumno: row.cowork_por_alumno ?? CFG.coworkPorAlumno,
+    packs: CONFIG_INIT.packs, // packs vienen de tabla separada (getPacks)
+  };
+};
+// Mapeo cfg state → objeto para updateConfig (solo campos escalares del admin)
+const cfgADB = (cfg) => ({
+  precio_ind: cfg.precioInd,
+  factor_grupal: cfg.factorGrupal,
+  tarifa_profe_ind: cfg.tarifaProfeInd,
+  tarifa_profe_grp: cfg.tarifaProfeGrp,
+  vencimiento_dias: cfg.vencimiento,
+  penalizacion_pct: cfg.penalizacionPct,
+  cowork_por_alumno: cfg.coworkPorAlumno,
+});
+
 // ── HELPERS ──────────────────────────────────────────────────────────────────
 const diasHasta = iso => { if (!iso) return 0; const [y,m,d]=iso.split("-"); const hoy=new Date(); hoy.setHours(0,0,0,0); return Math.ceil((new Date(+y,+m-1,+d)-hoy)/(1000*60*60*24)); };
 const MESES_CORTO = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
@@ -3858,9 +3904,14 @@ function Personas({ alumnos, setAlumnos, profes, setProfes, reservas }) {
               {a.suspendido?"🔓 Reactivar cuenta":"⏸ Suspender temporalmente"}
             </Btn>
             <Btn variant="danger" full onClick={()=>setConfirmar({
-              label:`¿Eliminar la cuenta de ${a.nombre}? Esta acción no se puede deshacer.`,
-              onOk:()=>{ setAlumnos(prev=>prev.filter(x=>x.id!==a.id)); setSel(null); }
-            })}>🗑 Eliminar cuenta permanentemente</Btn>
+              label:`¿Dar de baja la cuenta de ${a.nombre}? Quedará inactiva y no podrá iniciar sesión.`,
+              onOk:() => {
+                actualizarAlumno(a.id, { activo: false })
+                  .catch(err => console.error("Error al dar de baja alumno:", err));
+                setAlumnos(prev => prev.filter(x => x.id !== a.id));
+                setSel(null);
+              }
+            })}>🗑 Dar de baja cuenta</Btn>
           </div>
         </Card>
       </div>
@@ -4016,6 +4067,7 @@ function Personas({ alumnos, setAlumnos, profes, setProfes, reservas }) {
 
       {/* Lista alumnos */}
       {tab==="alumnos" && alumnos
+        .filter(a => a.activo !== false)
         .filter(a=>{
           if (filtro==="conSaldo") return a.saldo>0;
           if (filtro==="sinSaldo") return a.saldo===0;
@@ -4121,21 +4173,41 @@ function Personas({ alumnos, setAlumnos, profes, setProfes, reservas }) {
               Monotributo activo (obligatorio para operar)
             </label>
             <Btn
-              disabled={!nuevoProfe.nombre.trim() || !nuevoProfe.mail.trim() || !nuevoProfe.materias.trim() || !nuevoProfe.monotributo}
-              onClick={()=>{
-                setProfes(prev=>[...prev, {
-                  id: (prev.reduce((m,p)=>Math.max(m,p.id),0))+1,
-                  nombre: nuevoProfe.nombre.trim(),
-                  mail: nuevoProfe.mail.trim(),
-                  materias: nuevoProfe.materias.split(",").map(s=>s.trim()).filter(Boolean),
-                  clasesDadas:0, horasDadas:0, activo:true, suspendido:false, pagadoMes:false,
-                  monotributo: nuevoProfe.monotributo,
-                }]);
-                setNuevoProfe(null);
+              disabled={!nuevoProfe.nombre.trim() || !nuevoProfe.mail.trim() || !nuevoProfe.materias.trim() || !nuevoProfe.monotributo || nuevoProfe.guardando}
+              onClick={async () => {
+                setNuevoProfe(p => ({...p, guardando: true, error: null}));
+                const tempPass = Math.random().toString(36).slice(2,8).toUpperCase() + Math.random().toString(36).slice(2,5) + "!3";
+                const materiasArr = nuevoProfe.materias.split(",").map(s=>s.trim()).filter(Boolean);
+                try {
+                  const newUser = await registrarProfe({ mail: nuevoProfe.mail.trim(), pass: tempPass, nombre: nuevoProfe.nombre.trim(), tel: "" });
+                  if (newUser?.id) {
+                    await actualizarProfe(newUser.id, { materias: materiasArr, monotributo: nuevoProfe.monotributo }).catch(() => {});
+                  }
+                  setProfes(prev=>[...prev, {
+                    id: newUser?.id || crypto.randomUUID(),
+                    nombre: nuevoProfe.nombre.trim(),
+                    mail: nuevoProfe.mail.trim(),
+                    materias: materiasArr,
+                    clasesDadas:0, horasDadas:0, activo:false, suspendido:false, pagadoMes:false,
+                    monotributo: nuevoProfe.monotributo,
+                  }]);
+                  setNuevoProfe(p => ({...p, guardando: false, tempPass, creado: true}));
+                } catch(err) {
+                  setNuevoProfe(p => ({...p, guardando: false, error: err.message || "No se pudo crear el profe"}));
+                }
               }}>
-              Crear profe
+              {nuevoProfe.guardando ? "Creando..." : "Crear profe"}
             </Btn>
-            {!nuevoProfe.monotributo && <p style={{margin:0,fontSize:11,color:"#94a3b8",textAlign:"center"}}>El monotributo es obligatorio para dar de alta al profe.</p>}
+            {nuevoProfe.error && <p style={{margin:0,fontSize:12,color:"#dc2626",textAlign:"center"}}>{nuevoProfe.error}</p>}
+            {nuevoProfe.creado && (
+              <div style={{background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:10,padding:"12px 14px",display:"flex",flexDirection:"column",gap:6}}>
+                <p style={{margin:0,fontSize:13,fontWeight:700,color:"#15803d"}}>✓ Profe creado</p>
+                <p style={{margin:0,fontSize:12,color:"#374151"}}>Contraseña temporal: <strong>{nuevoProfe.tempPass}</strong></p>
+                <p style={{margin:0,fontSize:11,color:"#64748b"}}>Compartila con el profe. Recibirá un mail de confirmación de Supabase. Hasta confirmar, su cuenta aparece como "Pendiente".</p>
+                <Btn onClick={()=>setNuevoProfe(null)}>Cerrar</Btn>
+              </div>
+            )}
+            {!nuevoProfe.monotributo && !nuevoProfe.creado && <p style={{margin:0,fontSize:11,color:"#94a3b8",textAlign:"center"}}>El monotributo es obligatorio para dar de alta al profe.</p>}
           </div>
         </div>
       )}
@@ -4227,7 +4299,16 @@ function Finanzas({ reservas, cfg, setCfg }) {
   const materias = Object.entries(porMateria).sort((a,b)=>b[1].clases-a[1].clases);
   const maxCl = Math.max(...materias.map(m=>m[1].clases),1);
 
-  const guardar = () => { setGuardado(true); setTimeout(()=>setGuardado(false),2000); };
+  const guardar = async () => {
+    try {
+      await updateConfig(cfgADB(cfg));
+      setGuardado(true);
+      setTimeout(() => setGuardado(false), 2500);
+    } catch(err) {
+      console.error("Error al guardar config:", err);
+      alert("Error al guardar: " + (err.message || "intente de nuevo"));
+    }
+  };
 
   const FInput = ({label,value,onChange,prefix,suffix}) => (
     <div style={{display:"flex",flexDirection:"column",gap:5}}>
@@ -4410,7 +4491,7 @@ function AppAdminMain({ onLogout }) {
     vence: a.vencimiento || "",
     compras: 0,
     clases: reservs.filter(r => r.alumno_id === a.id).length,
-    activo: true,
+    activo: a.activo !== false,
     suspendido: a.suspendido || false,
   });
   const normProfe = (p, reservs) => {
@@ -4430,6 +4511,9 @@ function AppAdminMain({ onLogout }) {
   };
 
   useEffect(() => {
+    getConfig()
+      .then(row => setCfg(prev => ({ ...prev, ...normCfg(row) })))
+      .catch(err => console.error("Error al cargar config:", err));
     Promise.all([getAlumnos(), getProfesAdmin(), getTodasLasReservas()])
       .then(([alms, profs, reservs]) => {
         const normR = (reservs || []).map(normReservaAdmin);
