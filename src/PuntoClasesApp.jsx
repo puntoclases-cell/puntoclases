@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { login, getUsuarioActual, onAuthChange, logout, getAlumno, getCompras, getReservasAlumno, getProfes, getProfesAdmin, getDisponibilidad, getReservasProfe, marcarReserva, cargarDevolucion, reprogramarReserva, setBloque, borrarBloque, getAlumnos, getTodasLasReservas, actualizarAlumno, actualizarProfe, actualizarPerfil, crearCompra, buscarCompraPorPaymentId, crearReserva, verificarBloqueOcupado, getMensajes, enviarMensaje, suscribirMensajes, registrarAlumno, registrarProfe, enviarRecuperacion, actualizarPassword, onPasswordRecovery } from "./db";
+import { login, getUsuarioActual, onAuthChange, logout, getAlumno, getCompras, getReservasAlumno, getProfes, getProfesAdmin, getDisponibilidad, getReservasProfe, marcarReserva, cargarDevolucion, reprogramarReserva, setBloque, borrarBloque, getAlumnos, getTodasLasReservas, actualizarAlumno, actualizarProfe, actualizarPerfil, crearCompra, buscarCompraPorPaymentId, crearReserva, verificarBloqueOcupado, getMensajes, enviarMensaje, suscribirMensajes, registrarAlumno, registrarProfe, enviarRecuperacion, actualizarPassword, onPasswordRecovery, crearResenia } from "./db";
 
 // ════════════════════════════════════════════════════════════════════════════
 // PUNTOCLASES — APP UNIFICADA
@@ -95,62 +95,6 @@ function Logo({ size = 28 }) {
 // Clusters: (1) datos del alumno  (2) datos del profe  (3) datos del admin  (4) usuarios/login
 // ════════════════════════════════════════════════════════════════════════════
 
-// ── DATA — alumno @seed ──────────────────────────────────────────────────────
-const ALUMNO = { 
-  nombre: "Lucía Fernández", 
-  mail: "lucia.fernandez@gmail.com",
-  tel: "223 456-7890",
-  foto: null,
-  saldo: 6.5, 
-  vencimiento: "2026-07-18",
-  nivel: "Secundario — 4to año",
-};
-
-
-const PROFES = [{
-  id: 1, nombre: "David González", avatar: "DG",
-  materias: ["Matemática", "Física", "Química", "Álgebra", "Análisis Matemático"],
-  modalidad: ["Presencial", "Virtual"],
-  bio: "Especializado en ciencias exactas. Clases dinámicas con foco en comprensión real, no memorización."
-}];
-
-// Disponibilidad: cada bloque tiene tipo "individual" | "grupal" | "ambas"
-const DISPONIBILIDAD = {
-  1: {
-    "2026-06-09": {
-      "09:00":"individual","10:00":"ambas","11:00":"grupal",
-      "14:00":"individual","15:00":"ambas","16:00":"grupal"
-    },
-    "2026-06-10": {
-      "08:00":"individual","10:00":"grupal","11:00":"ambas","16:00":"individual"
-    },
-    "2026-06-11": {
-      "09:00":"grupal","10:00":"ambas","14:00":"individual","15:00":"grupal"
-    },
-    "2026-06-12": {
-      "09:00":"individual","10:00":"ambas","13:00":"grupal","17:00":"individual"
-    },
-    "2026-06-16": {
-      "09:00":"ambas","10:00":"individual","11:00":"grupal","15:00":"ambas"
-    },
-    "2026-06-17": {
-      "10:00":"individual","14:00":"grupal","16:00":"ambas"
-    },
-    "2026-06-18": {
-      "09:00":"ambas","10:00":"individual","14:00":"grupal","17:00":"individual"
-    },
-    "2026-06-19": {
-      "11:00":"grupal","15:00":"ambas","17:00":"individual","19:00":"grupal"
-    },
-  }
-};
-
-
-const PROXIMAS = [
-  { id:4, profe:"David González", materia:"Matemática", fecha:"2026-06-09", hora:"09:00", modalidad:"Presencial", tipo:"individual" },
-  { id:5, profe:"David González", materia:"Física", fecha:"2026-06-12", hora:"17:00", modalidad:"Virtual", tipo:"individual" },
-];
-
 
 const DIAS = ["Dom","Lun","Mar","Mié","Jue","Vie","Sáb"];
 const MESES = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
@@ -194,10 +138,9 @@ const Btn = ({children,onClick,disabled,variant="primary",full,style={}}) => {
 };
 
 // ── PANTALLA INICIO ──────────────────────────────────────────────────────────
-function Inicio({onNav, saldo, nombre, reservas}) {
-  const dias = diasVenc(ALUMNO.vencimiento);
+function Inicio({onNav, saldo, nombre, reservas, vencimiento}) {
+  const dias = vencimiento ? diasVenc(vencimiento) : 0;
   const pct = Math.min((saldo/12)*100,100);
-  const prox = PROXIMAS[0];
   const hoyInicio = new Date().toISOString().slice(0,10);
   const proximaClase = (reservas||[])
     .filter(r => r.fecha >= hoyInicio && r.estado !== "cancelada")
@@ -223,7 +166,7 @@ function Inicio({onNav, saldo, nombre, reservas}) {
           </div>
           <div style={{display:"flex",justifyContent:"space-between",fontSize:12,opacity:0.65}}>
             <span>Vence en {dias} días</span>
-            <span>{fmt(ALUMNO.vencimiento)}</span>
+            <span>{vencimiento ? fmt(vencimiento) : "—"}</span>
           </div>
         </div>
       </div>
@@ -273,10 +216,12 @@ function Reservar({ saldo, onReservar, profes, alumnoId }) {
   const [disponRaw, setDisponRaw] = useState([]);
   useEffect(() => {
     if (!profeId) return;
+    let cancelled = false;
     setDisponRaw([]);
     getDisponibilidad(profeId)
-      .then(data => setDisponRaw(data || []))
+      .then(data => { if (!cancelled) setDisponRaw(data || []); })
       .catch(err => console.error("Error al cargar disponibilidad:", err));
+    return () => { cancelled = true; };
   }, [profeId]);
 
   const profe = (profes||[]).find(p=>p.id===profeId);
@@ -323,6 +268,7 @@ function Reservar({ saldo, onReservar, profes, alumnoId }) {
       </button>
       {modalRecurrenteAlumno && (
         <ModalRecurrenteAlumno
+          profes={profes}
           onConfirmar={(datos)=>{ console.log("Recurrente:", datos); }}
           onCerrar={()=>setModalRecurrenteAlumno(false)}
         />
@@ -658,7 +604,7 @@ function Reservar({ saldo, onReservar, profes, alumnoId }) {
 }
 
 // ── PANTALLA HISTORIAL ───────────────────────────────────────────────────────
-function Historial({ reservas, onReprogramar, onCancelar }) {
+function Historial({ reservas, onReprogramar, onCancelar, alumnoId }) {
   const [tab,setTab] = useState("proximas");
   const [abierto,setAbierto] = useState(null);
   const [modalResenia,setModalResenia] = useState(null);
@@ -761,6 +707,17 @@ function Historial({ reservas, onReprogramar, onCancelar }) {
                     <p style={{margin:0,fontSize:13,color:"#92400e"}}>⏳ {nombreCorto} todavía no cargó la devolución.</p>
                   </div>
                 )}
+                {c.estado==="realizada" && !resenias[c.id] && (
+                  <button onClick={()=>setModalResenia(c)}
+                    style={{background:"#fefce8",border:"1.5px solid #fde68a",borderRadius:10,padding:"8px 14px",cursor:"pointer",fontSize:13,fontWeight:700,color:"#92400e",textAlign:"left"}}>
+                    ⭐ Calificar clase
+                  </button>
+                )}
+                {resenias[c.id] && (
+                  <div style={{background:"#f8fafc",borderRadius:10,padding:"8px 14px",fontSize:13,color:"#64748b"}}>
+                    {"★".repeat(resenias[c.id].estrellas)} · {resenias[c.id].comentario||"Reseña enviada"}
+                  </div>
+                )}
               </div>
             )}
           </Card>
@@ -770,8 +727,11 @@ function Historial({ reservas, onReprogramar, onCancelar }) {
       {modalResenia && (
         <ModalResenia
           clase={modalResenia}
-          onGuardar={()=>{
-            setResenias(prev=>({...prev,[modalResenia.id]:{estrellas:5,comentario:"¡Muy buena clase!"}}));
+          onGuardar={async (estrellas, comentario) => {
+            try {
+              await crearResenia(modalResenia.id, alumnoId, modalResenia.profe_id, estrellas, comentario);
+              setResenias(prev=>({...prev,[modalResenia.id]:{estrellas,comentario}}));
+            } catch(err) { console.error("Error al guardar reseña:", err); }
             setModalResenia(null);
           }}
           onOmitir={()=>setModalResenia(null)}
@@ -1059,7 +1019,7 @@ function Perfil({ onLogout, saldo, compras, datosAlumno, reservas }) {
     });
   }, [datosAlumno]);
   const iniciales = (datosAlumno?.profiles?.nombre||"").split(" ").map(n=>n[0]).join("").slice(0,2).toUpperCase() || "?";
-  const [borrador, setBorrador] = useState(datos);
+  const [borrador, setBorrador] = useState({nombre:"",mail:"",tel:""});
   const [guardado, setGuardado] = useState(false);
   const abrirEdicion = () => { setBorrador(datos); setEditando(true); };
   const guardarEdicion = async () => {
@@ -1219,7 +1179,7 @@ function Perfil({ onLogout, saldo, compras, datosAlumno, reservas }) {
         <div style={{display:"flex",flexDirection:"column",gap:10}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
             <p style={{margin:0,fontSize:13,color:"#64748b"}}>Total invertido</p>
-            <p style={{margin:0,fontWeight:800,fontSize:18,color:DK}}>${(compras||[]).reduce((a,c)=>a+(c.monto||0),0).toLocaleString("es-AR")}</p>
+            <p style={{margin:0,fontWeight:800,fontSize:18,color:DK}}>${(compras||[]).reduce((a,c)=>a+(c.precio||0),0).toLocaleString("es-AR")}</p>
           </div>
           {(compras||[]).map(c=>{
             const fechaISO = c.fecha || (c.creado_en||"").slice(0,10);
@@ -1227,10 +1187,10 @@ function Perfil({ onLogout, saldo, compras, datosAlumno, reservas }) {
               <Card key={c.id} style={{padding:14}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
                   <div>
-                    <p style={{margin:0,fontWeight:700,fontSize:14,color:DK}}>{c.pack||c.descripcion||"Compra"}</p>
+                    <p style={{margin:0,fontWeight:700,fontSize:14,color:DK}}>{c.horas ? `${c.horas}hs` : "Compra"}</p>
                     <p style={{margin:"3px 0 0",fontSize:12,color:"#94a3b8"}}>{fechaISO ? fmt(fechaISO) : "-"} · {c.metodo||c.metodo_pago||"-"}</p>
                   </div>
-                  <p style={{margin:0,fontWeight:800,fontSize:15,color:P}}>${(c.monto||0).toLocaleString("es-AR")}</p>
+                  <p style={{margin:0,fontWeight:800,fontSize:15,color:P}}>${(c.precio||0).toLocaleString("es-AR")}</p>
                 </div>
               </Card>
             );
@@ -1296,10 +1256,11 @@ function Chat({ reservas, userId }) {
 
   useEffect(() => {
     if (!reservaSel) return;
+    let mounted = true;
     const canal = suscribirMensajes(reservaSel.id, msg => {
-      setMensajes(prev => ({...prev, [reservaSel.id]: [...(prev[reservaSel.id]||[]), msg]}));
+      if (mounted) setMensajes(prev => ({...prev, [reservaSel.id]: [...(prev[reservaSel.id]||[]), msg]}));
     });
-    return () => { canal.unsubscribe(); };
+    return () => { mounted = false; canal.unsubscribe(); };
   }, [reservaSel]);
 
   const enviar = () => {
@@ -1689,8 +1650,8 @@ function ModalCancelacion({ onAceptar, onCerrar }) {
 
 function AppAlumno({ user, onLogout }) {
   const [screen,setScreen] = useState("inicio");
-  const [onboardingVisto,setOnboardingVisto] = useState(false);
-  const [saldo,setSaldo] = useState(ALUMNO.saldo);
+  const [onboardingVisto,setOnboardingVisto] = useState(() => !!localStorage.getItem("pc_onboarding_visto"));
+  const [saldo,setSaldo] = useState(0);
 
   const [datosAlumno, setDatosAlumno] = useState(null);
   useEffect(() => {
@@ -1699,7 +1660,7 @@ function AppAlumno({ user, onLogout }) {
       .then((d) => { setDatosAlumno(d); setSaldo(d.saldo); })
       .catch((err) => console.error("Error al cargar alumno:", err));
   }, [user]);
-  const nombreAlumno = datosAlumno?.profiles?.nombre || ALUMNO.nombre;
+  const nombreAlumno = datosAlumno?.profiles?.nombre || "";
 
   const [reservasAlumno, setReservasAlumno] = useState(null);
   useEffect(() => {
@@ -1768,7 +1729,7 @@ function AppAlumno({ user, onLogout }) {
   ];
   return (
     <div style={{fontFamily:"'DM Sans','Segoe UI',sans-serif",background:BG,minHeight:"100vh",display:"flex",flexDirection:"column",maxWidth:480,margin:"0 auto",position:"relative"}}>
-      {!onboardingVisto && <Onboarding onTerminar={()=>setOnboardingVisto(true)}/>}
+      {!onboardingVisto && <Onboarding onTerminar={()=>{ localStorage.setItem("pc_onboarding_visto","1"); setOnboardingVisto(true); }}/>}
       {/* Header */}
       <div style={{background:"#fff",borderBottom:"1px solid #e2e8f0",padding:"12px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:10}}>
         <div style={{display:"flex",alignItems:"center",gap:8}}>
@@ -1783,17 +1744,18 @@ function AppAlumno({ user, onLogout }) {
             color:diasVenc(datosAlumno?.vencimiento)<=2?"#dc2626":diasVenc(datosAlumno?.vencimiento)<=7?"#92400e":P}}>
             {diasVenc(datosAlumno?.vencimiento)<=2?"🚨":diasVenc(datosAlumno?.vencimiento)<=7?"⏰":"⏱"} {saldo} hs
           </div>
-          <div onClick={()=>setScreen("perfil")} style={{cursor:"pointer"}}><Av i="LF" size={32} color={DK}/></div>
+          <div onClick={()=>setScreen("perfil")} style={{cursor:"pointer"}}><Av i={(nombreAlumno||"").split(" ").map(n=>n[0]).join("").slice(0,2).toUpperCase()||"?"} size={32} color={DK}/></div>
         </div>
       </div>
 
       {/* Contenido */}
       <div style={{flex:1,padding:"16px 16px 80px"}}>
-        {screen==="inicio" && <Inicio onNav={setScreen} saldo={saldo} nombre={nombreAlumno} reservas={reservasAlumno}/>}
+        {screen==="inicio" && <Inicio onNav={setScreen} saldo={saldo} nombre={nombreAlumno} reservas={reservasAlumno} vencimiento={datosAlumno?.vencimiento}/>}
         {screen==="reservar" && <Reservar profes={profesData} saldo={saldo} alumnoId={user?.id} onReservar={(costo)=>setSaldo(s=>+(s-costo).toFixed(2))}/>}
         {screen==="historial" && (
           <Historial
             reservas={reservasAlumno}
+            alumnoId={user?.id}
             onReprogramar={(id, nuevaFecha, nuevaHora) => {
               setReservasAlumno(prev => (prev||[]).map(r =>
                 r.id===id ? {...r, fecha:nuevaFecha, hora:nuevaHora, estado:"confirmada"} : r
@@ -1880,7 +1842,7 @@ function ProfeReservas({ reservas, onDevolucion }) {
       {(tab==="proximas"?proximas:pasadas).map(r=>(
         <Card key={r.id} style={{cursor:"pointer"}}>
           <div onClick={()=>setAbierto(abierto===r.id?null:r.id)} style={{display:"flex",alignItems:"center",gap:12}}>
-            <Av i={r.alumno.split(" ").map(n=>n[0]).join("").slice(0,2)} color={P} size={38}/>
+            <Av i={(r.alumno||"").split(" ").map(n=>n[0]).join("").slice(0,2)} color={P} size={38}/>
             <div style={{flex:1}}>
               <p style={{margin:0,fontWeight:700,fontSize:14,color:DK}}>{r.materia} — {r.alumno}</p>
               <p style={{margin:"2px 0 0",fontSize:12,color:"#64748b"}}>{fmt(r.fecha)} · {r.hora} · {r.modalidad}</p>
@@ -2629,8 +2591,8 @@ function Ingresos({ reservas }) {
                     <p style={{margin:"2px 0 4px",fontSize:12,color:"#64748b"}}>{fmt(r.fecha)} · {r.hora} · {r.horas}hs</p>
                     <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
                       {r.tipo==="grupal"
-                        ? <Badge bg="#f0f6fa" col={BL}>👥 {r.alumnosGrupo} alumnos × ${TARIFA_PROFE_GRP.toLocaleString("es-AR")}</Badge>
-                        : <Badge bg={PL} col={P}>👤 Individual · ${TARIFA_PROFE_IND.toLocaleString("es-AR")}/hs</Badge>
+                        ? <Badge bg="#f0f6fa" col={BL}>👥 {r.alumnosGrupo} alumnos × ${CFG.tarifaProfeGrp.toLocaleString("es-AR")}</Badge>
+                        : <Badge bg={PL} col={P}>👤 Individual · ${CFG.tarifaProfeInd.toLocaleString("es-AR")}/hs</Badge>
                       }
                       <Badge bg="#f0f6fa" col={BL}>{r.modalidad}</Badge>
                     </div>
@@ -3205,10 +3167,11 @@ function ChatProfe({ reservas, userId }) {
 
   useEffect(() => {
     if (!reservaSel) return;
+    let mounted = true;
     const canal = suscribirMensajes(reservaSel.id, msg => {
-      setMensajes(prev => ({...prev, [reservaSel.id]: [...(prev[reservaSel.id]||[]), msg]}));
+      if (mounted) setMensajes(prev => ({...prev, [reservaSel.id]: [...(prev[reservaSel.id]||[]), msg]}));
     });
-    return () => { canal.unsubscribe(); };
+    return () => { mounted = false; canal.unsubscribe(); };
   }, [reservaSel]);
 
   const enviar = () => {
@@ -3409,7 +3372,7 @@ function AlertaDevolucionesPendientes({ reservas, onVer }) {
       <span style={{fontSize:28}}>⚠️</span>
       <div style={{flex:1}}>
         <p style={{margin:0,fontWeight:700,fontSize:14,color:"#dc2626"}}>{pendientes.length} clase{pendientes.length>1?"s":""} sin devolución hace más de 24hs</p>
-        <p style={{margin:"2px 0 0",fontSize:12,color:"#64748b"}}>{pendientes.map(r=>r.alumno.split(" ")[0]).join(", ")} esperan tu feedback.</p>
+        <p style={{margin:"2px 0 0",fontSize:12,color:"#64748b"}}>{pendientes.map(r=>(r.alumno||"?").split(" ")[0]).join(", ")} esperan tu feedback.</p>
       </div>
       <span style={{fontSize:12,fontWeight:700,color:"#dc2626",flexShrink:0}}>Cargar →</span>
     </button>
@@ -3486,7 +3449,7 @@ function AppProfeMain({ user, onLogout }) {
     try {
       await marcarReserva(reserva.id, "ausente");
       const ts = new Date().toLocaleString("es-AR");
-      setReservas(prev=>prev.map(r=>r.id===reserva.id?{...r,alumnoAusente:true,realizada:true,marcadaEn:ts}:r));
+      setReservas(prev=>prev.map(r=>r.id===reserva.id?{...r,alumnoAusente:true,realizada:false,marcadaEn:ts}:r));
     } catch(err) { console.error("Error al marcar ausente:", err); }
     setModalAusente(null);
   };
@@ -3511,22 +3474,20 @@ function AppProfeMain({ user, onLogout }) {
   ];
 
   const handleDisponChange = (updater) => {
-    setDispon(prev => {
-      const next = typeof updater === 'function' ? updater(prev) : updater;
-      Object.entries(next).forEach(([fecha, horas]) => {
-        Object.entries(horas).forEach(([hora, tipo]) => {
-          if (prev[fecha]?.[hora] !== tipo)
-            setBloque(user.id, fecha, hora, tipo).catch(err => console.error("Error setBloque:", err));
-        });
+    const next = typeof updater === 'function' ? updater(dispon) : updater;
+    Object.entries(next).forEach(([fecha, horas]) => {
+      Object.entries(horas).forEach(([hora, tipo]) => {
+        if (dispon[fecha]?.[hora] !== tipo)
+          setBloque(user.id, fecha, hora, tipo).catch(err => console.error("Error setBloque:", err));
       });
-      Object.entries(prev).forEach(([fecha, horas]) => {
-        Object.entries(horas).forEach(([hora]) => {
-          if (!next[fecha]?.[hora])
-            borrarBloque(user.id, fecha, hora).catch(err => console.error("Error borrarBloque:", err));
-        });
-      });
-      return next;
     });
+    Object.entries(dispon).forEach(([fecha, horas]) => {
+      Object.entries(horas).forEach(([hora]) => {
+        if (!next[fecha]?.[hora])
+          borrarBloque(user.id, fecha, hora).catch(err => console.error("Error borrarBloque:", err));
+      });
+    });
+    setDispon(next);
   };
 
   const guardar = async (reserva, texto) => {
@@ -3909,7 +3870,7 @@ function Personas({ alumnos, setAlumnos, profes, setProfes, reservas }) {
   // ── Detalle profe ───────────────────────────────────────────────────────
   if (sel && tab==="profes") {
     const p = profes.find(x=>x.id===sel);
-    const reservasProfe = reservas.filter(r=>r.estado==="realizada");
+    const reservasProfe = reservas.filter(r=>r.estado==="realizada"&&r.profe_id===p.id);
     const porCobrar = sumPagoProfe(reservasProfe);
     return (
       <div style={{display:"flex",flexDirection:"column",gap:12}}>
@@ -4097,7 +4058,7 @@ function Personas({ alumnos, setAlumnos, profes, setProfes, reservas }) {
           return true;
         })
         .map(p=>{
-        const porCobrar = sumPagoProfe(reservas.filter(r=>r.estado==="realizada"));
+        const porCobrar = sumPagoProfe(reservas.filter(r=>r.estado==="realizada"&&r.profe_id===p.id));
         return (
           <button key={p.id} onClick={()=>setSel(p.id)}
             style={{background:"#fff",border:`1.5px solid ${!p.activo?"#e9d5ff":!p.pagadoMes?PB:"#e2e8f0"}`,borderRadius:14,padding:"14px",cursor:"pointer",textAlign:"left",boxShadow:"0 1px 6px rgba(0,0,0,0.04)"}}>
@@ -4191,7 +4152,7 @@ function Operaciones({ reservas }) {
 
   const lista = reservas
     .filter(r=>filtro==="todas"||r.estado===filtro)
-    .filter(r=>!busqueda||r.alumno.toLowerCase().includes(busqueda.toLowerCase())||r.materia.toLowerCase().includes(busqueda.toLowerCase()))
+    .filter(r=>!busqueda||(r.alumno||"").toLowerCase().includes(busqueda.toLowerCase())||r.materia.toLowerCase().includes(busqueda.toLowerCase()))
     .sort((a,b)=>b.fecha.localeCompare(a.fecha));
 
   const total = lista.reduce((a,r)=>a+r.monto,0);
@@ -4668,7 +4629,7 @@ function ModalResenia({ clase, onGuardar, onOmitir }) {
         <div style={{width:72,height:72,background:"#fefce8",borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:40}}>⭐</div>
         <h3 style={{margin:0,color:DK,fontSize:20,fontWeight:800}}>¡Gracias por tu reseña!</h3>
         <p style={{margin:0,fontSize:14,color:"#64748b"}}>Tu opinión ayuda a otros alumnos a elegir y motiva a David a seguir mejorando.</p>
-        <button onClick={onGuardar} style={{background:P,color:"#fff",border:"none",borderRadius:12,padding:"14px 32px",fontSize:15,fontWeight:700,cursor:"pointer",width:"100%"}}>
+        <button onClick={onOmitir} style={{background:P,color:"#fff",border:"none",borderRadius:12,padding:"14px 32px",fontSize:15,fontWeight:700,cursor:"pointer",width:"100%"}}>
           Cerrar
         </button>
       </div>
@@ -4717,7 +4678,7 @@ function ModalResenia({ clase, onGuardar, onOmitir }) {
           </div>
         )}
 
-        <button onClick={()=>{ if(estrellas>0) setEnviado(true); }} disabled={estrellas===0}
+        <button onClick={()=>{ if(estrellas>0) { onGuardar(estrellas, comentario); setEnviado(true); } }} disabled={estrellas===0}
           style={{background:estrellas>0?P:"#e2e8f0",color:estrellas>0?"#fff":"#94a3b8",border:"none",borderRadius:12,padding:"14px",fontSize:15,fontWeight:700,cursor:estrellas>0?"pointer":"not-allowed",transition:"all 0.2s"}}>
           Enviar reseña
         </button>
@@ -4732,17 +4693,29 @@ function ModalResenia({ clase, onGuardar, onOmitir }) {
 // ════════════════════════════════════════════════════════════════════════════
 // 🔄 MODAL RESERVA RECURRENTE (alumno)
 // ════════════════════════════════════════════════════════════════════════════
-function ModalRecurrenteAlumno({ onConfirmar, onCerrar }) {
+function ModalRecurrenteAlumno({ onConfirmar, onCerrar, profes }) {
   const [paso, setPaso] = useState(1);
   const [diasSel, setDiasSel] = useState([]);
   const [horaSel, setHoraSel] = useState(null);
   const [semanas, setSemanas] = useState(4);
   const [materia, setMateria] = useState("");
   const [modalidad, setModalidad] = useState("");
+  const [dispRaw, setDispRaw] = useState([]);
 
   const DIAS_SEMANA = ["Dom","Lun","Mar","Mié","Jue","Vie","Sáb"];
-  const profe = PROFES[0];
-  const dispProfe = DISPONIBILIDAD[1] || {};
+  const profe = profes?.[0] || null;
+  const dispProfe = dispRaw.reduce((acc, b) => {
+    if (!acc[b.fecha]) acc[b.fecha] = {};
+    acc[b.fecha][b.hora] = b.tipo;
+    return acc;
+  }, {});
+
+  useEffect(() => {
+    if (!profe?.id) return;
+    getDisponibilidad(profe.id)
+      .then(data => setDispRaw(data || []))
+      .catch(() => {});
+  }, [profe?.id]);
 
   const toggleDia = d => { setDiasSel(prev=>prev.includes(d)?prev.filter(x=>x!==d):[...prev,d]); setHoraSel(null); };
 
@@ -4824,16 +4797,18 @@ function ModalRecurrenteAlumno({ onConfirmar, onCerrar }) {
         <div style={{padding:"0 20px 44px",display:"flex",flexDirection:"column",gap:16}}>
 
           {/* Card del profe siempre visible */}
+          {profe && (
           <div style={{background:"#f8fafc",borderRadius:14,padding:"12px 14px",display:"flex",alignItems:"center",gap:12}}>
-            <Av i={profe.avatar} color={P} size={44}/>
+            <Av i={(profe.profiles?.nombre||"").split(" ").map(n=>n[0]).join("").slice(0,2).toUpperCase()||"P"} color={P} size={44}/>
             <div style={{flex:1}}>
-              <p style={{margin:0,fontWeight:800,fontSize:15,color:DK}}>{profe.nombre}</p>
-              <p style={{margin:"2px 0 0",fontSize:12,color:"#64748b"}}>{profe.materias.slice(0,3).join(" · ")}</p>
+              <p style={{margin:0,fontWeight:800,fontSize:15,color:DK}}>{profe.profiles?.nombre||"Profe"}</p>
+              <p style={{margin:"2px 0 0",fontSize:12,color:"#64748b"}}>{(profe.materias||[]).slice(0,3).join(" · ")}</p>
             </div>
             <div style={{display:"flex",gap:4}}>
-              {profe.modalidad.map(m=><Badge key={m} bg="#f0f6fa" col={BL}>{m}</Badge>)}
+              {(profe.modalidad||profe.modalidades||["Presencial","Virtual"]).map(m=><Badge key={m} bg="#f0f6fa" col={BL}>{m}</Badge>)}
             </div>
           </div>
+          )}
 
           {/* PASO 1 — Días con disponibilidad + horarios disponibles */}
           {paso===1 && (<>
@@ -4982,7 +4957,7 @@ function ModalRecurrenteAlumno({ onConfirmar, onCerrar }) {
             <div>
               <p style={{margin:"0 0 10px",fontWeight:700,fontSize:14,color:DK}}>¿Cómo?</p>
               <div style={{display:"flex",gap:10}}>
-                {profe.modalidad.map(m=>(
+                {(profe?.modalidad||profe?.modalidades||["Presencial","Virtual"]).map(m=>(
                   <button key={m} onClick={()=>setModalidad(m)}
                     style={{flex:1,background:modalidad===m?P:PL,color:modalidad===m?"#fff":P,border:`2px solid ${modalidad===m?P:PB}`,borderRadius:12,padding:"14px",fontSize:14,fontWeight:700,cursor:"pointer"}}>
                     {modalidad===m?"✓ ":""}{m}
@@ -5130,6 +5105,7 @@ function OnboardingRegistroAlumno({ onTerminar }) {
             <div>
               <label style={labelStyle}>Contraseña</label>
               <input type="password" value={form.pass} onChange={e=>set("pass",e.target.value)} placeholder="Mínimo 8 caracteres" style={inputStyle}/>
+              {form.pass.length>0 && form.pass.length<8 && <p style={{margin:"4px 0 0",fontSize:11,color:"#dc2626"}}>La contraseña necesita al menos 8 caracteres</p>}
             </div>
             <div>
               <label style={labelStyle}>Repetir contraseña</label>
@@ -5278,6 +5254,7 @@ function OnboardingRegistroProfe({ onTerminar }) {
               <input type="password" value={form.pass} onChange={e=>setForm(p=>({...p,pass:e.target.value}))}
                 placeholder="Mínimo 8 caracteres"
                 style={{border:`2px solid ${form.pass.length>0&&form.pass.length<8?"#fca5a5":"#e2e8f0"}`,borderRadius:12,padding:"12px 16px",fontSize:14,outline:"none",background:"#fff",color:DK,fontFamily:"inherit"}}/>
+              {form.pass.length>0 && form.pass.length<8 && <p style={{margin:"2px 0 0",fontSize:11,color:"#dc2626"}}>La contraseña necesita al menos 8 caracteres</p>}
             </div>
             <div style={{display:"flex",flexDirection:"column",gap:5}}>
               <label style={{fontSize:12,fontWeight:700,color:"#64748b"}}>Repetir contraseña *</label>
@@ -5842,35 +5819,6 @@ function LoginScreen({ onLogin, onRegistroProfe, onRegistroAlumno }) {
       </div>
     </div>
   );
-}
-
-// ════════════════════════════════════════════════════════════════════════════
-// SALDO DECIMAL — helper para acumular residuos de grupales
-// ════════════════════════════════════════════════════════════════════════════
-// El saldo acumulado se suma al saldo principal cuando llega a >= 1.0
-// Se muestra separado para transparencia: "6.5hs + 0.4hs acumuladas"
-function useSaldoConDecimales(saldoInicial, saldoAcumInicial) {
-  const [saldo, setSaldo]     = useState(saldoInicial);
-  const [acum, setAcum]       = useState(saldoAcumInicial);
-
-  const descontarHoras = (cant, esGrupal=false) => {
-    const costo = esGrupal ? cant * 0.8 : cant;
-    if (saldo >= costo) {
-      const nuevoSaldo = +(saldo - costo).toFixed(1);
-      setSaldo(nuevoSaldo);
-    }
-  };
-
-  // Cuando acum >= 1, transferir al saldo principal
-  const acumConsolidado = () => {
-    if (acum >= 1.0) {
-      const entero = Math.floor(acum);
-      setSaldo(s => +(s + entero).toFixed(1));
-      setAcum(a => +(a - entero).toFixed(1));
-    }
-  };
-
-  return { saldo, acum, descontarHoras, acumConsolidado };
 }
 
 // ════════════════════════════════════════════════════════════════════════════

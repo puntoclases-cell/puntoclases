@@ -168,9 +168,9 @@ export async function registrarProfe({ mail, pass, nombre, tel }) {
 }
 
 export async function crearProfe({ nombre, mail, materias, monotributo }) {
-  // El alta real de un profe implica crear su usuario (auth). En producción
-  // conviene hacerlo con una invitación o desde el panel admin server-side.
-  // Acá actualizamos/insertamos su fila de profe asumiendo que ya tiene cuenta.
+  // STUB: `nombre` y `mail` son ignorados aquí — el alta real de un profe
+  // requiere crear su usuario auth (auth.signUp) server-side o vía invitación.
+  // Usar `registrarProfe` para el flujo completo de registro con contraseña.
   const { data, error } = await supabase.from("profes").insert({
     materias, monotributo, activo: true,
   }).select().single();
