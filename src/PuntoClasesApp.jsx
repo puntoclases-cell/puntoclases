@@ -106,17 +106,6 @@ const ALUMNO = {
   nivel: "Secundario — 4to año",
 };
 
-const COMPRAS = [
-  { id:1, fecha:"2026-04-10", pack:"8 horas", monto:136000, metodo:"Tarjeta de crédito" },
-  { id:2, fecha:"2026-05-02", pack:"4 horas", monto:72000, metodo:"Transferencia" },
-  { id:3, fecha:"2026-06-01", pack:"8 horas", monto:136000, metodo:"Tarjeta de débito" },
-];
-
-const PROGRESO = [
-  { materia:"Matemática", clases:5, avance:"Avanzó en funciones cuadráticas y factorización. Próximo tema: ecuaciones de 2° grado.", emoji:"📐" },
-  { materia:"Física", clases:3, avance:"Buen progreso en cinemática. Necesita reforzar MRUV antes del parcial.", emoji:"⚡" },
-  { materia:"Química", clases:2, avance:"Comenzó estequiometría. Dificultades iniciales en balanceo, mejorando clase a clase.", emoji:"🧪" },
-];
 
 const PROFES = [{
   id: 1, nombre: "David González", avatar: "DG",
@@ -156,34 +145,12 @@ const DISPONIBILIDAD = {
   }
 };
 
-const HISTORIAL = [
-  { id:1, profe:"David González", materia:"Matemática", fecha:"2026-05-28", hora:"10:00", modalidad:"Presencial", devolucion:"Trabajamos funciones cuadráticas. Lucía mejoró notablemente en factorización. Para la próxima: repasar trinomios.", necesidad:"Repaso para el parcial de funciones", resenia:{estrellas:5, comentario:"Excelente clase, David explica muy claro y con paciencia. Llegué al parcial mucho más segura."} },
-  { id:2, profe:"David González", materia:"Física", fecha:"2026-05-30", hora:"16:00", modalidad:"Virtual", devolucion:"Excelente avance en cinemática. Recomiendo ejercitar más MRU antes de pasar a MRUV.", necesidad:"Movimiento rectilíneo para el examen", resenia:{estrellas:5, comentario:"Muy buena clase virtual, se entendió todo perfectamente."} },
-  { id:3, profe:"David González", materia:"Química", fecha:"2026-06-02", hora:"14:00", modalidad:"Presencial", devolucion:"", necesidad:"Estequiometría, no entiendo balanceo de ecuaciones", resenia:null },
-];
 
 const PROXIMAS = [
   { id:4, profe:"David González", materia:"Matemática", fecha:"2026-06-09", hora:"09:00", modalidad:"Presencial", tipo:"individual" },
   { id:5, profe:"David González", materia:"Física", fecha:"2026-06-12", hora:"17:00", modalidad:"Virtual", tipo:"individual" },
 ];
 
-// Chat: mensajes agrupados por reserva
-const MENSAJES_INIT = {
-  4: [
-    { id:1, de:"profe", texto:"¡Hola Lucía! Confirmo la clase del lunes a las 9. ¿Traés el libro de Baldor o trabajamos con fotocopias?", hora:"10:30", fecha:"2026-06-07" },
-    { id:2, de:"alumno", texto:"Hola David! Tengo las fotocopias que me diste la vez pasada. También tengo el parcial del año pasado si te sirve para guiarnos.", hora:"11:15", fecha:"2026-06-07" },
-    { id:3, de:"profe", texto:"Perfecto, llevalo. Vamos a repasar los ejercicios más difíciles. Nos vemos el lunes 💪", hora:"11:20", fecha:"2026-06-07" },
-  ],
-  5: [
-    { id:1, de:"profe", texto:"Lucía, para la clase virtual del jueves — ¿tenés Zoom instalado o preferís Meet?", hora:"09:00", fecha:"2026-06-08" },
-    { id:2, de:"alumno", texto:"Meet mejor, lo tengo en el celu directamente.", hora:"09:45", fecha:"2026-06-08" },
-  ],
-  // Historial
-  1: [
-    { id:1, de:"alumno", texto:"David, ¿para la clase del 28 traigo el cuaderno de actividades también?", hora:"18:00", fecha:"2026-05-27" },
-    { id:2, de:"profe", texto:"Sí, traelo. Y si tenés algún ejercicio que no te salió del parcial anterior, marcalo que lo arrancamos por ahí.", hora:"18:30", fecha:"2026-05-27" },
-  ],
-};
 
 const DIAS = ["Dom","Lun","Mar","Mié","Jue","Vie","Sáb"];
 const MESES = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
@@ -193,7 +160,7 @@ const diasEnMes = (y,m) => new Date(y,m+1,0).getDate();
 const primerDia = (y,m) => new Date(y,m,1).getDay();
 const toISO = (y,m,d) => `${y}-${String(m+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
 const fmt = iso => { const [y,m,d]=iso.split("-"); return `${d}/${m}/${y}`; };
-const diasVenc = iso => Math.ceil((new Date(iso)-new Date())/(1000*60*60*24));
+const diasVenc = iso => { if (!iso) return 0; const [y,m,d]=iso.split("-"); const hoy=new Date(); hoy.setHours(0,0,0,0); return Math.ceil((new Date(+y,+m-1,+d)-hoy)/(1000*60*60*24)); };
 
 // ── UI PRIMITIVOS ────────────────────────────────────────────────────────────
 const Av = ({i,size=40,color=P}) => (
@@ -296,11 +263,11 @@ function Reservar({ saldo, onReservar, profes, alumnoId }) {
   const [tipo,setTipo] = useState("individual");
 
   const [necesidad,setNecesidad] = useState("");
-  const [mes,setMes] = useState(5);
+  const [mes,setMes] = useState(new Date().getMonth());
   const [mostrarCancelacion,setMostrarCancelacion] = useState(false);
   const [modalRecurrenteAlumno, setModalRecurrenteAlumno] = useState(false);
   const [errorReserva, setErrorReserva] = useState("");
-  const year = 2026;
+  const year = new Date().getFullYear();
   const [nombreProfeElegido, setNombreProfeElegido] = useState("");
 
   const [disponRaw, setDisponRaw] = useState([]);
@@ -477,9 +444,9 @@ function Reservar({ saldo, onReservar, profes, alumnoId }) {
           <h3 style={{margin:0,color:DK}}>Elegí el día</h3>
           <Card style={{padding:16}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-              <button onClick={()=>setMes(m=>Math.max(m-1,5))} style={{background:"none",border:"none",fontSize:22,cursor:"pointer",color:P}}>‹</button>
+              <button onClick={()=>setMes(m=>Math.max(m-1,0))} style={{background:"none",border:"none",fontSize:22,cursor:"pointer",color:P}}>‹</button>
               <span style={{fontWeight:700,fontSize:15,color:DK}}>{MESES[mes]} {year}</span>
-              <button onClick={()=>setMes(m=>Math.min(m+1,7))} style={{background:"none",border:"none",fontSize:22,cursor:"pointer",color:P}}>›</button>
+              <button onClick={()=>setMes(m=>Math.min(m+1,11))} style={{background:"none",border:"none",fontSize:22,cursor:"pointer",color:P}}>›</button>
             </div>
             <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:4,textAlign:"center"}}>
               {DIAS.map(d=><div key={d} style={{fontSize:11,color:"#94a3b8",fontWeight:600,paddingBottom:4}}>{d}</div>)}
@@ -1616,7 +1583,7 @@ function AlertaVencimiento({ dias, saldo, onComprar }) {
 // ── COUNTDOWN PRÓXIMA CLASE ───────────────────────────────────────────────────
 function CountdownClase({ clase, onChat }) {
   // Calculamos días hasta la clase (simulado)
-  const fechaClase = new Date(clase.fecha + "T" + (clase.hora || "00:00") + ":00");
+  const fechaClase = new Date(+clase.fecha.slice(0,4), +clase.fecha.slice(5,7)-1, +clase.fecha.slice(8,10), +(clase.hora||"00:00").slice(0,2), +(clase.hora||"00:00").slice(3,5));
   const ahora = new Date();
   const diff = fechaClase - ahora;
   const dias = Math.floor(diff / (1000*60*60*24));
@@ -1810,11 +1777,11 @@ function AppAlumno({ user, onLogout }) {
         </div>
         <div style={{display:"flex",alignItems:"center",gap:10}}>
           <div style={{
-            background:diasVenc(ALUMNO.vencimiento)<=2?"#fff5f5":diasVenc(ALUMNO.vencimiento)<=7?"#fefce8":PL,
-            border:`1.5px solid ${diasVenc(ALUMNO.vencimiento)<=2?"#fecaca":diasVenc(ALUMNO.vencimiento)<=7?"#fde68a":PB}`,
+            background:diasVenc(datosAlumno?.vencimiento)<=2?"#fff5f5":diasVenc(datosAlumno?.vencimiento)<=7?"#fefce8":PL,
+            border:`1.5px solid ${diasVenc(datosAlumno?.vencimiento)<=2?"#fecaca":diasVenc(datosAlumno?.vencimiento)<=7?"#fde68a":PB}`,
             borderRadius:99,padding:"4px 12px",fontSize:13,fontWeight:700,
-            color:diasVenc(ALUMNO.vencimiento)<=2?"#dc2626":diasVenc(ALUMNO.vencimiento)<=7?"#92400e":P}}>
-            {diasVenc(ALUMNO.vencimiento)<=2?"🚨":diasVenc(ALUMNO.vencimiento)<=7?"⏰":"⏱"} {saldo} hs
+            color:diasVenc(datosAlumno?.vencimiento)<=2?"#dc2626":diasVenc(datosAlumno?.vencimiento)<=7?"#92400e":P}}>
+            {diasVenc(datosAlumno?.vencimiento)<=2?"🚨":diasVenc(datosAlumno?.vencimiento)<=7?"⏰":"⏱"} {saldo} hs
           </div>
           <div onClick={()=>setScreen("perfil")} style={{cursor:"pointer"}}><Av i="LF" size={32} color={DK}/></div>
         </div>
@@ -1894,7 +1861,7 @@ const HORAS_DIA = ["08:00","09:00","10:00","11:00","12:00","13:00","14:00","15:0
 function ProfeReservas({ reservas, onDevolucion }) {
   const [tab, setTab] = useState("proximas");
   const [abierto, setAbierto] = useState(null);
-  const hoy = "2026-06-09";
+  const hoy = (()=>{ const n=new Date(); return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,"0")}-${String(n.getDate()).padStart(2,"0")}`; })();
   const proximas = reservas.filter(r => r.fecha >= hoy).sort((a,b)=>a.fecha.localeCompare(b.fecha));
   const pasadas = reservas.filter(r => r.fecha < hoy).sort((a,b)=>b.fecha.localeCompare(a.fecha));
 
@@ -1955,8 +1922,8 @@ function ProfeReservas({ reservas, onDevolucion }) {
 // Pantalla disponibilidad del profe
 function ProfeDisponibilidad({ dispon, setDispon }) {
   const [fechaSel, setFechaSel] = useState(null);
-  const [mes, setMes] = useState(5);
-  const year = 2026;
+  const [mes, setMes] = useState(new Date().getMonth());
+  const year = new Date().getFullYear();
   const TIPOS = ["individual","grupal","ambas"];
   const TIPO_COLOR = { individual:{bg:PL,col:P}, grupal:{bg:"#f0f6fa",col:BL}, ambas:{bg:"#f0fdf4",col:"#15803d"} };
 
@@ -2003,9 +1970,9 @@ function ProfeDisponibilidad({ dispon, setDispon }) {
       {/* Calendario */}
       <Card style={{padding:16}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-          <button onClick={()=>setMes(m=>Math.max(m-1,5))} style={{background:"none",border:"none",fontSize:22,cursor:"pointer",color:P}}>‹</button>
+          <button onClick={()=>setMes(m=>Math.max(m-1,0))} style={{background:"none",border:"none",fontSize:22,cursor:"pointer",color:P}}>‹</button>
           <span style={{fontWeight:700,fontSize:15,color:DK}}>{MESES[mes]} {year}</span>
-          <button onClick={()=>setMes(m=>Math.min(m+1,8))} style={{background:"none",border:"none",fontSize:22,cursor:"pointer",color:P}}>›</button>
+          <button onClick={()=>setMes(m=>Math.min(m+1,11))} style={{background:"none",border:"none",fontSize:22,cursor:"pointer",color:P}}>›</button>
         </div>
         <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:4,textAlign:"center"}}>
           {DIAS.map(d=><div key={d} style={{fontSize:11,color:"#94a3b8",fontWeight:600,paddingBottom:4}}>{d}</div>)}
@@ -2088,31 +2055,9 @@ function ProfeDisponibilidad({ dispon, setDispon }) {
 
 // Tarifas — ver constantes en panel admin
 
-// ── DATA — profe @seed ───────────────────────────────────────────────────────
-
-const RESERVAS_INIT = [
-  { id:1, alumno:"Lucía Fernández", materia:"Matemática", fecha:"2026-06-09", hora:"09:00", horas:1, modalidad:"Presencial", tipo:"individual", alumnosGrupo:null, necesidad:"Repaso funciones cuadráticas para el parcial del viernes", devolucion:"", realizada:false, marcadaEn:null },
-  { id:2, alumno:"Lucía Fernández", materia:"Física", fecha:"2026-06-12", hora:"17:00", horas:1, modalidad:"Virtual", tipo:"individual", alumnosGrupo:null, necesidad:"Movimiento rectilíneo uniformemente variado", devolucion:"", realizada:false, marcadaEn:null },
-  { id:3, alumno:"Tomás Rodríguez + 2", materia:"Química", fecha:"2026-06-09", hora:"11:00", horas:1, modalidad:"Presencial", tipo:"grupal", alumnosGrupo:3, necesidad:"Balanceo de ecuaciones químicas", devolucion:"", realizada:false, marcadaEn:null },
-  { id:4, alumno:"Lucía Fernández", materia:"Matemática", fecha:"2026-05-28", hora:"10:00", horas:1, modalidad:"Presencial", tipo:"individual", alumnosGrupo:null, necesidad:"Repaso para el parcial de funciones", devolucion:"Trabajamos funciones cuadráticas. Mejoró notablemente en factorización.", realizada:true, marcadaEn:"2026-05-28 11:05" },
-  { id:5, alumno:"Sofía Pérez", materia:"Física", fecha:"2026-05-26", hora:"14:00", horas:2, modalidad:"Virtual", tipo:"individual", alumnosGrupo:null, necesidad:"Cinemática básica", devolucion:"Buen avance. Recomiendo ejercitar MRU antes de pasar a MRUV.", realizada:true, marcadaEn:"2026-05-26 16:02" },
-  { id:6, alumno:"Tomás Rodríguez", materia:"Álgebra", fecha:"2026-05-22", hora:"10:00", horas:1, modalidad:"Presencial", tipo:"individual", alumnosGrupo:null, necesidad:"Sistemas de ecuaciones", devolucion:"", realizada:true, marcadaEn:"2026-05-22 11:00" },
-  { id:7, alumno:"Grupo Química", materia:"Química", fecha:"2026-05-15", hora:"09:00", horas:1, modalidad:"Presencial", tipo:"grupal", alumnosGrupo:2, necesidad:"Tabla periódica y enlaces químicos", devolucion:"Muy buen avance en enlaces iónicos.", realizada:true, marcadaEn:"2026-05-15 10:01" },
-];
-
-const DISPON_INIT = {
-  "2026-06-09": { "09:00":"individual","10:00":"ambas","11:00":"grupal","14:00":"individual","15:00":"ambas","16:00":"grupal" },
-  "2026-06-10": { "08:00":"individual","10:00":"grupal","11:00":"ambas","16:00":"individual" },
-  "2026-06-11": { "09:00":"grupal","10:00":"ambas","14:00":"individual","15:00":"grupal" },
-  "2026-06-12": { "09:00":"individual","10:00":"ambas","13:00":"grupal","17:00":"individual" },
-  "2026-06-16": { "09:00":"ambas","10:00":"individual","11:00":"grupal","15:00":"ambas" },
-  "2026-06-17": { "10:00":"individual","14:00":"grupal","16:00":"ambas" },
-  "2026-06-18": { "09:00":"ambas","10:00":"individual","14:00":"grupal","17:00":"individual" },
-  "2026-06-19": { "11:00":"grupal","15:00":"ambas","17:00":"individual","19:00":"grupal" },
-};
 
 const initialsProfe = nombre => (nombre||"?").split(" ").map(n=>n[0]).join("").slice(0,2);
-const HOY = new Date().toISOString().slice(0,10);
+const HOY = (()=>{ const n=new Date(); return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,"0")}-${String(n.getDate()).padStart(2,"0")}`; })();
 
 // ── PANTALLA INICIO ──────────────────────────────────────────────────────────
 function ProfeInicioPanel({ onNav, reservas, profeNombre }) {
@@ -2331,8 +2276,8 @@ function ModalDevolucion({ reserva, onGuardar, onCerrar }) {
 // ── PANTALLA DISPONIBILIDAD ──────────────────────────────────────────────────
 function Disponibilidad({ dispon, setDispon, onRecurrente }) {
   const [fechaSel,setFechaSel] = useState(null);
-  const [mes,setMes] = useState(5);
-  const year = 2026;
+  const [mes,setMes] = useState(new Date().getMonth());
+  const year = new Date().getFullYear();
   const TIPO_COLOR = {
     individual:{bg:PL,col:P,icon:"👤"},
     grupal:{bg:"#f0f6fa",col:BL,icon:"👥"},
@@ -2379,9 +2324,9 @@ function Disponibilidad({ dispon, setDispon, onRecurrente }) {
 
       <Card style={{padding:16}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-          <button onClick={()=>setMes(m=>Math.max(m-1,5))} style={{background:"none",border:"none",fontSize:22,cursor:"pointer",color:P}}>‹</button>
+          <button onClick={()=>setMes(m=>Math.max(m-1,0))} style={{background:"none",border:"none",fontSize:22,cursor:"pointer",color:P}}>‹</button>
           <span style={{fontWeight:700,fontSize:15,color:DK}}>{MESES[mes]} {year}</span>
-          <button onClick={()=>setMes(m=>Math.min(m+1,8))} style={{background:"none",border:"none",fontSize:22,cursor:"pointer",color:P}}>›</button>
+          <button onClick={()=>setMes(m=>Math.min(m+1,11))} style={{background:"none",border:"none",fontSize:22,cursor:"pointer",color:P}}>›</button>
         </div>
         <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:4,textAlign:"center"}}>
           {DIAS.map(d=><div key={d} style={{fontSize:11,color:"#94a3b8",fontWeight:600,paddingBottom:4}}>{d}</div>)}
@@ -2607,8 +2552,8 @@ function Alumnos({ reservas, onDevolucion }) {
 
 // ── PANTALLA INGRESOS ────────────────────────────────────────────────────────
 function Ingresos({ reservas }) {
-  const [mes, setMes] = useState(5); // Junio
-  const year = 2026;
+  const [mes, setMes] = useState(new Date().getMonth());
+  const year = new Date().getFullYear();
   const nombresMes = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
 
   const realizadasMes = reservas.filter(r => {
@@ -2734,7 +2679,7 @@ function ModalRecurrente({ onCerrar, dispon, setDispon }) {
     for (let sem=0; sem<semanas; sem++) {
       diasSel.forEach(dia => {
         // Calcular próxima ocurrencia de ese día
-        const hoy = new Date(2026,5,9); // HOY simulado
+        const hoy = new Date();
         const diff = (dia - hoy.getDay() + 7) % 7 || 7;
         const fecha = new Date(hoy);
         fecha.setDate(hoy.getDate() + diff + sem*7);
@@ -3241,20 +3186,6 @@ function PerfilProfe({ onLogoutProfe, profeData }) {
 
 
 // ── PANTALLA CHAT (PROFE) ─────────────────────────────────────────────────────
-const MENSAJES_PROFE_INIT = { // @seed
-  1: [
-    { id:1, de:"alumno", texto:"David, ¿para la clase del lunes traigo el libro de Baldor o las fotocopias?", hora:"10:30", fecha:"2026-06-07" },
-    { id:2, de:"profe", texto:"Las fotocopias están bien. Y si tenés el parcial del año pasado llevalo, arrancamos por ahí 💪", hora:"11:20", fecha:"2026-06-07" },
-  ],
-  2: [
-    { id:1, de:"profe", texto:"Lucía, para la clase virtual del jueves — ¿tenés Zoom o preferís Meet?", hora:"09:00", fecha:"2026-06-08" },
-    { id:2, de:"alumno", texto:"Meet mejor, lo tengo en el celu directamente.", hora:"09:45", fecha:"2026-06-08" },
-  ],
-  3: [
-    { id:1, de:"alumno", texto:"Hola! Somos 3 en el grupo para la clase de química. ¿Llevamos calculadora?", hora:"14:00", fecha:"2026-06-08" },
-    { id:2, de:"profe", texto:"Sí, traigan calculadora. Y si tienen la tabla periódica del colegio, mejor.", hora:"14:30", fecha:"2026-06-08" },
-  ],
-};
 
 function ChatProfe({ reservas, userId }) {
   const [reservaSel, setReservaSel] = useState(null);
@@ -3715,7 +3646,7 @@ const CONFIG_INIT = {
 };
 
 // ── HELPERS ──────────────────────────────────────────────────────────────────
-const diasHasta = iso => iso ? Math.ceil((new Date(iso)-new Date())/(1000*60*60*24)) : 0;
+const diasHasta = iso => { if (!iso) return 0; const [y,m,d]=iso.split("-"); const hoy=new Date(); hoy.setHours(0,0,0,0); return Math.ceil((new Date(+y,+m-1,+d)-hoy)/(1000*60*60*24)); };
 const MESES_CORTO = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -4598,8 +4529,8 @@ function ModalReprogramarProfe({ reserva, dispon, onActualizar, onCerrar }) {
   const [confirmado, setConfirmado] = useState(false);
   const [nuevaFecha, setNuevaFecha] = useState(null);
   const [nuevaHora, setNuevaHora] = useState(null);
-  const [mes, setMes] = useState(5);
-  const year = 2026;
+  const [mes, setMes] = useState(new Date().getMonth());
+  const year = new Date().getFullYear();
   const dispProfe = dispon || {};
 
   const confirmarReprogramar = async () => {
@@ -4673,9 +4604,9 @@ function ModalReprogramarProfe({ reserva, dispon, onActualizar, onCerrar }) {
           <p style={{margin:0,fontWeight:700,fontSize:14,color:DK}}>Nueva fecha:</p>
           <div style={{background:"#f8fafc",borderRadius:14,padding:14}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-              <button onClick={()=>setMes(m=>Math.max(m-1,5))} style={{background:"none",border:"none",fontSize:20,cursor:"pointer",color:P}}>‹</button>
+              <button onClick={()=>setMes(m=>Math.max(m-1,0))} style={{background:"none",border:"none",fontSize:20,cursor:"pointer",color:P}}>‹</button>
               <span style={{fontWeight:700,fontSize:14,color:DK}}>{MESES[mes]} {year}</span>
-              <button onClick={()=>setMes(m=>Math.min(m+1,7))} style={{background:"none",border:"none",fontSize:20,cursor:"pointer",color:P}}>›</button>
+              <button onClick={()=>setMes(m=>Math.min(m+1,11))} style={{background:"none",border:"none",fontSize:20,cursor:"pointer",color:P}}>›</button>
             </div>
             <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3,textAlign:"center"}}>
               {DIAS.map(d=><div key={d} style={{fontSize:10,color:"#94a3b8",fontWeight:600,paddingBottom:3}}>{d}</div>)}
@@ -4846,7 +4777,7 @@ function ModalRecurrenteAlumno({ onConfirmar, onCerrar }) {
   // Verificar disponibilidad por semana
   const verificarPorSemana = () => {
     if (!horaSel || !diasSel.length) return [];
-    const BASE = new Date("2026-06-09");
+    const BASE = new Date(); BASE.setHours(0,0,0,0);
     const resultado = [];
     for (let sem = 0; sem < semanas; sem++) {
       const clasesSemana = [];
@@ -5538,9 +5469,9 @@ function ModalReprogramar({ reserva, onCerrar, onConfirmar, onCancelar }) {
   const [paso, setPaso] = useState(1); // 1=elegir acción, 2=confirmar
   const [nuevaFecha, setNuevaFecha] = useState(null);
   const [nuevaHora, setNuevaHora] = useState(null);
-  const [mes, setMes] = useState(5);
+  const [mes, setMes] = useState(new Date().getMonth());
   const [confirmado, setConfirmado] = useState(false);
-  const year = 2026;
+  const year = new Date().getFullYear();
 
   // Calcular si la clase es en menos de 24hs (simulado)
   const fechaClase = new Date(`${reserva.fecha}T${reserva.hora}`);
@@ -5653,9 +5584,9 @@ function ModalReprogramar({ reserva, onCerrar, onConfirmar, onCancelar }) {
           {/* Calendario */}
           <div style={{background:"#f8fafc",borderRadius:14,padding:14}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-              <button onClick={()=>setMes(m=>Math.max(m-1,5))} style={{background:"none",border:"none",fontSize:20,cursor:"pointer",color:P}}>‹</button>
+              <button onClick={()=>setMes(m=>Math.max(m-1,0))} style={{background:"none",border:"none",fontSize:20,cursor:"pointer",color:P}}>‹</button>
               <span style={{fontWeight:700,fontSize:14,color:DK}}>{MESES[mes]} {year}</span>
-              <button onClick={()=>setMes(m=>Math.min(m+1,7))} style={{background:"none",border:"none",fontSize:20,cursor:"pointer",color:P}}>›</button>
+              <button onClick={()=>setMes(m=>Math.min(m+1,11))} style={{background:"none",border:"none",fontSize:20,cursor:"pointer",color:P}}>›</button>
             </div>
             <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3,textAlign:"center"}}>
               {DIAS.map(d=><div key={d} style={{fontSize:10,color:"#94a3b8",fontWeight:600,paddingBottom:3}}>{d}</div>)}
