@@ -247,7 +247,7 @@ function Reservar({ saldo, onReservar, profes, alumnoId }) {
     <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",minHeight:300,gap:16,textAlign:"center",padding:20}}>
       <div style={{width:80,height:80,background:PL,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:40}}>🎉</div>
       <h2 style={{margin:0,color:DK,fontSize:22}}>¡Clase reservada!</h2>
-      <p style={{margin:0,color:"#64748b",fontSize:15,lineHeight:1.6}}>{materia} con {nombreProfeElegido || profe?.profiles?.nombre || profe?.titulo}<br/>{fmt(fecha)} — {horas.sort().join(', ')}</p>
+      <p style={{margin:0,color:"#64748b",fontSize:15,lineHeight:1.6}}>{materia} con {nombreProfeElegido || profe?.nombre || profe?.titulo}<br/>{fmt(fecha)} — {horas.sort().join(', ')}</p>
       <Badge bg="#dcfce7" col="#15803d">-{costo} hs descontadas de tu saldo</Badge>
       <Btn onClick={()=>{setPaso(1);setProfeId(null);setMateria("");setModalidad("");setFecha(null);setHoras([]);setNecesidad("");setTipo("individual");setNombreProfeElegido("");}}>
         Reservar otra clase
@@ -332,7 +332,7 @@ function Reservar({ saldo, onReservar, profes, alumnoId }) {
               <Btn onClick={()=>setPaso(1)} variant="secondary">← Elegir otra materia</Btn>
             </Card>
           ) : profesParaMateria.map(p=>{
-            const nombreProfe = p.profiles?.nombre || p.titulo || p.nombre || "";
+            const nombreProfe = p.nombre || p.titulo || "";
             const initials = nombreProfe.split(" ").map(n=>n[0]).join("").slice(0,2).toUpperCase() || "P";
             const modalidades = p.modalidad || p.modalidades || ["Presencial","Virtual"];
             const modalText = modalidades.length===1 ? modalidades[0] : "Presencial y Virtual";
@@ -384,7 +384,7 @@ function Reservar({ saldo, onReservar, profes, alumnoId }) {
         <div style={{display:"flex",flexDirection:"column",gap:14}}>
           <div style={{background:PL,border:`1.5px solid ${PB}`,borderRadius:12,padding:"10px 14px"}}>
             <p style={{margin:0,fontSize:13,color:P,fontWeight:600}}>
-              {materia} · con {(nombreProfeElegido || profe?.profiles?.nombre || profe?.titulo || "el profe").split(" ")[0]}
+              {materia} · con {(nombreProfeElegido || profe?.nombre || profe?.titulo || "el profe").split(" ")[0]}
             </p>
           </div>
           <h3 style={{margin:0,color:DK}}>Elegí el día</h3>
@@ -424,7 +424,7 @@ function Reservar({ saldo, onReservar, profes, alumnoId }) {
         <div style={{display:"flex",flexDirection:"column",gap:16}}>
           <div style={{background:PL,border:`1.5px solid ${PB}`,borderRadius:12,padding:"10px 14px"}}>
             <p style={{margin:0,fontSize:13,color:P,fontWeight:600}}>
-              {materia} · con {(nombreProfeElegido || profe?.profiles?.nombre || profe?.titulo || "el profe").split(" ")[0]}
+              {materia} · con {(nombreProfeElegido || profe?.nombre || profe?.titulo || "el profe").split(" ")[0]}
             </p>
           </div>
           <div>
@@ -551,14 +551,14 @@ function Reservar({ saldo, onReservar, profes, alumnoId }) {
       {paso===5 && (
         <div style={{display:"flex",flexDirection:"column",gap:14}}>
           <h3 style={{margin:0,color:DK}}>¿Qué necesitás trabajar?</h3>
-          <p style={{margin:0,fontSize:13,color:"#64748b"}}>Contale a {(nombreProfeElegido || profe?.profiles?.nombre || profe?.titulo || "el profe").split(" ")[0]} qué temas traer preparados. Cuanto más detalle, mejor la clase.</p>
+          <p style={{margin:0,fontSize:13,color:"#64748b"}}>Contale a {(nombreProfeElegido || profe?.nombre || profe?.titulo || "el profe").split(" ")[0]} qué temas traer preparados. Cuanto más detalle, mejor la clase.</p>
           <textarea value={necesidad} onChange={e=>setNecesidad(e.target.value)}
             placeholder="Ej: Tengo parcial de funciones cuadráticas la semana que viene y no entiendo factorización..."
             style={{width:"100%",minHeight:120,borderRadius:12,border:`2px solid ${necesidad?P:"#e2e8f0"}`,padding:14,fontSize:14,fontFamily:"inherit",resize:"vertical",boxSizing:"border-box",outline:"none",transition:"border 0.2s"}}/>
           <Card style={{background:"#f0fdf4",border:"1.5px solid #bbf7d0",padding:14}}>
             <p style={{margin:"0 0 8px",fontWeight:700,fontSize:13,color:"#166534"}}>Resumen de tu reserva</p>
             <div style={{display:"flex",flexDirection:"column",gap:4,fontSize:13,color:"#374151"}}>
-              <span>👨‍🏫 {nombreProfeElegido || profe?.profiles?.nombre || profe?.titulo || "—"} — {materia}</span>
+              <span>👨‍🏫 {nombreProfeElegido || profe?.nombre || profe?.titulo || "—"} — {materia}</span>
               <span>📅 {fmt(fecha)} — {horas.sort().join(', ')}</span>
               <span>📍 {modalidad} · Clase {tipo}</span>
               <span>⏱ Se descuentan <strong>{costo} hs</strong> de tu saldo</span>
@@ -984,7 +984,7 @@ function Profes({ onReservar, profes }) {
     <div style={{display:"flex",flexDirection:"column",gap:14}}>
       <h3 style={{margin:0,color:DK}}>Nuestro profe</h3>
       {profes.map(p=>{
-        const nombreProfe = p.profiles?.nombre || "";
+        const nombreProfe = p.nombre || "";
         const initiales = nombreProfe.split(" ").map(n=>n[0]).join("").slice(0,2).toUpperCase() || "P";
         return (
           <Card key={p.id}>
@@ -4885,9 +4885,9 @@ function ModalRecurrenteAlumno({ onConfirmar, onCerrar, profes }) {
           {/* Card del profe siempre visible */}
           {profe && (
           <div style={{background:"#f8fafc",borderRadius:14,padding:"12px 14px",display:"flex",alignItems:"center",gap:12}}>
-            <Av i={(profe.profiles?.nombre||"").split(" ").map(n=>n[0]).join("").slice(0,2).toUpperCase()||"P"} color={P} size={44}/>
+            <Av i={(profe.nombre||"").split(" ").map(n=>n[0]).join("").slice(0,2).toUpperCase()||"P"} color={P} size={44}/>
             <div style={{flex:1}}>
-              <p style={{margin:0,fontWeight:800,fontSize:15,color:DK}}>{profe.profiles?.nombre||"Profe"}</p>
+              <p style={{margin:0,fontWeight:800,fontSize:15,color:DK}}>{profe.nombre||"Profe"}</p>
               <p style={{margin:"2px 0 0",fontSize:12,color:"#64748b"}}>{(profe.materias||[]).slice(0,3).join(" · ")}</p>
             </div>
             <div style={{display:"flex",gap:4}}>

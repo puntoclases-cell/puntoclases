@@ -146,9 +146,9 @@ export async function actualizarPerfil(userId, cambios) {
 // ── PROFE ────────────────────────────────────────────────────────────────────
 
 export async function getProfes() {
-  const { data, error } = await supabase.from("profes").select("*, profiles(nombre, mail)").eq("activo", true);
+  const { data, error } = await supabase.from("profes_publicos").select("*");
   if (error) throw error;
-  return data;
+  return data; // { id, activo, materias, suspendido, nombre } — sin datos sensibles
 }
 
 export async function getProfesAdmin() {
