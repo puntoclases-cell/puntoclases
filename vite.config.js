@@ -10,9 +10,18 @@ export default defineConfig({
       injectRegister: 'auto',
       manifest: false,
       workbox: {
+        globPatterns: ['**/*.{js,css,html,png,svg,json,ico,woff2}'],
         cleanupOutdatedCaches: true,
         skipWaiting: true,
         clientsClaim: true,
+        navigateFallback: '/index.html',
+        runtimeCaching: [
+          {
+            urlPattern: ({ request }) => request.mode === 'navigate',
+            handler: 'NetworkFirst',
+            options: { cacheName: 'pages' },
+          },
+        ],
       },
     }),
   ],
