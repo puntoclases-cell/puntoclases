@@ -337,3 +337,13 @@ export async function addHorasAdmin(alumnoId, delta = 1) {
   if (error) throw error;
   return data; // numeric saldo_nuevo
 }
+
+// ── EDGE FUNCTIONS ────────────────────────────────────────────────────────────
+
+export async function crearPreferencia(horas, packId = null) {
+  const { data, error } = await supabase.functions.invoke("crear-preferencia", {
+    body: { horas, packId },
+  });
+  if (error) throw error;
+  return data; // { init_point }
+}

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { login, getUsuarioActual, onAuthChange, logout, getAlumno, getCompras, getReservasAlumno, getProfes, getProfesAdmin, getDisponibilidad, getReservasProfe, marcarReserva, cargarDevolucion, reprogramarReserva, setBloque, borrarBloque, getAlumnos, getTodasLasReservas, actualizarAlumno, actualizarProfe, actualizarPerfil, crearCompra, crearReserva, verificarBloqueOcupado, getMensajes, enviarMensaje, suscribirMensajes, registrarAlumno, registrarProfe, enviarRecuperacion, actualizarPassword, onPasswordRecovery, crearResenia, getConfig, updateConfig, getPacks, acreditarCompra, devolverHoras, addHorasAdmin } from "./db";
+import { login, getUsuarioActual, onAuthChange, logout, getAlumno, getCompras, getReservasAlumno, getProfes, getProfesAdmin, getDisponibilidad, getReservasProfe, marcarReserva, cargarDevolucion, reprogramarReserva, setBloque, borrarBloque, getAlumnos, getTodasLasReservas, actualizarAlumno, actualizarProfe, actualizarPerfil, crearCompra, crearReserva, verificarBloqueOcupado, getMensajes, enviarMensaje, suscribirMensajes, registrarAlumno, registrarProfe, enviarRecuperacion, actualizarPassword, onPasswordRecovery, crearResenia, getConfig, updateConfig, getPacks, devolverHoras, addHorasAdmin, crearPreferencia } from "./db";
 
 // ════════════════════════════════════════════════════════════════════════════
 // PUNTOCLASES — APP UNIFICADA
@@ -927,25 +927,11 @@ function Comprar({ onComprar, compras, cfg: cfgProp, packsDB }) {
               horas: seleccion.horas,
               precio: seleccion.precio,
             }));
-            const res = await fetch("https://api.mercadopago.com/checkout/preferences", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                "Authorization": `Bearer ${import.meta.env.VITE_MP_ACCESS_TOKEN}`,
-              },
-              body: JSON.stringify({
-                items: [{ title: `${seleccion.horas} horas PuntoClases`, quantity: 1, unit_price: seleccion.precio, currency_id: "ARS" }],
-                back_urls: { success: "https://puntoclases.vercel.app", failure: "https://puntoclases.vercel.app", pending: "https://puntoclases.vercel.app" },
-              }),
-            });
-            const pref = await res.json();
-            console.log("MP response completo:", JSON.stringify(pref));
-            if (!res.ok) throw new Error(JSON.stringify(pref));
-            if (pref.init_point) {
-              window.location.href = pref.init_point;
-            } else {
-              throw new Error(JSON.stringify(pref));
-            }
+            const { init_point } = await crearPreferencia(
+              seleccion.horas,
+              tab === "packs" ? sel : null,
+            );
+            window.location.href = init_point;
           } catch (err) {
             console.error("Error al crear preferencia MP:", err);
             setPago("idle");
@@ -1713,27 +1699,22 @@ function AppAlumno({ user, onLogout }) {
     const paymentId = params.get("payment_id") || params.get("collection_id") || null;
     if (!collectionStatus) return;
     const raw = localStorage.getItem("pc_compra_pendiente");
-    if (!raw) return;
-    const { horas, precio } = JSON.parse(raw);
+    const { horas, precio } = raw ? JSON.parse(raw) : {};
     localStorage.removeItem("pc_compra_pendiente");
     window.history.replaceState({}, "", window.location.pathname);
 
     if (collectionStatus === "approved") {
-      acreditarCompra(user.id, horas, precio, paymentId)
-        .then(({ compra_id, saldo_nuevo }) => {
-          if (compra_id === null) return; // ya procesado (idempotente por payment_id)
-          setSaldo(saldo_nuevo);
-          setComprasAlumno(prev => [{ alumno_id: user.id, horas, precio, medio: "mercadopago", estado_pago: "aprobado", creado_en: new Date().toISOString() }, ...(prev||[])]);
-          setCompraAprobada({ horas, precio });
-        })
-        .catch(err => {
-          console.error("Error al registrar compra aprobada:", err);
-          alert("Error al acreditar el pago: " + (err.message || "intentá de nuevo"));
-        });
+      // El webhook acredita las horas — acá solo mostramos confirmación y refrescamos saldo
+      setCompraAprobada({ horas, precio });
+      setTimeout(() => {
+        getAlumno(user.id).then(d => { if (d?.saldo !== undefined) setSaldo(d.saldo); }).catch(() => {});
+      }, 5000);
     } else {
       const estadoPago = collectionStatus === "pending" ? "pendiente" : "fallido";
-      crearCompra(user.id, horas, precio, null, estadoPago, paymentId)
-        .catch(err => console.error("Error al registrar compra " + estadoPago + ":", err));
+      if (horas && precio) {
+        crearCompra(user.id, horas, precio, null, estadoPago, paymentId)
+          .catch(err => console.error("Error al registrar compra " + estadoPago + ":", err));
+      }
     }
   }, [user, datosAlumno]);
 
@@ -1798,13 +1779,19 @@ function AppAlumno({ user, onLogout }) {
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:50,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
           <div style={{background:"#fff",borderRadius:20,padding:"28px 22px",maxWidth:360,width:"100%",textAlign:"center",display:"flex",flexDirection:"column",gap:14,alignItems:"center"}}>
             <div style={{width:64,height:64,borderRadius:"50%",background:"#dcfce7",display:"flex",alignItems:"center",justifyContent:"center",fontSize:34}}>✓</div>
-            <h3 style={{margin:0,color:DK,fontSize:19}}>¡Pago aprobado!</h3>
-            <p style={{margin:0,fontSize:14,color:"#64748b"}}>Se acreditaron <strong style={{color:P}}>{compraAprobada.horas} horas</strong> a tu saldo.</p>
-            <div style={{background:"#f8fafc",borderRadius:12,padding:14,width:"100%",textAlign:"left",display:"flex",flexDirection:"column",gap:6,fontSize:13,color:"#374151"}}>
-              <div style={{display:"flex",justifyContent:"space-between"}}><span>Horas acreditadas</span><strong>{compraAprobada.horas}hs</strong></div>
-              <div style={{display:"flex",justifyContent:"space-between"}}><span>Monto</span><strong>${compraAprobada.precio.toLocaleString("es-AR")}</strong></div>
-              <div style={{display:"flex",justifyContent:"space-between"}}><span>Medio</span><strong>Mercado Pago</strong></div>
-            </div>
+            <h3 style={{margin:0,color:DK,fontSize:19}}>¡Pago recibido!</h3>
+            <p style={{margin:0,fontSize:14,color:"#64748b"}}>
+              {compraAprobada.horas
+                ? <>Se acreditarán <strong style={{color:P}}>{compraAprobada.horas} horas</strong> a tu saldo en segundos.</>
+                : "Tu pago fue procesado. Las horas se acreditarán en segundos."}
+            </p>
+            {compraAprobada.horas && compraAprobada.precio && (
+              <div style={{background:"#f8fafc",borderRadius:12,padding:14,width:"100%",textAlign:"left",display:"flex",flexDirection:"column",gap:6,fontSize:13,color:"#374151"}}>
+                <div style={{display:"flex",justifyContent:"space-between"}}><span>Horas</span><strong>{compraAprobada.horas}hs</strong></div>
+                <div style={{display:"flex",justifyContent:"space-between"}}><span>Monto</span><strong>${compraAprobada.precio.toLocaleString("es-AR")}</strong></div>
+                <div style={{display:"flex",justifyContent:"space-between"}}><span>Medio</span><strong>Mercado Pago</strong></div>
+              </div>
+            )}
             <Btn onClick={()=>setCompraAprobada(null)}>Listo</Btn>
           </div>
         </div>
