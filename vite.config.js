@@ -10,7 +10,7 @@ export default defineConfig({
       injectRegister: 'auto',
       manifest: false,
       workbox: {
-        globPatterns: ['**/*.{js,css,html,png,svg,json,ico,woff2}'],
+        globPatterns: ['**/*.{js,css,html,png,svg,ico,woff2}'],
         cleanupOutdatedCaches: true,
         skipWaiting: true,
         clientsClaim: true,
