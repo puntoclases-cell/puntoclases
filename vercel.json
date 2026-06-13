@@ -6,6 +6,20 @@
         { "key": "Cache-Control", "value": "no-store" },
         { "key": "Clear-Site-Data", "value": "\"cache\", \"cookies\", \"storage\"" }
       ]
+    },
+    {
+      "source": "/(icon-192|icon-512|icon-maskable-512|apple-touch-icon).png",
+      "headers": [
+        { "key": "Access-Control-Allow-Origin", "value": "*" },
+        { "key": "Cache-Control", "value": "public, max-age=86400" }
+      ]
+    },
+    {
+      "source": "/manifest.json",
+      "headers": [
+        { "key": "Access-Control-Allow-Origin", "value": "*" },
+        { "key": "Content-Type", "value": "application/manifest+json" }
+      ]
     }
   ]
 }
