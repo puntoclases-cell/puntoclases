@@ -59,6 +59,9 @@ Deno.serve(async (req) => {
   }
 
   // 5. Acreditar horas con la RPC idempotente (service_role bypasea RLS)
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const safePackId = pack_id && UUID_RE.test(String(pack_id)) ? pack_id : null;
+
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
@@ -68,7 +71,7 @@ Deno.serve(async (req) => {
     p_horas: horas,
     p_precio: precio,
     p_payment_id: String(paymentId),
-    p_pack_id: pack_id ?? null,
+    p_pack_id: safePackId,
   });
 
   if (error) {

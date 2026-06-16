@@ -794,7 +794,7 @@ function Comprar({ onComprar, compras, cfg: cfgProp, packsDB }) {
 
   const seleccion = tab==="packs"
     ? packs.find(p=>p.id===sel)
-    : sel==="sueltas" ? {horas:cantSueltas, precio:precioSuelto} : null;
+    : {horas:cantSueltas, precio:precioSuelto};
 
   return (
     <div style={{display:"flex",flexDirection:"column",gap:14}}>
@@ -1708,6 +1708,7 @@ function AppAlumno({ user, onLogout }) {
       setCompraAprobada({ horas, precio });
       setTimeout(() => {
         getAlumno(user.id).then(d => { if (d?.saldo !== undefined) setSaldo(d.saldo); }).catch(() => {});
+        getCompras(user.id).then(c => setComprasAlumno(c)).catch(() => {});
       }, 5000);
     } else {
       const estadoPago = collectionStatus === "pending" ? "pendiente" : "fallido";
