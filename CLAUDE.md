@@ -24,19 +24,22 @@ Arrancá del estado de abajo; **no re-diagnostiques lo ✅**.
 - **DB prod**: connection string en `DATABASE_URL` (archivo `.env.local`, ignorado por git). Para consultar: `psql $DATABASE_URL -c "SELECT ..."`.
 
 ## Esquema (ojo)
-- La tabla `compras` **NO tiene columna `created_at`**. Leé las columnas reales antes de consultarla.
-- `service_role` hoy solo tiene `SELECT` en `config` y `packs` (se lo agregamos). Si algo server-side falla con permisos, revisá grants.
+- La tabla `compras` **NO tiene columna `created_at`** (sí tiene `creado_en`). Leé las columnas reales antes de consultarla.
+- `service_role` tiene: `SELECT` en `config` y `packs`; `EXECUTE` en `acreditar_compra`. Es todo lo necesario para el flujo actual.
+- `acreditar_compra` es SECURITY DEFINER (owner postgres): inserta en `compras` y actualiza `alumnos` sin necesitar grants directos en esas tablas.
 
-## TAREA ACTUAL (transitorio — actualizá o borrá cuando cierre)
-**Arreglar pagos.**
-- ✅ "Pagar con MP" no redirigía → faltaba `GRANT SELECT ON config,packs TO service_role` (Postgres 42501). Aplicado → redirige.
-- ✅ Pago aprueba end-to-end con comprador de prueba + tarjeta de prueba.
-- 🔴 **EN CURSO: el webhook NO acredita** (saldo sigue 0). Evidencia (Invocations de `mp-webhook`): la notif de pago en formato **NUEVO** (`?type=payment&data.id=<pid>`) da **500**; el formato viejo (`?id&topic`) da 200 pero tampoco acredita. El código no maneja bien la notif nueva (`data.id`). **NO es grants** (`acreditar_compra` es SECURITY DEFINER dueño postgres + `service_role` tiene EXECUTE; el webhook solo llama ese RPC).
-  - **FIX:** leé `supabase/functions/mp-webhook/index.ts`; manejá la notif nueva (sacar paymentId de `data.id` → `GET /v1/payments/{id}` con `MP_ACCESS_TOKEN` → `acreditar_compra`) **sin romper lo que hoy da 200**. Mostrame el **diff** (único gate). Con mi OK: deploy por CLI + re-invocá el pago ya aprobado `163363540521` con curl y verificá 200 + acreditación (idempotente por `payment_id`).
+## TAREA ACTUAL
+✅ **Pagos end-to-end funcionando en TEST.** Webhook acredita, saldo sube, fila en compras OK.
 
-## Cola (post-fix, en orden)
-- **A)** Verificar acreditación real: ↑ saldo del alumno + fila en `compras` + desaparece la promo "1ra compra 2hs 50% OFF" (si sigue tras una compra real → **ES bug**; mirar lógica de la promo).
-- **B)** Front: en "Horas sueltas", elegir 1/2/3 hs deja "Pagar con MP" gris (`disabled={!seleccion}`); esa pestaña no setea `seleccion`. Arreglar en `PuntoClasesApp.jsx`.
-- **C)** Revertir la línea de diagnóstico en `crear-preferencia` (hoy filtra `cfgErr`/`serviceKeyPresent` → dejar error limpio).
-- **D)** Producción: cargar `MP_WEBHOOK_SECRET` + validar firma; rotar el `MP_ACCESS_TOKEN` comprometido y el token de Supabase de prueba.
-- **E)** Auditar otros GRANT faltantes de `service_role` (hoy solo `SELECT` en `config`/`packs`).
+**Pendiente antes de ir a PRODUCCIÓN REAL (Task D):**
+El código de validación de firma HMAC ya está en `mp-webhook/index.ts` (bloque `if (webhookSecret)`). Solo falta que vos hagas estas 3 acciones manuales en los dashboards:
+
+1. **MP Dashboard** → Tu app → Webhooks → copiá el "Secret" del webhook → guardalo.
+2. **Supabase Dashboard** → Edge Functions → `mp-webhook` → Secrets → `MP_WEBHOOK_SECRET=<el secret de MP>`.
+3. **Rotar MP_ACCESS_TOKEN**: en MP crear credenciales de producción reales (no las de test) y cargarlas en Supabase Secrets como `MP_ACCESS_TOKEN`.
+4. **Rotar Supabase anon key** si fue expuesta: Dashboard → Settings → API → regenerar.
+
+Después de cargar `MP_WEBHOOK_SECRET`, la validación de firma se activa sola (sin deploy).
+
+## Cola
+- Nada urgente. Ver tareas de producto/UX abajo si querés agregar features.
