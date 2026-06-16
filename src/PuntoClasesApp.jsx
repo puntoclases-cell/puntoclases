@@ -402,9 +402,12 @@ function Reservar({ saldo, onReservar, profes, alumnoId }) {
                 const bloqDia = Object.entries(dispon[iso]||{})
                   .filter(([h,t]) => t==="ambas" || t===tipo);
                 const tiene = bloqDia.length > 0;
+                const hoy = toISO(new Date().getFullYear(), new Date().getMonth(), new Date().getDate());
+                const esPasado = iso < hoy;
+                const disponible = tiene && !esPasado;
                 return (
-                  <button key={d} disabled={!tiene} onClick={()=>setFecha(iso)}
-                    style={{aspectRatio:"1",borderRadius:8,border:sel?`2px solid ${P}`:"none",background:sel?P:tiene?PL:"transparent",color:sel?"#fff":tiene?P:"#cbd5e1",fontSize:13,fontWeight:tiene?700:400,cursor:tiene?"pointer":"default"}}>
+                  <button key={d} disabled={!disponible} onClick={()=>setFecha(iso)}
+                    style={{aspectRatio:"1",borderRadius:8,border:sel?`2px solid ${P}`:"none",background:sel?P:disponible?PL:"transparent",color:sel?"#fff":disponible?P:"#cbd5e1",fontSize:13,fontWeight:disponible?700:400,cursor:disponible?"pointer":"default"}}>
                     {d}
                   </button>
                 );
@@ -579,6 +582,11 @@ function Reservar({ saldo, onReservar, profes, alumnoId }) {
             <Btn onClick={async ()=>{
               setErrorReserva("");
               try {
+                const hoy = toISO(new Date().getFullYear(), new Date().getMonth(), new Date().getDate());
+                if (fecha < hoy) {
+                  setErrorReserva("No podés reservar en una fecha pasada.");
+                  return;
+                }
                 for (const h of horas) {
                   const ocupado = await verificarBloqueOcupado(profeId, fecha, h);
                   if (ocupado) {
@@ -1253,7 +1261,7 @@ function Chat({ reservas, userId }) {
     if (!reservaSel) return;
     let mounted = true;
     const canal = suscribirMensajes(reservaSel.id, msg => {
-      if (mounted) setMensajes(prev => ({...prev, [reservaSel.id]: [...(prev[reservaSel.id]||[]), msg]}));
+      if (mounted) setMensajes(prev => { const ya=prev[reservaSel.id]||[]; if(ya.some(m=>m.id===msg.id)) return prev; return {...prev,[reservaSel.id]:[...ya,msg]}; });
     });
     return () => { mounted = false; canal.unsubscribe(); };
   }, [reservaSel]);
@@ -1263,6 +1271,7 @@ function Chat({ reservas, userId }) {
     const t = texto.trim();
     setTexto("");
     enviarMensaje(reservaSel.id, "alumno", userId, t)
+      .then(msg => { if(msg?.id) setMensajes(prev=>{ const ya=prev[reservaSel.id]||[]; if(ya.some(m=>m.id===msg.id)) return prev; return {...prev,[reservaSel.id]:[...ya,msg]}; }); })
       .catch(err => { console.error("Error al enviar mensaje:", err); setTexto(t); });
   };
 
@@ -1750,7 +1759,7 @@ function AppAlumno({ user, onLogout }) {
       {/* Contenido */}
       <div style={{flex:1,padding:"16px 16px 80px"}}>
         {screen==="inicio" && <Inicio onNav={setScreen} saldo={saldo} nombre={nombreAlumno} reservas={reservasAlumno} vencimiento={datosAlumno?.vencimiento}/>}
-        {screen==="reservar" && <Reservar profes={profesData} saldo={saldo} alumnoId={user?.id} onReservar={(costo)=>setSaldo(s=>+(s-costo).toFixed(2))}/>}
+        {screen==="reservar" && <Reservar profes={profesData} saldo={saldo} alumnoId={user?.id} onReservar={(costo)=>{setSaldo(s=>+(s-costo).toFixed(2));getReservasAlumno(user.id).then(r=>setReservasAlumno(r)).catch(()=>{});}}/>}
         {screen==="historial" && (
           <Historial
             reservas={reservasAlumno}
@@ -3171,7 +3180,7 @@ function ChatProfe({ reservas, userId }) {
     if (!reservaSel) return;
     let mounted = true;
     const canal = suscribirMensajes(reservaSel.id, msg => {
-      if (mounted) setMensajes(prev => ({...prev, [reservaSel.id]: [...(prev[reservaSel.id]||[]), msg]}));
+      if (mounted) setMensajes(prev => { const ya=prev[reservaSel.id]||[]; if(ya.some(m=>m.id===msg.id)) return prev; return {...prev,[reservaSel.id]:[...ya,msg]}; });
     });
     return () => { mounted = false; canal.unsubscribe(); };
   }, [reservaSel]);
@@ -3181,6 +3190,7 @@ function ChatProfe({ reservas, userId }) {
     const t = texto.trim();
     setTexto("");
     enviarMensaje(reservaSel.id, "profe", userId, t)
+      .then(msg => { if(msg?.id) setMensajes(prev=>{ const ya=prev[reservaSel.id]||[]; if(ya.some(m=>m.id===msg.id)) return prev; return {...prev,[reservaSel.id]:[...ya,msg]}; }); })
       .catch(err => { console.error("Error al enviar mensaje:", err); setTexto(t); });
   };
 
