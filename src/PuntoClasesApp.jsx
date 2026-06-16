@@ -4206,20 +4206,22 @@ function Personas({ alumnos, setAlumnos, profes, setProfes, reservas }) {
                 setNuevoProfe(p => ({...p, guardando: true, error: null}));
                 const tempPass = Math.random().toString(36).slice(2,8).toUpperCase() + Math.random().toString(36).slice(2,5) + "!3";
                 const materiasArr = nuevoProfe.materias.split(",").map(s=>s.trim()).filter(Boolean);
+                const mailProfe = nuevoProfe.mail.trim();
                 try {
-                  const newUser = await registrarProfe({ mail: nuevoProfe.mail.trim(), pass: tempPass, nombre: nuevoProfe.nombre.trim(), tel: "" });
+                  const newUser = await registrarProfe({ mail: mailProfe, pass: tempPass, nombre: nuevoProfe.nombre.trim(), tel: "" });
                   if (newUser?.id) {
                     await actualizarProfe(newUser.id, { materias: materiasArr, monotributo: nuevoProfe.monotributo }).catch(() => {});
                   }
+                  await supabase.auth.resetPasswordForEmail(mailProfe, { redirectTo: "https://puntoclases.vercel.app" });
                   setProfes(prev=>[...prev, {
                     id: newUser?.id || crypto.randomUUID(),
                     nombre: nuevoProfe.nombre.trim(),
-                    mail: nuevoProfe.mail.trim(),
+                    mail: mailProfe,
                     materias: materiasArr,
                     clasesDadas:0, horasDadas:0, activo:false, suspendido:false, pagadoMes:false,
                     monotributo: nuevoProfe.monotributo,
                   }]);
-                  setNuevoProfe(p => ({...p, guardando: false, tempPass, creado: true}));
+                  setNuevoProfe(p => ({...p, guardando: false, creado: true}));
                 } catch(err) {
                   setNuevoProfe(p => ({...p, guardando: false, error: err.message || "No se pudo crear el profe"}));
                 }
@@ -4230,8 +4232,7 @@ function Personas({ alumnos, setAlumnos, profes, setProfes, reservas }) {
             {nuevoProfe.creado && (
               <div style={{background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:10,padding:"12px 14px",display:"flex",flexDirection:"column",gap:6}}>
                 <p style={{margin:0,fontSize:13,fontWeight:700,color:"#15803d"}}>✓ Profe creado</p>
-                <p style={{margin:0,fontSize:12,color:"#374151"}}>Contraseña temporal: <strong>{nuevoProfe.tempPass}</strong></p>
-                <p style={{margin:0,fontSize:11,color:"#64748b"}}>Compartila con el profe. Recibirá un mail de confirmación de Supabase. Hasta confirmar, su cuenta aparece como "Pendiente".</p>
+                <p style={{margin:0,fontSize:12,color:"#374151"}}>Se envió un email a <strong>{nuevoProfe.mail}</strong> para que establezca su contraseña.</p>
                 <Btn onClick={()=>setNuevoProfe(null)}>Cerrar</Btn>
               </div>
             )}
