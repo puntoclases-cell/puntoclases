@@ -764,6 +764,7 @@ function Comprar({ onComprar, compras, cfg: cfgProp, packsDB }) {
   const [tab, setTab] = useState("packs"); // "packs" | "sueltas"
   const [cantSueltas, setCantSueltas] = useState(1);
   const [pago, setPago] = useState("idle"); // idle | procesando | aprobado
+  const [errorPago, setErrorPago] = useState(null);
   // El pack de prueba solo aplica a la 1ra compra: si no hay historial, es alumno nuevo.
   const esNuevoAlumno = compras !== null && compras.length === 0;
 
@@ -926,10 +927,12 @@ function Comprar({ onComprar, compras, cfg: cfgProp, packsDB }) {
         </div>
       </>)}
 
+      {errorPago && <div style={{background:"#fff5f5",border:"1.5px solid #fecaca",borderRadius:12,padding:"10px 14px",fontSize:13,color:"#dc2626"}}>⚠️ {errorPago}</div>}
       <Btn disabled={!seleccion || pago==="procesando"}
         onClick={async ()=>{
           if (!seleccion) return;
           setPago("procesando");
+          setErrorPago(null);
           try {
             localStorage.setItem("pc_compra_pendiente", JSON.stringify({
               horas: seleccion.horas,
@@ -944,6 +947,7 @@ function Comprar({ onComprar, compras, cfg: cfgProp, packsDB }) {
             console.error("Error al crear preferencia MP:", err);
             setPago("idle");
             localStorage.removeItem("pc_compra_pendiente");
+            setErrorPago("No se pudo iniciar el pago. Revisá tu conexión y volvé a intentarlo.");
           }
         }}>
         {pago==="procesando" ? "Procesando pago…" : "Pagar con Mercado Pago →"}
@@ -1670,7 +1674,7 @@ function AppAlumno({ user, onLogout }) {
   useEffect(() => {
     if (!user) return;
     getReservasAlumno(user.id)
-      .then((r) => { console.log("RESERVAS DEL ALUMNO:", r); setReservasAlumno(r); })
+      .then((r) => { setReservasAlumno(r); })
       .catch((err) => console.error("Error al cargar reservas:", err));
   }, [user]);
 
@@ -1678,7 +1682,7 @@ function AppAlumno({ user, onLogout }) {
   useEffect(() => {
     if (!user) return;
     getCompras(user.id)
-      .then((c) => { console.log("COMPRAS DEL ALUMNO:", c); setComprasAlumno(c); })
+      .then((c) => { setComprasAlumno(c); })
       .catch((err) => console.error("Error al cargar compras:", err));
   }, [user]);
 
@@ -1701,6 +1705,7 @@ function AppAlumno({ user, onLogout }) {
   }, []);
 
   const [compraAprobada, setCompraAprobada] = useState(null);
+  const [compraPendiente, setCompraPendiente] = useState(null); // {status:"pendiente"|"fallido"}
   useEffect(() => {
     if (!user || !datosAlumno) return;
     const params = new URLSearchParams(window.location.search);
@@ -1721,6 +1726,7 @@ function AppAlumno({ user, onLogout }) {
       }, 5000);
     } else {
       const estadoPago = collectionStatus === "pending" ? "pendiente" : "fallido";
+      setCompraPendiente({ status: estadoPago });
       if (horas && precio) {
         crearCompra(user.id, horas, precio, null, estadoPago, paymentId)
           .catch(err => console.error("Error al registrar compra " + estadoPago + ":", err));
@@ -1803,6 +1809,26 @@ function AppAlumno({ user, onLogout }) {
               </div>
             )}
             <Btn onClick={()=>setCompraAprobada(null)}>Listo</Btn>
+          </div>
+        </div>
+      )}
+
+      {/* Modal pago pendiente/fallido */}
+      {compraPendiente && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:50,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+          <div style={{background:"#fff",borderRadius:20,padding:"28px 22px",maxWidth:360,width:"100%",textAlign:"center",display:"flex",flexDirection:"column",gap:14,alignItems:"center"}}>
+            <div style={{width:64,height:64,borderRadius:"50%",background:compraPendiente.status==="pendiente"?"#fefce8":"#fff5f5",display:"flex",alignItems:"center",justifyContent:"center",fontSize:34}}>
+              {compraPendiente.status==="pendiente" ? "⏳" : "✕"}
+            </div>
+            <h3 style={{margin:0,color:DK,fontSize:19}}>
+              {compraPendiente.status==="pendiente" ? "Pago en proceso" : "Pago no completado"}
+            </h3>
+            <p style={{margin:0,fontSize:14,color:"#64748b"}}>
+              {compraPendiente.status==="pendiente"
+                ? "Tu pago está siendo procesado por Mercado Pago. Te avisaremos cuando se acrediten las horas. Podés revisar tu saldo en unos minutos."
+                : "El pago no se completó. No se descontó ningún importe. Podés intentarlo de nuevo cuando quieras."}
+            </p>
+            <Btn onClick={()=>setCompraPendiente(null)}>Entendido</Btn>
           </div>
         </div>
       )}
@@ -3793,6 +3819,7 @@ function Personas({ alumnos, setAlumnos, profes, setProfes, reservas }) {
   const [filtro, setFiltro] = useState("todos");
   const [confirmar, setConfirmar] = useState(null); // {accion, label, onOk}
   const [nuevoProfe, setNuevoProfe] = useState(null); // form de alta de profe
+  const [adminMsg, setAdminMsg] = useState(null); // {tipo:"ok"|"err", texto}
 
   const accionAlumno = (id, accion) => {
     if (accion === "addHoras") {
@@ -3802,7 +3829,7 @@ function Personas({ alumnos, setAlumnos, profes, setProfes, reservas }) {
         })
         .catch(err => {
           console.error("Error addHoras:", err);
-          alert("Error al agregar hora: " + (err.message || "intentá de nuevo"));
+          setAdminMsg({tipo:"err", texto:"Error al agregar hora: " + (err.message || "intentá de nuevo")});
         });
       return;
     }
@@ -3851,6 +3878,7 @@ function Personas({ alumnos, setAlumnos, profes, setProfes, reservas }) {
     const dias = diasHasta(a.vence);
     return (
       <div style={{display:"flex",flexDirection:"column",gap:12}}>
+        {adminMsg && <div style={{background:adminMsg.tipo==="err"?"#fff5f5":"#f0fdf4",border:`1.5px solid ${adminMsg.tipo==="err"?"#fecaca":"#bbf7d0"}`,borderRadius:12,padding:"10px 14px",fontSize:13,color:adminMsg.tipo==="err"?"#dc2626":"#15803d",cursor:"pointer"}} onClick={()=>setAdminMsg(null)}>{adminMsg.tipo==="err"?"⚠️":"✓"} {adminMsg.texto}</div>}
         {confirmar && (
           <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:100,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
             <div style={{background:"#fff",borderRadius:20,padding:24,width:"100%",maxWidth:360}}>
@@ -4280,6 +4308,7 @@ function Operaciones({ reservas }) {
 function Finanzas({ reservas, cfg, setCfg }) {
   const [tab, setTab] = useState("reportes");
   const [guardado, setGuardado] = useState(false);
+  const [errGuardado, setErrGuardado] = useState(null);
 
   const realizadas = reservas.filter(r=>r.estado==="realizada");
   const bruto = realizadas.reduce((a,r)=>a+r.monto,0);
@@ -4300,13 +4329,14 @@ function Finanzas({ reservas, cfg, setCfg }) {
   const maxCl = Math.max(...materias.map(m=>m[1].clases),1);
 
   const guardar = async () => {
+    setErrGuardado(null);
     try {
       await updateConfig(cfgADB(cfg));
       setGuardado(true);
       setTimeout(() => setGuardado(false), 2500);
     } catch(err) {
       console.error("Error al guardar config:", err);
-      alert("Error al guardar: " + (err.message || "intente de nuevo"));
+      setErrGuardado(err.message || "Error al guardar. Intentá de nuevo.");
     }
   };
 
@@ -4458,6 +4488,7 @@ function Finanzas({ reservas, cfg, setCfg }) {
           <p style={{margin:"8px 0 0",fontSize:11,color:"#94a3b8"}}>El alumno pierde ese % de la hora y el profe cobra ese % de su tarifa.</p>
         </Card>
 
+        {errGuardado && <div style={{background:"#fff5f5",border:"1.5px solid #fecaca",borderRadius:12,padding:"10px 14px",fontSize:13,color:"#dc2626"}}>⚠️ {errGuardado}</div>}
         <button onClick={guardar}
           style={{background:guardado?GR:P,color:"#fff",border:"none",borderRadius:12,padding:"15px",fontSize:15,fontWeight:700,cursor:"pointer",transition:"background 0.3s",width:"100%"}}>
           {guardado?"✓ Guardado":"Guardar cambios"}
@@ -5532,6 +5563,7 @@ function ModalReprogramar({ reserva, onCerrar, onConfirmar, onCancelar, cfg }) {
   const [nuevaHora, setNuevaHora] = useState(null);
   const [mes, setMes] = useState(new Date().getMonth());
   const [confirmado, setConfirmado] = useState(false);
+  const [errCancelar, setErrCancelar] = useState(null);
   const year = new Date().getFullYear();
 
   // Calcular si la clase es en menos de 24hs (simulado)
@@ -5710,11 +5742,13 @@ function ModalReprogramar({ reserva, onCerrar, onConfirmar, onCancelar, cfg }) {
               }
             </div>
           </div>
+          {errCancelar && <div style={{background:"#fff5f5",border:"1.5px solid #fecaca",borderRadius:12,padding:"10px 14px",fontSize:13,color:"#dc2626"}}>⚠️ {errCancelar}</div>}
           <div style={{display:"flex",gap:10}}>
-            <button onClick={()=>setPaso(1)} style={{flex:1,background:"#f1f5f9",border:"none",borderRadius:12,padding:"13px",fontSize:14,fontWeight:700,cursor:"pointer",color:"#475569"}}>
+            <button onClick={()=>{setPaso(1);setErrCancelar(null);}} style={{flex:1,background:"#f1f5f9",border:"none",borderRadius:12,padding:"13px",fontSize:14,fontWeight:700,cursor:"pointer",color:"#475569"}}>
               Volver
             </button>
             <button onClick={async ()=>{
+              setErrCancelar(null);
               try {
                 const result = await devolverHoras(
                   reserva.id,
@@ -5725,7 +5759,7 @@ function ModalReprogramar({ reserva, onCerrar, onConfirmar, onCancelar, cfg }) {
                 setConfirmado(true);
               } catch (err) {
                 console.error("Error al cancelar:", err);
-                alert("No se pudo cancelar: " + (err.message || "intentá de nuevo"));
+                setErrCancelar(err.message || "No se pudo cancelar. Intentá de nuevo.");
               }
             }} style={{flex:1,background:"#dc2626",border:"none",borderRadius:12,padding:"13px",fontSize:14,fontWeight:700,cursor:"pointer",color:"#fff"}}>
               Sí, cancelar
