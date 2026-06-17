@@ -299,6 +299,17 @@ export function suscribirMensajes(reservaId, onNuevo) {
     .subscribe();
 }
 
+export async function contarMensajesNuevosProfe(reservaIds, desde) {
+  if (!reservaIds.length) return 0;
+  const { count } = await supabase
+    .from("mensajes")
+    .select("id", { count: "exact", head: true })
+    .in("reserva_id", reservaIds)
+    .eq("emisor", "alumno")
+    .gt("creado_en", desde);
+  return count || 0;
+}
+
 // ── RESEÑAS ──────────────────────────────────────────────────────────────────
 
 export async function crearResenia(reservaId, alumnoId, profeId, estrellas, comentario) {

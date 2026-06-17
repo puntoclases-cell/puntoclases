@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { login, getUsuarioActual, onAuthChange, logout, getAlumno, getCompras, getReservasAlumno, getProfes, getProfesAdmin, getDisponibilidad, getReservasProfe, marcarReserva, cargarDevolucion, reprogramarReserva, setBloque, borrarBloque, getAlumnos, getTodasLasReservas, actualizarAlumno, actualizarProfe, actualizarPerfil, crearCompra, crearReserva, verificarBloqueOcupado, getMensajes, enviarMensaje, suscribirMensajes, registrarAlumno, registrarProfe, enviarRecuperacion, actualizarPassword, onPasswordRecovery, crearResenia, getConfig, updateConfig, getPacks, devolverHoras, addHorasAdmin, crearPreferencia } from "./db";
+import { login, getUsuarioActual, onAuthChange, logout, getAlumno, getCompras, getReservasAlumno, getProfes, getProfesAdmin, getDisponibilidad, getReservasProfe, marcarReserva, cargarDevolucion, reprogramarReserva, setBloque, borrarBloque, getAlumnos, getTodasLasReservas, actualizarAlumno, actualizarProfe, actualizarPerfil, crearCompra, crearReserva, verificarBloqueOcupado, getMensajes, enviarMensaje, suscribirMensajes, registrarAlumno, registrarProfe, enviarRecuperacion, actualizarPassword, onPasswordRecovery, crearResenia, getConfig, updateConfig, getPacks, devolverHoras, addHorasAdmin, crearPreferencia, contarMensajesNuevosProfe } from "./db";
 
 // ════════════════════════════════════════════════════════════════════════════
 // PUNTOCLASES — APP UNIFICADA
@@ -3483,6 +3483,7 @@ function AppProfeMain({ user, onLogout }) {
   const [onboardingVisto,setOnboardingVisto] = useState(false);
   const [modalAusente,setModalAusente] = useState(null);
   const [modalReprogProfe,setModalReprogProfe] = useState(null);
+  const [profeUnread,setProfeUnread] = useState(0);
 
   const normReserva = r => ({
     ...r,
@@ -3509,6 +3510,20 @@ function AppProfeMain({ user, onLogout }) {
       .then(data => setProfeData((data||[]).find(p => p.id === user.id) || null))
       .catch(err => console.error("Error al cargar datos del profe:", err));
   }, [user]);
+
+  useEffect(() => {
+    if (!reservas.length) return;
+    const ids = reservas.map(r => r.id);
+    const desde = localStorage.getItem("pc_profe_mensajes_read") || new Date(0).toISOString();
+    contarMensajesNuevosProfe(ids, desde).then(n => setProfeUnread(n)).catch(()=>{});
+  }, [reservas]);
+
+  useEffect(() => {
+    if (screen === "mensajes") {
+      localStorage.setItem("pc_profe_mensajes_read", new Date().toISOString());
+      setProfeUnread(0);
+    }
+  }, [screen]);
 
   const marcarAusente = async (reserva) => {
     try {
@@ -3590,8 +3605,9 @@ function AppProfeMain({ user, onLogout }) {
       <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:480,background:"#fff",borderTop:"1px solid #e2e8f0",display:"flex",padding:"8px 0 12px",zIndex:10}}>
         {nav.map(n=>(
           <button key={n.id} onClick={()=>setScreen(n.id)}
-            style={{flex:1,background:"none",border:"none",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
+            style={{flex:1,background:"none",border:"none",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:2,position:"relative"}}>
             <span style={{fontSize:20}}>{n.icon}</span>
+            {n.id==="mensajes" && profeUnread>0 && <div style={{position:"absolute",top:2,right:"calc(50% - 18px)",width:8,height:8,borderRadius:"50%",background:"#dc2626"}}/>}
             <span style={{fontSize:10,fontWeight:screen===n.id?700:400,color:screen===n.id?P:"#94a3b8"}}>{n.label}</span>
             {screen===n.id && <div style={{width:4,height:4,borderRadius:"50%",background:P}}/>}
           </button>
