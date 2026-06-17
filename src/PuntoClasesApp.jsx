@@ -2155,8 +2155,9 @@ function ProfeInicioPanel({ onNav, reservas, profeNombre }) {
 function Reservas({ reservas, onDevolucion, onMarcar, onAusente, onReprogramar }) {
   const [tab,setTab] = useState("proximas");
   const [abierto,setAbierto] = useState(null);
-  const proximas = reservas.filter(r=>r.fecha>=HOY).sort((a,b)=>a.fecha.localeCompare(b.fecha));
-  const pasadas = reservas.filter(r=>r.fecha<HOY).sort((a,b)=>b.fecha.localeCompare(a.fecha));
+  const confirmada = r => r.estado==="ausente" || r.estado==="realizada";
+  const proximas = reservas.filter(r=>r.fecha>=HOY && !confirmada(r)).sort((a,b)=>a.fecha.localeCompare(b.fecha));
+  const pasadas = reservas.filter(r=>r.fecha<HOY || confirmada(r)).sort((a,b)=>b.fecha.localeCompare(a.fecha));
   const lista = tab==="proximas" ? proximas : pasadas;
 
   return (
