@@ -73,7 +73,22 @@ const sumPagoProfe = (reservas, cfg = CFG) => reservas.reduce((a, r) => a + calc
 const sumCowork    = (reservas, cfg = CFG) => reservas.reduce((a, r) => a + calcCoworkReserva(r, cfg), 0);
 
 function Logo({ size = 28 }) {
-  return <img src="/icon-192.png" width={size} height={size} alt="PuntoClases" style={{display:"block",borderRadius:Math.round(size*0.22),objectFit:"cover"}}/>;
+  return (
+    <svg width={size} height={size} viewBox="0 0 100 100" fill="none" style={{display:"block"}}>
+      {/* Contorno negro grueso */}
+      <path d="M50 5C27 5 10 22 10 42Q10 68 50 97Q90 68 90 42C90 22 73 5 50 5Z" fill={DK}/>
+      {/* Cuerpo celeste — offset derecho: crea la franja celeste visible entre el rojo y el negro */}
+      <path d="M55 14C38 14 22 27 22 42Q22 65 55 93Q88 65 88 42C88 27 72 14 55 14Z" fill={BL}/>
+      {/* Cuerpo rojo — centrado, tapa el celeste excepto en el borde derecho */}
+      <path d="M50 14C33 14 20 27 20 42Q20 64 50 92Q80 64 80 42C80 27 67 14 50 14Z" fill={P}/>
+      {/* Ojo: aro negro */}
+      <circle cx="50" cy="41" r="16" fill={DK}/>
+      {/* Ojo: aro rojo */}
+      <circle cx="50" cy="41" r="9.5" fill={P}/>
+      {/* Ojo: punto negro central */}
+      <circle cx="50" cy="41" r="4" fill={DK}/>
+    </svg>
+  );
 }
 
 // ════════════════════════════════════════════════════════════════════════════
