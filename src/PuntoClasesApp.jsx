@@ -72,23 +72,9 @@ const calcCoworkReserva = (r, cfg = CFG) => r.modalidad === "Presencial"
 const sumPagoProfe = (reservas, cfg = CFG) => reservas.reduce((a, r) => a + calcPagoProfe(r, cfg), 0);
 const sumCowork    = (reservas, cfg = CFG) => reservas.reduce((a, r) => a + calcCoworkReserva(r, cfg), 0);
 
+const LOGO_BG = "#DFF2FF"; // celeste exacto del fondo del PNG oficial
 function Logo({ size = 28 }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 100 100" fill="none" style={{display:"block"}}>
-      {/* Contorno negro grueso */}
-      <path d="M50 5C27 5 10 22 10 42Q10 68 50 97Q90 68 90 42C90 22 73 5 50 5Z" fill={DK}/>
-      {/* Cuerpo celeste — offset derecho: crea la franja celeste visible entre el rojo y el negro */}
-      <path d="M55 14C38 14 22 27 22 42Q22 65 55 93Q88 65 88 42C88 27 72 14 55 14Z" fill={BL}/>
-      {/* Cuerpo rojo — centrado, tapa el celeste excepto en el borde derecho */}
-      <path d="M50 14C33 14 20 27 20 42Q20 64 50 92Q80 64 80 42C80 27 67 14 50 14Z" fill={P}/>
-      {/* Ojo: aro negro */}
-      <circle cx="50" cy="41" r="16" fill={DK}/>
-      {/* Ojo: aro rojo */}
-      <circle cx="50" cy="41" r="9.5" fill={P}/>
-      {/* Ojo: punto negro central */}
-      <circle cx="50" cy="41" r="4" fill={DK}/>
-    </svg>
-  );
+  return <img src="/icon-192.png" width={size} height={size} alt="PuntoClases" style={{display:"block"}}/>;
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -1773,7 +1759,7 @@ function AppAlumno({ user, onLogout }) {
     <div style={{fontFamily:"'DM Sans','Segoe UI',sans-serif",background:BG,minHeight:"100vh",display:"flex",flexDirection:"column",maxWidth:480,margin:"0 auto",position:"relative"}}>
       {!onboardingVisto && <Onboarding onTerminar={()=>{ localStorage.setItem("pc_onboarding_visto","1"); setOnboardingVisto(true); }}/>}
       {/* Header */}
-      <div style={{background:"#fff",borderBottom:"1px solid #e2e8f0",padding:"12px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:10}}>
+      <div style={{background:LOGO_BG,borderBottom:"1px solid #c8e5f5",padding:"12px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:10}}>
         <div style={{display:"flex",alignItems:"center",gap:8}}>
           <Logo size={32}/>
           <span style={{fontWeight:800,fontSize:17,color:DK,letterSpacing:-0.5}}>PuntoClases</span>
@@ -5923,11 +5909,11 @@ function LoginScreen({ onLogin, onRegistroProfe, onRegistroAlumno }) {
   return (
     <div style={{fontFamily:"'DM Sans','Segoe UI',sans-serif",background:BG,minHeight:"100vh",maxWidth:480,margin:"0 auto",display:"flex",flexDirection:"column"}}>
       {/* Hero */}
-      <div style={{background:`linear-gradient(160deg,#3D7A95 0%,${BL} 100%)`,padding:"52px 24px 44px",display:"flex",flexDirection:"column",alignItems:"center",gap:14}}>
+      <div style={{background:LOGO_BG,padding:"52px 24px 44px",display:"flex",flexDirection:"column",alignItems:"center",gap:14}}>
         <Logo size={60}/>
-        <div style={{textAlign:"center",color:"#fff"}}>
+        <div style={{textAlign:"center",color:DK}}>
           <h1 style={{margin:0,fontSize:28,fontWeight:800,letterSpacing:-0.5}}>PuntoClases</h1>
-          <p style={{margin:"6px 0 0",fontSize:14,opacity:0.75}}>Clases de apoyo, cuando las necesitás</p>
+          <p style={{margin:"6px 0 0",fontSize:14,opacity:0.6}}>Clases de apoyo, cuando las necesitás</p>
         </div>
       </div>
 
