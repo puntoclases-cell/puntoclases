@@ -5909,11 +5909,11 @@ function LoginScreen({ onLogin, onRegistroProfe, onRegistroAlumno }) {
   return (
     <div style={{fontFamily:"'DM Sans','Segoe UI',sans-serif",background:BG,minHeight:"100vh",maxWidth:480,margin:"0 auto",display:"flex",flexDirection:"column"}}>
       {/* Hero */}
-      <div style={{background:LOGO_BG,padding:"52px 24px 44px",display:"flex",flexDirection:"column",alignItems:"center",gap:14}}>
-        <Logo size={60}/>
+      <div style={{background:LOGO_BG,padding:"52px 24px 44px",display:"flex",flexDirection:"column",alignItems:"center",gap:16}}>
+        <img src="/logo-transparente.png" width={110} height={110} alt="PuntoClases" style={{display:"block"}}/>
         <div style={{textAlign:"center",color:DK}}>
           <h1 style={{margin:0,fontSize:28,fontWeight:800,letterSpacing:-0.5}}>PuntoClases</h1>
-          <p style={{margin:"6px 0 0",fontSize:14,opacity:0.6}}>Clases de apoyo, cuando las necesitás</p>
+          <p style={{margin:"6px 0 0",fontSize:14,color:"#374151"}}>Clases de apoyo, cuando las necesitás</p>
         </div>
       </div>
 
