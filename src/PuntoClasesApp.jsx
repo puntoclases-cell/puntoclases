@@ -3457,7 +3457,7 @@ function ModalAusente({ reserva, onConfirmar, onCerrar }) {
         <div style={{background:"#fefce8",border:"1.5px solid #fde68a",borderRadius:12,padding:"12px 14px"}}>
           <p style={{margin:0,fontSize:13,color:"#92400e"}}>
             ⚠️ Se descontará la hora completa del saldo del alumno.<br/>
-            Vos cobrás el <strong>{CFG.penalizacionPct}% de tu tarifa</strong> ({reserva.tipo==="grupal"?`$${calcSeñaProfe(reserva).toLocaleString("es-AR")} ($${SEÑA_GRP.toLocaleString("es-AR")} × ${reserva.alumnosGrupo||1} alumno${(reserva.alumnosGrupo||1)>1?"s":""}${(reserva.horas||1)>1?` × ${reserva.horas} hs`:""})`:`$${calcSeñaProfe(reserva).toLocaleString("es-AR")}`}).
+            Vos cobrás el <strong>{CFG.penalizacionPct}% de tu tarifa</strong> ({(reserva.tipo==="grupal"&&(reserva.alumnosGrupo||1)>1)?`$${calcSeñaProfe(reserva).toLocaleString("es-AR")} ($${SEÑA_GRP.toLocaleString("es-AR")} × ${reserva.alumnosGrupo} alumnos${(reserva.horas||1)>1?` × ${reserva.horas} hs`:""})`:`$${calcSeñaProfe(reserva).toLocaleString("es-AR")}`}).
           </p>
         </div>
         <div style={{display:"flex",gap:10}}>
