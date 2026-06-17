@@ -71,6 +71,12 @@ Arrancá del estado de abajo; **no re-diagnostiques lo ✅**.
 - mp-webhook: soporte dual formato MP — querystring `?type=payment&data.id=X` Y body JSON; firma HMAC usa el id correcto en ambos casos ✅
 - Header profe: fondo negro → celeste LOGO_BG igual que vista alumno ✅
 - Tarjeta bienvenida profe (Hoy/Próximas/Sin devolución): fondo negro → BL (#6FA8C0), textos DK (contraste 4.6:1 WCAG AA), alerta en P (rojo) ✅
+- Unificación celeste todos los roles — 6 elementos negros/oscuros → BL/LOGO_BG (criterio único: BL en hero cards, LOGO_BG en headers sticky, textos DK, boxes rgba(255,255,255,0.45), acentos P/GR) ✅
+  - Profe Ingresos: tarjeta hero → BL, monto en P
+  - Profe PerfilProfe: preview hero → BL; botón editar avatar DK → P
+  - Admin Header: → LOGO_BG (igual a alumno y profe)
+  - Admin Dashboard: hero → BL, ganancia negativa en P
+  - Admin Finanzas P&L: card → BL, ganancia en GR (positiva) / P (negativa)
 - Badge mensajes profe: punto rojo en nav cuando hay msgs de alumnos sin leer (localStorage, sin col DB extra) ✅
 - Clases confirmadas (estado ausente/realizada) → Historial aunque fecha >= hoy ✅
 - Modal alumno ausente: monto no duplicado — desglose solo para grupal con >1 alumno ✅
