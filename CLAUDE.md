@@ -53,9 +53,27 @@ Arrancá del estado de abajo; **no re-diagnostiques lo ✅**.
 - Chat en tiempo real (`mensajes` en publication realtime) ✅
 - Profe nuevo: email automático para establecer contraseña ✅
 - Errores inline, sin alert(), sin logs sensibles ✅
+- Login/home: fondo celeste (#3D7A95→BL) reemplaza gris oscuro ✅
+- CountdownClase: clases pasadas sin confirmar → "Pendiente de confirmación" en vez de tiempo negativo ✅
+- Profe historial: botones "Clase dada / No se dio" para confirmar asistencia ✅
 
 ### ⚠️ Pendiente de primera compra real
 - Verificación end-to-end de acreditación en producción (requiere un pago real de usuario).
+
+### 🔴 Esperando OK de David (toca lógica de saldos en prod)
+Ver diagnóstico abajo.
+
+## Diagnóstico vencimiento — esperando OK para el fix
+
+**Bug 1 — "Vence en 0 días" cuando no hay fecha:**
+- Causa: `diasVenc(null) = 0` (línea 107). Si el alumno tiene saldo pero `vencimiento = null` (cargado manualmente, nunca compró), `dias = 0` y se dispara la alerta 🚨.
+- Fix propuesto (solo front, no toca DB): En `Inicio`, usar `const dias = vencimiento ? diasVenc(vencimiento) : null;`. En `AlertaVencimiento`, salir si `dias === null` o `dias < 0`. En el display del card, no mostrar "Vence en X días" cuando `vencimiento` es null.
+
+**Bug 2 — Saldo fantasma (decimal que no se descuenta al vencer):**
+- Causa: Ningún código pone saldo a 0 cuando `CURRENT_DATE > vencimiento`. `crear_reserva` bloquea reservas pero el saldo queda en DB. Si el alumno compra de nuevo, `acreditar_compra` renueva vencimiento Y suma encima → las horas vencidas se "recuperan".
+- Fix front (seguro): Cuando `diasVenc < 0`, mostrar saldo efectivo = 0 en el UI. No modifica DB.
+- Fix DB (correcto, destructivo): Función/trigger que ponga `saldo = 0` cuando `CURRENT_DATE > vencimiento`. Requiere backup de `alumnos` primero. **Necesita OK de David.**
+- Recomendación: hacer primero el fix de front; separar si las horas vencidas deben zeroearse en DB (decisión de negocio).
 
 ## A futuro (no prioritario)
 - **Google Calendar**: sincronizar reservas al Calendar del alumno y del profe. Requiere Google Cloud project con Calendar API habilitada + OAuth 2.0 credentials de Google. Iniciarlo cuando se decida.
