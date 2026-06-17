@@ -148,7 +148,7 @@ function Inicio({onNav, saldo, nombre, reservas, vencimiento}) {
   return (
     <div style={{display:"flex",flexDirection:"column",gap:14}}>
       {/* Hero saldo */}
-      <div style={{background:`linear-gradient(135deg, ${DK} 0%, #3d3d3d 100%)`,borderRadius:20,padding:"22px 20px",color:"#fff",position:"relative",overflow:"hidden"}}>
+      <div style={{background:`linear-gradient(135deg,#3D7A95 0%,${BL} 100%)`,borderRadius:20,padding:"22px 20px",color:"#fff",position:"relative",overflow:"hidden"}}>
         <div style={{position:"absolute",top:-20,right:-20,width:120,height:120,borderRadius:"50%",background:"rgba(217,79,61,0.15)"}}/>
         <h2 style={{margin:"0 0 14px",fontSize:22,fontWeight:700}}>¡Hola, {nombre.split(" ")[0]}! 👋</h2>
         <div style={{background:"rgba(255,255,255,0.1)",borderRadius:12,padding:"12px 16px"}}>
@@ -1560,27 +1560,44 @@ function CountdownClase({ clase, onChat }) {
   const mins = Math.floor((diff % (1000*60*60)) / (1000*60));
 
   const esVirtual = clase.modalidad === "Virtual";
-  const esMañana = dias === 0;
-  const esHoy = dias < 0;
+  const yaOcurrio = diff < 0;
+  const esMañana = !yaOcurrio && dias === 0;
+
+  const bgGradient = yaOcurrio
+    ? clase.estado==="realizada" ? "linear-gradient(135deg,#15803d,#16a34a)"
+    : clase.estado==="ausente"   ? `linear-gradient(135deg,${DK},#3d3d3d)`
+    :                              "linear-gradient(135deg,#64748b,#475569)"
+    : esMañana ? "linear-gradient(135deg,#15803d,#16a34a)"
+    : `linear-gradient(135deg,${DK},#3d3d3d)`;
+
+  const labelSuperior = yaOcurrio
+    ? clase.estado==="realizada" ? "✓ Clase confirmada"
+    : clase.estado==="ausente"   ? "Alumno ausente"
+    :                              "🕐 Pendiente de confirmación"
+    : "Próxima clase";
 
   return (
-    <div style={{background: esHoy ? `linear-gradient(135deg,${P},#b83c2c)` : esMañana ? `linear-gradient(135deg,#15803d,#16a34a)` : `linear-gradient(135deg,${DK},#3d3d3d)`,borderRadius:16,padding:"16px",color:"#fff"}}>
+    <div style={{background:bgGradient,borderRadius:16,padding:"16px",color:"#fff"}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12}}>
         <div>
           <p style={{margin:0,fontSize:11,opacity:0.6,textTransform:"uppercase",letterSpacing:0.8}}>
-            {esHoy?"🔴 CLASE AHORA":"Próxima clase"}
+            {labelSuperior}
           </p>
           <p style={{margin:"4px 0 0",fontWeight:800,fontSize:16}}>{clase.materia} con {clase.profes?.profiles?.nombre?.split(" ")[0] || "el profe"}</p>
           <p style={{margin:"2px 0 0",fontSize:12,opacity:0.7}}>{fmt(clase.fecha)} · {clase.hora} · {clase.modalidad}</p>
         </div>
         <div style={{textAlign:"center",background:"rgba(255,255,255,0.15)",borderRadius:12,padding:"10px 12px",flexShrink:0}}>
-          {dias >= 1 ? (<>
+          {!yaOcurrio ? (dias >= 1 ? (<>
             <p style={{margin:0,fontSize:22,fontWeight:800}}>{dias}d {horas}h</p>
             <p style={{margin:0,fontSize:10,opacity:0.7}}>para la clase</p>
           </>) : (<>
             <p style={{margin:0,fontSize:22,fontWeight:800}}>{horas}h {mins}m</p>
             <p style={{margin:0,fontSize:10,opacity:0.7}}>para la clase</p>
-          </>)}
+          </>)) : (
+            <p style={{margin:0,fontSize:11,fontWeight:700,lineHeight:1.4,maxWidth:88}}>
+              {clase.estado==="realizada" ? "✓ Dada" : clase.estado==="ausente" ? "Ausente" : "Confirmar\nasistencia"}
+            </p>
+          )}
         </div>
       </div>
 
@@ -2167,8 +2184,10 @@ function Reservas({ reservas, onDevolucion, onMarcar, onAusente, onReprogramar }
             </div>
             <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4}}>
               <Badge bg={r.tipo==="grupal"?"#f0f6fa":PL} col={r.tipo==="grupal"?BL:P}>{r.tipo==="grupal"?"👥":"👤"}</Badge>
-              {tab==="pasadas" && !r.devolucion && <Badge bg="#fefce8" col="#92400e">⚠️ pendiente</Badge>}
-              {tab==="pasadas" && r.devolucion && <Badge bg="#dcfce7" col="#15803d">✓ ok</Badge>}
+              {tab==="pasadas" && r.estado!=="realizada" && r.estado!=="ausente" && <Badge bg="#fefce8" col="#92400e">⚠️ confirmar</Badge>}
+              {tab==="pasadas" && r.estado==="ausente" && <Badge bg="#fff5f5" col="#dc2626">👤 ausente</Badge>}
+              {tab==="pasadas" && r.estado==="realizada" && !r.devolucion && <Badge bg="#fefce8" col="#92400e">✍️ devolución</Badge>}
+              {tab==="pasadas" && r.estado==="realizada" && r.devolucion && <Badge bg="#dcfce7" col="#15803d">✓ ok</Badge>}
             </div>
           </div>
 
@@ -2205,13 +2224,24 @@ function Reservas({ reservas, onDevolucion, onMarcar, onAusente, onReprogramar }
                 </div>
               )}
               {tab==="pasadas" && (
-                r.devolucion ? (
-                  <div style={{background:"#f0fdf4",borderRadius:10,padding:12,border:"1px solid #bbf7d0"}}>
-                    <p style={{margin:"0 0 4px",fontSize:11,fontWeight:700,color:"#166534",textTransform:"uppercase"}}>Tu devolución</p>
-                    <p style={{margin:0,fontSize:13,color:"#374151"}}>{r.devolucion}</p>
+                r.estado==="realizada" ? (
+                  r.devolucion ? (
+                    <div style={{background:"#f0fdf4",borderRadius:10,padding:12,border:"1px solid #bbf7d0"}}>
+                      <p style={{margin:"0 0 4px",fontSize:11,fontWeight:700,color:"#166534",textTransform:"uppercase"}}>Tu devolución</p>
+                      <p style={{margin:0,fontSize:13,color:"#374151"}}>{r.devolucion}</p>
+                    </div>
+                  ) : (
+                    <Btn onClick={()=>onDevolucion(r)}>✍️ Cargar devolución</Btn>
+                  )
+                ) : r.estado==="ausente" ? (
+                  <div style={{background:"#fff5f5",borderRadius:8,padding:"8px 12px",border:"1px solid #fecaca"}}>
+                    <p style={{margin:0,fontSize:12,color:"#dc2626"}}>👤 Alumno ausente — clase no realizada</p>
                   </div>
                 ) : (
-                  <Btn onClick={()=>onDevolucion(r)}>✍️ Cargar devolución</Btn>
+                  <div style={{display:"flex",gap:8}}>
+                    <Btn onClick={()=>onMarcar(r)} style={{flex:2}}>✅ Clase dada</Btn>
+                    <Btn onClick={()=>onAusente(r)} variant="danger" style={{flex:1}}>👤 No se dio</Btn>
+                  </div>
                 )
               )}
             </div>
@@ -5882,11 +5912,11 @@ function LoginScreen({ onLogin, onRegistroProfe, onRegistroAlumno }) {
   return (
     <div style={{fontFamily:"'DM Sans','Segoe UI',sans-serif",background:BG,minHeight:"100vh",maxWidth:480,margin:"0 auto",display:"flex",flexDirection:"column"}}>
       {/* Hero */}
-      <div style={{background:`linear-gradient(160deg,${DK} 0%,#3d3d3d 100%)`,padding:"52px 24px 44px",display:"flex",flexDirection:"column",alignItems:"center",gap:14}}>
+      <div style={{background:`linear-gradient(160deg,#3D7A95 0%,${BL} 100%)`,padding:"52px 24px 44px",display:"flex",flexDirection:"column",alignItems:"center",gap:14}}>
         <Logo size={60}/>
         <div style={{textAlign:"center",color:"#fff"}}>
           <h1 style={{margin:0,fontSize:28,fontWeight:800,letterSpacing:-0.5}}>PuntoClases</h1>
-          <p style={{margin:"6px 0 0",fontSize:14,opacity:0.55}}>Clases de apoyo, cuando las necesitás</p>
+          <p style={{margin:"6px 0 0",fontSize:14,opacity:0.75}}>Clases de apoyo, cuando las necesitás</p>
         </div>
       </div>
 

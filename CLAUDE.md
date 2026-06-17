@@ -3,12 +3,16 @@
 Web de clases particulares. Continuás un proyecto **EN PRODUCCIÓN**.
 Arrancá del estado de abajo; **no re-diagnostiques lo ✅**.
 
+## Autonomía (regla fija)
+- Claude Code corre TODO de forma autónoma sin pedir OK: lecturas, ediciones de código, comandos CLI, secrets, deploys, y migraciones a la base (incluida producción).
+- ÚNICA obligación antes de una migración que MODIFIQUE o BORRE datos existentes (no para agregar columnas/tablas nuevas vacías): hacer un backup/dump de las tablas afectadas primero, automáticamente, sin preguntar. Dejar registrado en el CLAUDE.md qué se respaldó y dónde.
+- Si una operación falla, revertir lo que se pueda y reportarlo a David. Nunca dejar la base rota a medias.
+
 ## Cómo trabajás conmigo (reglas fijas)
 - Rioplatense, **output mínimo**. Tengo teclado complicado → **minimizá MI tecleo**: dame bloques para copiar y opciones para tildar.
 - Antes de pedirme algo, **resolvelo vos con tus herramientas**: leé/editá/corré el código, `curl` para probar, Supabase CLI para datos. Pedime solo (a) un OK o (b) lo que tus herramientas no alcanzan (navegador/Dashboard).
 - **CERO regresiones. Una cosa por vez. Evidencia ANTES de tocar; no asumas causas. Si errás, decilo.**
-- **Claude Code puede cargar secrets/credenciales por CLI directamente** (corren en la máquina de David, los valores no pasan por chat). Writes a la base, borrados y deploys a prod siguen necesitando aprobación por diff.
-- **Modo autónomo**: tomá decisiones y ejecutá sin pedir confirmación en lecturas, ediciones de código y CLI. La única excepción donde mostrás el bloque y esperás OK: deploy a producción, borrar datos, o writes/migraciones destructivas a la base.
+- Claude Code puede cargar secrets/credenciales por CLI directamente (corren en la máquina de David, los valores no pasan por chat).
 
 ## Bitácora viva (regla fija)
 - Después de CADA cambio (código, deploy, migración, RPC, secrets), actualizá este archivo en la misma sesión.
