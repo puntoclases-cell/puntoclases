@@ -72,19 +72,8 @@ const calcCoworkReserva = (r, cfg = CFG) => r.modalidad === "Presencial"
 const sumPagoProfe = (reservas, cfg = CFG) => reservas.reduce((a, r) => a + calcPagoProfe(r, cfg), 0);
 const sumCowork    = (reservas, cfg = CFG) => reservas.reduce((a, r) => a + calcCoworkReserva(r, cfg), 0);
 
-// Logo SVG
 function Logo({ size = 28 }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 100 100" fill="none">
-      <path d="M50 5C32 5 17 20 17 38C17 60 50 95 50 95C50 95 83 60 83 38C83 20 68 5 50 5Z" fill={DK}/>
-      <path d="M52 8C36 8 23 21 23 38C23 58 52 90 52 90C52 90 79 58 79 38C79 21 68 8 52 8Z" fill={BL}/>
-      <path d="M50 7C34 7 21 20 21 38C21 58 50 92 50 92C50 92 79 58 79 38C79 20 66 7 50 7Z" fill={P}/>
-      <circle cx="50" cy="38" r="16" fill={DK}/>
-      <circle cx="50" cy="38" r="9" fill={P}/>
-      <circle cx="50" cy="38" r="4" fill={DK}/>
-      <path d="M72 18 Q85 10 82 28" stroke={DK} strokeWidth="7" strokeLinecap="round" fill="none"/>
-    </svg>
-  );
+  return <img src="/icon-192.png" width={size} height={size} alt="PuntoClases" style={{display:"block",borderRadius:Math.round(size*0.22),objectFit:"cover"}}/>;
 }
 
 // ════════════════════════════════════════════════════════════════════════════
