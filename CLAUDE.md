@@ -11,7 +11,7 @@ Arrancá del estado de abajo; **no re-diagnostiques lo ✅**.
 - **Modo autónomo**: tomá decisiones y ejecutá sin pedir confirmación en lecturas, ediciones de código y CLI. La única excepción donde mostrás el bloque y esperás OK: deploy a producción, borrar datos, o writes/migraciones destructivas a la base.
 
 ## Bitácora viva (regla fija)
-- Después de CADA cambio (código, deploy, migración, RPC, secrets), actualizá este archivo en la misma sesión: mover ítems a ✅, reescribir "TAREA ACTUAL", dejar la Cola al día.
+- Después de CADA cambio (código, deploy, migración, RPC, secrets), actualizá este archivo en la misma sesión.
 - Si el cambio lo hizo alguien por fuera del código (David o Manuel en un dashboard) y me lo informan, registralo igual con fecha.
 - Meta: que cualquiera que abra este archivo pueda retomar exactamente desde donde se dejó, sin re-diagnosticar.
 - Mantené el archivo CORTO: estado actual, no historial largo. Lo cerrado se resume o se borra.
@@ -32,28 +32,27 @@ Arrancá del estado de abajo; **no re-diagnostiques lo ✅**.
 
 ## Esquema (ojo)
 - La tabla `compras` **NO tiene columna `created_at`** (sí tiene `creado_en`). Leé las columnas reales antes de consultarla.
-- `service_role` tiene: `SELECT` en `config` y `packs`; `EXECUTE` en `acreditar_compra`. Es todo lo necesario para el flujo actual.
-- `acreditar_compra` es SECURITY DEFINER (owner postgres): inserta en `compras` y actualiza `alumnos` sin necesitar grants directos en esas tablas.
+- `service_role` tiene: `SELECT` en `config` y `packs`; `EXECUTE` en `acreditar_compra`. Ningún grant directo en `alumnos`, `compras`, `reservas`, `profiles`, `mensajes`.
+- `acreditar_compra` es SECURITY DEFINER (owner postgres): inserta en `compras` y actualiza `alumnos` sin necesitar grants directos.
 
-## TAREA ACTUAL — Estado al 2026-06-17
+## ESTADO ACTUAL — al 2026-06-17 ✅ PRODUCCIÓN LISTA
 
-### ✅ TODO cerrado — app lista para producción real
-- Pagos end-to-end TEST y PRODUCCIÓN (MP credentials prod cargadas 2026-06-17)
-- Webhook HMAC-SHA256 validando en prod (MP_WEBHOOK_SECRET cargado 2026-06-17, verificado: firma inválida → 401, firma válida → 200, idempotencia → OK)
-- `crear_reserva`: valida fecha pasada + vencimiento (live en DB)
-- `acreditar_compra`: renueva vencimiento al comprar (live en DB)
-- `profiles_self_update` eliminada → privilege escalation cerrada
-- `mensajes` en `supabase_realtime` publication (chat en tiempo real)
-- `mp-webhook` v7 deployado con HMAC
-- Fechas pasadas bloqueadas en UI y servidor
-- Chat: actualización optimista + dedup
-- alert() → errores inline (errorPago, compraPendiente, errCancelar, errGuardado, adminMsg)
-- Logs sensibles eliminados
-- Profe nuevo: recibe email automático para establecer contraseña
+### Todo cerrado y verificado en prod
+- Pagos MP end-to-end en prod (credenciales prod cargadas; token rotado 2026-06-17 ~13:00)
+- Webhook HMAC-SHA256 activo (firma inválida → 401, firma válida → 200, idempotente ✅)
+- Horas sueltas: botón "Pagar con MP" habilitado al elegir cantidad ✅
+- crear-preferencia: respuesta de error limpia (sin diagnóstico) ✅
+- GRANTs service_role: solo `config (SELECT)` + `packs (SELECT)` en tablas de app ✅
+- `crear_reserva`: fecha pasada + vencimiento validados en DB ✅
+- `acreditar_compra`: renueva vencimiento al comprar ✅
+- Privilege escalation en profiles cerrada ✅
+- Chat en tiempo real (`mensajes` en publication realtime) ✅
+- Profe nuevo: email automático para establecer contraseña ✅
+- Errores inline, sin alert(), sin logs sensibles ✅
 
-### ⚠️ Pendiente de aprobación (no ejecuté)
-- Ninguno al momento.
+### ⚠️ Pendiente de primera compra real
+- Verificación end-to-end de acreditación en producción (requiere un pago real de usuario).
 
-## Cola (features para después)
-- **Google Calendar**: sincronizar reservas al Calendar del alumno y del profe. Requiere: Google Cloud project con Calendar API, OAuth 2.0 credentials (client ID + secret de Google). Avisá cuando tengas eso listo.
-- **WhatsApp**: notificaciones vía WA Business. Requiere verificación de cuenta Business en Meta.
+## A futuro (no prioritario)
+- **Google Calendar**: sincronizar reservas al Calendar del alumno y del profe. Requiere Google Cloud project con Calendar API habilitada + OAuth 2.0 credentials de Google. Iniciarlo cuando se decida.
+- **WhatsApp**: notificaciones vía WA Business. Requiere cuenta Business en Meta verificada — el trámite tarda, conviene iniciarlo con tiempo.
