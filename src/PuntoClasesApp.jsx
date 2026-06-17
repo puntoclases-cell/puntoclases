@@ -1777,7 +1777,7 @@ function AppAlumno({ user, onLogout }) {
       </div>
 
       {/* Contenido */}
-      <div style={{flex:1,padding:"16px 16px 80px"}}>
+      <div style={{flex:1,padding:"16px 20px 80px"}}>
         {screen==="inicio" && <Inicio onNav={setScreen} saldo={saldoDisplay} nombre={nombreAlumno} reservas={reservasAlumno} vencimiento={datosAlumno?.vencimiento}/>}
         {screen==="reservar" && <Reservar profes={profesData} saldo={saldoDisplay} alumnoId={user?.id} onReservar={(costo)=>{setSaldo(s=>+(s-costo).toFixed(2));getReservasAlumno(user.id).then(r=>setReservasAlumno(r)).catch(()=>{});}}/>}
         {screen==="historial" && (
