@@ -2975,7 +2975,7 @@ function PerfilProfe({ onLogoutProfe, profeData }) {
       </button>
 
       {/* Hero como lo ve el alumno */}
-      <div style={{background:`linear-gradient(160deg,${DK},#3d3d3d)`,borderRadius:20,padding:"28px 20px",color:"#fff",marginBottom:16}}>
+      <div style={{background:BL,borderRadius:20,padding:"28px 20px",color:DK,marginBottom:16}}>
         <div style={{display:"flex",alignItems:"center",gap:16,marginBottom:16}}>
           <div style={{width:72,height:72,borderRadius:"50%",background:P,display:"flex",alignItems:"center",justifyContent:"center",fontSize:26,fontWeight:800,color:"#fff",flexShrink:0}}>{initialsProfe(perfil.nombre)}</div>
           <div>
@@ -2986,9 +2986,9 @@ function PerfilProfe({ onLogoutProfe, profeData }) {
         </div>
         <div style={{display:"flex",gap:10}}>
           {perfil.modalidad.map(m=>(
-            <span key={m} style={{background:"rgba(255,255,255,0.15)",borderRadius:99,padding:"4px 14px",fontSize:12,fontWeight:600}}>{m}</span>
+            <span key={m} style={{background:"rgba(255,255,255,0.45)",borderRadius:99,padding:"4px 14px",fontSize:12,fontWeight:600}}>{m}</span>
           ))}
-          <span style={{background:"rgba(255,255,255,0.15)",borderRadius:99,padding:"4px 14px",fontSize:12,fontWeight:600}}>
+          <span style={{background:"rgba(255,255,255,0.45)",borderRadius:99,padding:"4px 14px",fontSize:12,fontWeight:600}}>
             ⭐ {perfil.experiencia} años de exp.
           </span>
         </div>
@@ -3131,7 +3131,7 @@ function PerfilProfe({ onLogoutProfe, profeData }) {
         <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:16}}>
           <div style={{position:"relative"}}>
             <Av i="DG" size={64} color={P}/>
-            <button onClick={()=>{setDraft(perfil);setSeccion("editar");}} title="Editar perfil" style={{position:"absolute",bottom:0,right:0,width:22,height:22,borderRadius:"50%",background:DK,border:"2px solid #fff",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:11,color:"#fff"}}>✎</button>
+            <button onClick={()=>{setDraft(perfil);setSeccion("editar");}} title="Editar perfil" style={{position:"absolute",bottom:0,right:0,width:22,height:22,borderRadius:"50%",background:P,border:"2px solid #fff",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:11,color:"#fff"}}>✎</button>
           </div>
           <div style={{flex:1}}>
             <p style={{margin:0,fontWeight:800,fontSize:18,color:DK}}>{perfil.nombre}</p>
