@@ -2080,8 +2080,8 @@ function ProfeInicioPanel({ onNav, reservas, profeNombre }) {
 
   return (
     <div style={{display:"flex",flexDirection:"column",gap:16}}>
-      <div style={{background:`linear-gradient(135deg,${DK},#444)`,borderRadius:20,padding:"22px 20px",color:"#fff",position:"relative",overflow:"hidden"}}>
-        <div style={{position:"absolute",top:-20,right:-20,width:100,height:100,borderRadius:"50%",background:"rgba(217,79,61,0.2)"}}/>
+      <div style={{background:BL,borderRadius:20,padding:"22px 20px",color:DK,position:"relative",overflow:"hidden"}}>
+        <div style={{position:"absolute",top:-20,right:-20,width:100,height:100,borderRadius:"50%",background:"rgba(255,255,255,0.25)"}}/>
         <p style={{margin:0,fontSize:12,opacity:0.6,textTransform:"uppercase",letterSpacing:1}}>Panel del profe</p>
         <h2 style={{margin:"4px 0 16px",fontSize:21,fontWeight:800}}>{profeNombre||"—"} 👨‍🏫</h2>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
@@ -2090,9 +2090,9 @@ function ProfeInicioPanel({ onNav, reservas, profeNombre }) {
             {n:proximas,l:"Próximas",alert:false},
             {n:sinDevol.length,l:"Sin devolución",alert:sinDevol.length>0},
           ].map(s=>(
-            <div key={s.l} style={{background:"rgba(255,255,255,0.1)",borderRadius:10,padding:"10px 0",textAlign:"center"}}>
-              <p style={{margin:0,fontSize:24,fontWeight:800,color:s.alert?"#fbbf24":"#fff"}}>{s.n}</p>
-              <p style={{margin:0,fontSize:11,opacity:0.7,lineHeight:1.3}}>{s.l}</p>
+            <div key={s.l} style={{background:"rgba(255,255,255,0.45)",borderRadius:10,padding:"10px 0",textAlign:"center"}}>
+              <p style={{margin:0,fontSize:24,fontWeight:800,color:s.alert?P:DK}}>{s.n}</p>
+              <p style={{margin:0,fontSize:11,opacity:0.65,lineHeight:1.3}}>{s.l}</p>
             </div>
           ))}
         </div>
