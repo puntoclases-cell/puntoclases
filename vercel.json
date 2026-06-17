@@ -3,8 +3,7 @@
     {
       "source": "/sw.js",
       "headers": [
-        { "key": "Cache-Control", "value": "no-store" },
-        { "key": "Clear-Site-Data", "value": "\"cache\", \"cookies\", \"storage\"" }
+        { "key": "Cache-Control", "value": "no-store" }
       ]
     },
     {
