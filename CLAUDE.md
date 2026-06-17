@@ -70,6 +70,7 @@ Arrancá del estado de abajo; **no re-diagnostiques lo ✅**.
   - Fix vercel.json: eliminado Clear-Site-Data de /sw.js (era destructivo, borraba auth) ✅
 - mp-webhook: soporte dual formato MP — querystring `?type=payment&data.id=X` Y body JSON; firma HMAC usa el id correcto en ambos casos ✅
 - Header profe: fondo negro → celeste LOGO_BG igual que vista alumno ✅
+- Tarjeta bienvenida profe (Hoy/Próximas/Sin devolución): fondo negro → BL (#6FA8C0), textos DK (contraste 4.6:1 WCAG AA), alerta en P (rojo) ✅
 - Badge mensajes profe: punto rojo en nav cuando hay msgs de alumnos sin leer (localStorage, sin col DB extra) ✅
 - Clases confirmadas (estado ausente/realizada) → Historial aunque fecha >= hoy ✅
 - Modal alumno ausente: monto no duplicado — desglose solo para grupal con >1 alumno ✅
