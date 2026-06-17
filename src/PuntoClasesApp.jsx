@@ -141,14 +141,14 @@ function Inicio({onNav, saldo, nombre, reservas, vencimiento}) {
   return (
     <div style={{display:"flex",flexDirection:"column",gap:14}}>
       {/* Hero saldo */}
-      <div style={{background:`linear-gradient(135deg,#3D7A95 0%,${BL} 100%)`,borderRadius:20,padding:"22px 20px",color:"#fff",position:"relative",overflow:"hidden"}}>
+      <div style={{background:"#2188B6",borderRadius:20,padding:"22px 20px",color:"#fff",position:"relative",overflow:"hidden"}}>
         <div style={{position:"absolute",top:-20,right:-20,width:120,height:120,borderRadius:"50%",background:"rgba(217,79,61,0.15)"}}/>
         <h2 style={{margin:"0 0 14px",fontSize:22,fontWeight:700}}>¡Hola, {nombre.split(" ")[0]}! 👋</h2>
         <div style={{background:"rgba(255,255,255,0.1)",borderRadius:12,padding:"12px 16px"}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
             <div>
               <p style={{margin:0,fontSize:13,opacity:0.8}}>Saldo de horas</p>
-              <p style={{margin:"2px 0 0",fontSize:11,opacity:0.55}}>
+              <p style={{margin:"2px 0 0",fontSize:11,opacity:0.8}}>
                 ≈ ${(saldo*CFG.precioInd).toLocaleString("es-AR")} en clases individuales
               </p>
             </div>
@@ -157,7 +157,7 @@ function Inicio({onNav, saldo, nombre, reservas, vencimiento}) {
           <div style={{background:"rgba(255,255,255,0.2)",borderRadius:99,height:6,marginBottom:6}}>
             <div style={{background:pct<=25?"#fca5a5":pct<=50?"#fde68a":"#86efac",borderRadius:99,height:6,width:`${pct}%`,transition:"width 0.6s"}}/>
           </div>
-          <div style={{display:"flex",justifyContent:"space-between",fontSize:12,opacity:0.65}}>
+          <div style={{display:"flex",justifyContent:"space-between",fontSize:12,opacity:0.8}}>
             <span>{dias === null ? "Sin fecha de vencimiento" : dias >= 0 ? `Vence en ${dias} días` : `Venció el ${fmt(vencimiento)}`}</span>
             {vencimiento && <span>{fmt(vencimiento)}</span>}
           </div>
