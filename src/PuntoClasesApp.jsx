@@ -3759,19 +3759,19 @@ function Dashboard({ alumnos, profes, reservas, cfg, onNav, onLogout }) {
     <div style={{display:"flex",flexDirection:"column",gap:14}}>
 
       {/* Hero financiero */}
-      <div style={{background:`linear-gradient(135deg,${DK} 0%,#3a3a3a 100%)`,borderRadius:20,padding:"22px 20px",color:"#fff",position:"relative",overflow:"hidden"}}>
-        <div style={{position:"absolute",top:-30,right:-30,width:120,height:120,borderRadius:"50%",background:"rgba(217,79,61,0.15)"}}/>
-        <p style={{margin:"0 0 4px",fontSize:11,opacity:0.5,textTransform:"uppercase",letterSpacing:1}}>Tu ganancia este mes</p>
-        <p style={{margin:"0 0 16px",fontSize:34,fontWeight:800,color:neto>=0?"#fff":"#fca5a5"}}>${neto.toLocaleString("es-AR")}</p>
+      <div style={{background:BL,borderRadius:20,padding:"22px 20px",color:DK,position:"relative",overflow:"hidden"}}>
+        <div style={{position:"absolute",top:-30,right:-30,width:120,height:120,borderRadius:"50%",background:"rgba(255,255,255,0.25)"}}/>
+        <p style={{margin:"0 0 4px",fontSize:11,opacity:0.55,textTransform:"uppercase",letterSpacing:1}}>Tu ganancia este mes</p>
+        <p style={{margin:"0 0 16px",fontSize:34,fontWeight:800,color:neto>=0?DK:P}}>${neto.toLocaleString("es-AR")}</p>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
           {[
             {l:"Facturado",v:`$${(bruto/1000).toFixed(0)}k`,op:0.9},
             {l:"Pagos profes",v:`-$${(pagoProfe/1000).toFixed(0)}k`,op:0.65},
             {l:"Cowork",v:`-$${(costoCowork/1000).toFixed(0)}k`,op:0.65},
           ].map(x=>(
-            <div key={x.l} style={{background:"rgba(255,255,255,0.08)",borderRadius:10,padding:"10px 8px",textAlign:"center"}}>
+            <div key={x.l} style={{background:"rgba(255,255,255,0.45)",borderRadius:10,padding:"10px 8px",textAlign:"center"}}>
               <p style={{margin:0,fontSize:15,fontWeight:800,opacity:x.op}}>{x.v}</p>
-              <p style={{margin:0,fontSize:10,opacity:0.5}}>{x.l}</p>
+              <p style={{margin:0,fontSize:10,opacity:0.55}}>{x.l}</p>
             </div>
           ))}
         </div>
