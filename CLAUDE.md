@@ -57,22 +57,17 @@ Arrancá del estado de abajo; **no re-diagnostiques lo ✅**.
 - CountdownClase: clases pasadas sin confirmar → "Pendiente de confirmación" en vez de tiempo negativo ✅
 - Profe historial: botones "Clase dada / No se dio" para confirmar asistencia ✅
 - Fix "0 días" (null vencimiento): dias=null, AlertaVencimiento retorna null, display "Sin fecha de vencimiento" ✅
-- saldoEfectivo en front: si dias<0 y saldo>=0.8 muestra 0 (window entre vencimiento y próxima carga) ✅
+- Fix saldo fantasma (saldoVivo): centralizado en módulo, aplica en header/Inicio/Perfil/Reservar ✅
+- Fix 2 DB (migración 20260617000000): acreditar_compra aplica umbral 0.8; one-time UPDATE aplicado (0 filas afectadas) ✅
 
 ### ⚠️ Pendiente de primera compra real
 - Verificación end-to-end de acreditación en producción (requiere un pago real de usuario).
-
-### 🔴 Pendiente OK de David — migración Fix 2 (saldo fantasma)
-- Archivo listo: `supabase/migrations/20260617000000_vencimiento_umbral.sql`
-- Backup previo: `backups/alumnos_20260617.csv` (3 filas, todos vencimiento=null; one-time UPDATE no afecta a nadie hoy)
-- Aplica la regla de umbral en `acreditar_compra` y one-time UPDATE para existentes.
-- Corré el SQL del archivo o confirmame y lo aplico.
 
 ## Regla de negocio — Vencimiento de horas (fija)
 - `saldo >= 0.8 hs` cuando vence → se pierde todo (saldo = 0). La clase mínima es 0.8 hs; si tenés menos no podés reservar.
 - `saldo < 0.8 hs` cuando vence → se conserva (remanente no reservable se suma a próxima carga).
 - La regla se aplica en `acreditar_compra` al recargar (punto atómico, idempotente por ON CONFLICT).
-- Front: `saldoEfectivo` = 0 cuando días<0 y saldo>=0.8 (visual consistency mientras DB no se actualiza).
+- Front: `saldoVivo(sal, venc)` en `AlumnoApp` → `saldoDisplay` se pasa a todos los componentes que muestran saldo (header badge, Inicio, Perfil, Reservar)..
 
 ## A futuro (no prioritario)
 - **Google Calendar**: sincronizar reservas al Calendar del alumno y del profe. Requiere Google Cloud project con Calendar API habilitada + OAuth 2.0 credentials de Google. Iniciarlo cuando se decida.

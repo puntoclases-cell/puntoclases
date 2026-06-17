@@ -105,6 +105,8 @@ const primerDia = (y,m) => new Date(y,m,1).getDay();
 const toISO = (y,m,d) => `${y}-${String(m+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
 const fmt = iso => { const [y,m,d]=iso.split("-"); return `${d}/${m}/${y}`; };
 const diasVenc = iso => { if (!iso) return 0; const [y,m,d]=iso.split("-"); const hoy=new Date(); hoy.setHours(0,0,0,0); return Math.ceil((new Date(+y,+m-1,+d)-hoy)/(1000*60*60*24)); };
+// Saldo real disponible aplicando la regla de umbral 0.8: si venció y era ≥0.8 hs → 0; si <0.8 → se conserva.
+const saldoVivo = (sal, vencimiento) => { if (!vencimiento) return sal; return (diasVenc(vencimiento) < 0 && sal >= 0.8) ? 0 : sal; };
 
 // ── UI PRIMITIVOS ────────────────────────────────────────────────────────────
 const Av = ({i,size=40,color=P}) => (
@@ -139,11 +141,9 @@ const Btn = ({children,onClick,disabled,variant="primary",full,style={}}) => {
 
 // ── PANTALLA INICIO ──────────────────────────────────────────────────────────
 function Inicio({onNav, saldo, nombre, reservas, vencimiento}) {
+  // saldo ya viene como saldoDisplay (saldoVivo aplicado en AlumnoApp)
   const dias = vencimiento ? diasVenc(vencimiento) : null;
-  // Saldo efectivo: si venció y era >= 0.8 hs, ya debería ser 0 en DB;
-  // este cálculo defiende contra el window entre vencimiento y próxima carga.
-  const saldoEfectivo = (vencimiento && dias !== null && dias < 0 && saldo >= 0.8) ? 0 : saldo;
-  const pct = Math.min((saldoEfectivo/12)*100,100);
+  const pct = Math.min((saldo/12)*100,100);
   const hoyInicio = new Date().toISOString().slice(0,10);
   const proximaClase = (reservas||[])
     .filter(r => r.fecha >= hoyInicio && r.estado !== "cancelada")
@@ -159,10 +159,10 @@ function Inicio({onNav, saldo, nombre, reservas, vencimiento}) {
             <div>
               <p style={{margin:0,fontSize:13,opacity:0.8}}>Saldo de horas</p>
               <p style={{margin:"2px 0 0",fontSize:11,opacity:0.55}}>
-                ≈ ${(saldoEfectivo*CFG.precioInd).toLocaleString("es-AR")} en clases individuales
+                ≈ ${(saldo*CFG.precioInd).toLocaleString("es-AR")} en clases individuales
               </p>
             </div>
-            <span style={{fontSize:24,fontWeight:800}}>{saldoEfectivo} hs</span>
+            <span style={{fontSize:24,fontWeight:800}}>{saldo} hs</span>
           </div>
           <div style={{background:"rgba(255,255,255,0.2)",borderRadius:99,height:6,marginBottom:6}}>
             <div style={{background:pct<=25?"#fca5a5":pct<=50?"#fde68a":"#86efac",borderRadius:99,height:6,width:`${pct}%`,transition:"width 0.6s"}}/>
@@ -175,7 +175,7 @@ function Inicio({onNav, saldo, nombre, reservas, vencimiento}) {
       </div>
 
       {/* Alerta de vencimiento */}
-      <AlertaVencimiento dias={dias} saldo={saldoEfectivo} onComprar={()=>onNav("comprar")}/>
+      <AlertaVencimiento dias={dias} saldo={saldo} onComprar={()=>onNav("comprar")}/>
 
       {/* Countdown próxima clase */}
       {proximaClase && <CountdownClase clase={proximaClase} onChat={()=>onNav("mensajes")}/>}
@@ -1762,6 +1762,9 @@ function AppAlumno({ user, onLogout }) {
     {id:"mensajes",icon:"💬",label:"Mensajes"},
     {id:"perfil",icon:"👤",label:"Perfil"},
   ];
+  const _venc = datosAlumno?.vencimiento ?? null;
+  const _diasHdr = _venc ? diasVenc(_venc) : null;
+  const saldoDisplay = saldoVivo(saldo, _venc);
   return (
     <div style={{fontFamily:"'DM Sans','Segoe UI',sans-serif",background:BG,minHeight:"100vh",display:"flex",flexDirection:"column",maxWidth:480,margin:"0 auto",position:"relative"}}>
       {!onboardingVisto && <Onboarding onTerminar={()=>{ localStorage.setItem("pc_onboarding_visto","1"); setOnboardingVisto(true); }}/>}
@@ -1773,11 +1776,11 @@ function AppAlumno({ user, onLogout }) {
         </div>
         <div style={{display:"flex",alignItems:"center",gap:10}}>
           <div style={{
-            background:diasVenc(datosAlumno?.vencimiento)<=2?"#fff5f5":diasVenc(datosAlumno?.vencimiento)<=7?"#fefce8":PL,
-            border:`1.5px solid ${diasVenc(datosAlumno?.vencimiento)<=2?"#fecaca":diasVenc(datosAlumno?.vencimiento)<=7?"#fde68a":PB}`,
+            background:(_diasHdr??999)<=2?"#fff5f5":(_diasHdr??999)<=7?"#fefce8":PL,
+            border:`1.5px solid ${(_diasHdr??999)<=2?"#fecaca":(_diasHdr??999)<=7?"#fde68a":PB}`,
             borderRadius:99,padding:"4px 12px",fontSize:13,fontWeight:700,
-            color:diasVenc(datosAlumno?.vencimiento)<=2?"#dc2626":diasVenc(datosAlumno?.vencimiento)<=7?"#92400e":P}}>
-            {diasVenc(datosAlumno?.vencimiento)<=2?"🚨":diasVenc(datosAlumno?.vencimiento)<=7?"⏰":"⏱"} {saldo} hs
+            color:(_diasHdr??999)<=2?"#dc2626":(_diasHdr??999)<=7?"#92400e":P}}>
+            {(_diasHdr??999)<=2?"🚨":(_diasHdr??999)<=7?"⏰":"⏱"} {saldoDisplay} hs
           </div>
           <div onClick={()=>setScreen("perfil")} style={{cursor:"pointer"}}><Av i={(nombreAlumno||"").split(" ").map(n=>n[0]).join("").slice(0,2).toUpperCase()||"?"} size={32} color={DK}/></div>
         </div>
@@ -1785,8 +1788,8 @@ function AppAlumno({ user, onLogout }) {
 
       {/* Contenido */}
       <div style={{flex:1,padding:"16px 16px 80px"}}>
-        {screen==="inicio" && <Inicio onNav={setScreen} saldo={saldo} nombre={nombreAlumno} reservas={reservasAlumno} vencimiento={datosAlumno?.vencimiento}/>}
-        {screen==="reservar" && <Reservar profes={profesData} saldo={saldo} alumnoId={user?.id} onReservar={(costo)=>{setSaldo(s=>+(s-costo).toFixed(2));getReservasAlumno(user.id).then(r=>setReservasAlumno(r)).catch(()=>{});}}/>}
+        {screen==="inicio" && <Inicio onNav={setScreen} saldo={saldoDisplay} nombre={nombreAlumno} reservas={reservasAlumno} vencimiento={datosAlumno?.vencimiento}/>}
+        {screen==="reservar" && <Reservar profes={profesData} saldo={saldoDisplay} alumnoId={user?.id} onReservar={(costo)=>{setSaldo(s=>+(s-costo).toFixed(2));getReservasAlumno(user.id).then(r=>setReservasAlumno(r)).catch(()=>{});}}/>}
         {screen==="historial" && (
           <Historial
             reservas={reservasAlumno}
@@ -1807,7 +1810,7 @@ function AppAlumno({ user, onLogout }) {
         )}
         {screen==="comprar" && <Comprar compras={comprasAlumno} cfg={cfgLive} packsDB={packsLive} onComprar={(hs)=>setSaldo(s=>+(s+hs).toFixed(2))}/>}
         {screen==="profes" && <Profes profes={profesData} onReservar={()=>setScreen("reservar")}/>}
-        {screen==="perfil" && <Perfil datosAlumno={datosAlumno} reservas={reservasAlumno} compras={comprasAlumno} onLogout={onLogout} saldo={saldo}/>}
+        {screen==="perfil" && <Perfil datosAlumno={datosAlumno} reservas={reservasAlumno} compras={comprasAlumno} onLogout={onLogout} saldo={saldoDisplay}/>}
         {screen==="mensajes" && <Chat reservas={reservasAlumno} userId={user?.id}/>}
       </div>
 
