@@ -4412,15 +4412,15 @@ function Finanzas({ reservas, cfg, setCfg }) {
 
       {tab==="reportes" && (<>
         {/* P&L */}
-        <Card style={{background:`linear-gradient(135deg,${DK},#3a3a3a)`,color:"#fff"}}>
-          <p style={{margin:"0 0 14px",fontSize:11,opacity:0.5,textTransform:"uppercase",letterSpacing:0.8}}>Estado de resultados</p>
+        <Card style={{background:BL,color:DK}}>
+          <p style={{margin:"0 0 14px",fontSize:11,opacity:0.55,textTransform:"uppercase",letterSpacing:0.8}}>Estado de resultados</p>
           {[
-            {l:"📥 Facturado bruto",v:bruto,col:"#fff",bold:false},
-            {l:"👨‍🏫 Pagos a profes (tarifa fija)",v:-pagoProfe,col:"#94a3b8",bold:false},
-            {l:"🏢 Costo cowork",v:-costoCowork,col:"#94a3b8",bold:false},
-            {l:"💰 Ganancia neta",v:neto,col:neto>=0?"#86efac":"#fca5a5",bold:true},
+            {l:"📥 Facturado bruto",v:bruto,col:DK,bold:false},
+            {l:"👨‍🏫 Pagos a profes (tarifa fija)",v:-pagoProfe,col:"#374151",bold:false},
+            {l:"🏢 Costo cowork",v:-costoCowork,col:"#374151",bold:false},
+            {l:"💰 Ganancia neta",v:neto,col:neto>=0?GR:P,bold:true},
           ].map((x,i)=>(
-            <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderTop:i>0?"1px solid rgba(255,255,255,0.06)":undefined}}>
+            <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderTop:i>0?"1px solid rgba(0,0,0,0.08)":undefined}}>
               <span style={{fontSize:13,color:x.col,opacity:0.85}}>{x.l}</span>
               <span style={{fontWeight:x.bold?800:600,fontSize:x.bold?18:14,color:x.col}}>
                 {x.v>=0?"":"-"}${Math.abs(x.v).toLocaleString("es-AR")}
