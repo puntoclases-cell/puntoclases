@@ -4610,12 +4610,12 @@ function AppAdminMain({ onLogout }) {
 
   return (
     <div style={{fontFamily:"'DM Sans','Segoe UI',sans-serif",background:BG,minHeight:"100vh",display:"flex",flexDirection:"column",maxWidth:480,width:"100%",margin:"0 auto"}}>
-      <div style={{background:DK,padding:"12px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:10}}>
+      <div style={{background:LOGO_BG,borderBottom:"1px solid #c8e5f5",padding:"12px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:10}}>
         <div style={{display:"flex",alignItems:"center",gap:8}}>
           <Logo size={28}/>
           <div>
-            <span style={{fontWeight:800,fontSize:15,color:"#fff"}}>PuntoClases</span>
-            <span style={{marginLeft:8,fontSize:11,color:"rgba(255,255,255,0.4)"}}>/ Admin</span>
+            <span style={{fontWeight:800,fontSize:15,color:DK}}>PuntoClases</span>
+            <span style={{marginLeft:8,fontSize:11,color:"rgba(46,46,46,0.45)",fontWeight:500}}>/ Admin</span>
           </div>
         </div>
         <Badge bg={P} col="#fff">⚙️ Admin</Badge>
