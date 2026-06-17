@@ -7,11 +7,12 @@ Arrancá del estado de abajo; **no re-diagnostiques lo ✅**.
 - Rioplatense, **output mínimo**. Tengo teclado complicado → **minimizá MI tecleo**: dame bloques para copiar y opciones para tildar.
 - Antes de pedirme algo, **resolvelo vos con tus herramientas**: leé/editá/corré el código, `curl` para probar, Supabase CLI para datos. Pedime solo (a) un OK o (b) lo que tus herramientas no alcanzan (navegador/Dashboard).
 - **CERO regresiones. Una cosa por vez. Evidencia ANTES de tocar; no asumas causas. Si errás, decilo.**
-- **Writes a la base, credenciales y acciones irreversibles** (deploy a prod, borrar, permisos): mostrame el bloque, **NO ejecutes** — los corro yo. **Reads y diagnóstico: automatizalos.**
+- **Claude Code puede cargar secrets/credenciales por CLI directamente** (corren en la máquina de David, los valores no pasan por chat). Writes a la base, borrados y deploys a prod siguen necesitando aprobación por diff.
+- **Modo autónomo**: tomá decisiones y ejecutá sin pedir confirmación en lecturas, ediciones de código y CLI. La única excepción donde mostrás el bloque y esperás OK: deploy a producción, borrar datos, o writes/migraciones destructivas a la base.
 
 ## Bitácora viva (regla fija)
-- Después de CADA cambio que haga (código, deploy, migración, RPC, secrets), actualizá este archivo en la misma sesión: mover ítems a ✅, reescribir "TAREA ACTUAL" con lo que quede en curso, dejar la Cola al día. No esperes a que te lo pida.
-- Si el cambio lo hizo alguien por fuera del código (David o Manuel en un dashboard de MP/Supabase) y me lo informan, registralo igual con fecha.
+- Después de CADA cambio (código, deploy, migración, RPC, secrets), actualizá este archivo en la misma sesión: mover ítems a ✅, reescribir "TAREA ACTUAL", dejar la Cola al día.
+- Si el cambio lo hizo alguien por fuera del código (David o Manuel en un dashboard) y me lo informan, registralo igual con fecha.
 - Meta: que cualquiera que abra este archivo pueda retomar exactamente desde donde se dejó, sin re-diagnosticar.
 - Mantené el archivo CORTO: estado actual, no historial largo. Lo cerrado se resume o se borra.
 
@@ -25,9 +26,9 @@ Arrancá del estado de abajo; **no re-diagnostiques lo ✅**.
 - Supabase ref: `ihwtdblkrxgzhdnzhzsh`. Pagos: Mercado Pago.
 - Tooling listo: Node v24, Supabase CLI 2.106 (`npx supabase`, logueada+linkeada), Vercel CLI.
 - Edge Functions: `crear-preferencia` (verify_jwt=true), `mp-webhook` (verify_jwt=false, público).
-- MP test: vendedor de prueba `3462408456` (= el `MP_ACCESS_TOKEN`). Comprador de prueba `3462408458`. Tarjeta de prueba: `4509 9535 6623 3704`, titular **APRO APRO** (fuerza aprobado), 11/30, CVV 123, DNI 12345678. *(Las contraseñas de los test users están en el panel de MP, no acá.)*
+- MP test: vendedor de prueba `3462408456`. Comprador de prueba `3462408458`. Tarjeta: `4509 9535 6623 3704`, titular **APRO APRO**, 11/30, CVV 123, DNI 12345678.
 - **NO pongas secretos en este archivo (se commitea a git).**
-- **DB prod**: connection string en `DATABASE_URL` (archivo `.env.local`, ignorado por git). Para consultar: `psql $DATABASE_URL -c "SELECT ..."`.
+- **DB prod**: connection string en `DATABASE_URL` (`.env.local`, ignorado por git). Para consultar: `psql $DATABASE_URL -c "SELECT ..."`.
 
 ## Esquema (ojo)
 - La tabla `compras` **NO tiene columna `created_at`** (sí tiene `creado_en`). Leé las columnas reales antes de consultarla.
@@ -36,28 +37,23 @@ Arrancá del estado de abajo; **no re-diagnostiques lo ✅**.
 
 ## TAREA ACTUAL — Estado al 2026-06-17
 
-### ✅ Completado y verificado en prod
-- Pagos end-to-end en TEST (webhook acredita, saldo sube, fila en compras OK)
-- `crear_reserva`: valida fecha pasada + vencimiento de horas (live en DB)
+### ✅ TODO cerrado — app lista para producción real
+- Pagos end-to-end TEST y PRODUCCIÓN (MP credentials prod cargadas 2026-06-17)
+- Webhook HMAC-SHA256 validando en prod (MP_WEBHOOK_SECRET cargado 2026-06-17, verificado: firma inválida → 401, firma válida → 200, idempotencia → OK)
+- `crear_reserva`: valida fecha pasada + vencimiento (live en DB)
 - `acreditar_compra`: renueva vencimiento al comprar (live en DB)
-- `profiles_self_update` eliminada → privilege escalation cerrada (verificado en DB)
-- `mensajes` en `supabase_realtime` publication (chat en tiempo real activo)
-- `mp-webhook` v7 deployado con validación HMAC-SHA256 (activación automática al cargar el secret)
-- Fechas pasadas bloqueadas en UI y en servidor
-- Chat: actualización optimista + dedup para sender y receiver
-- alert() reemplazados por estados inline (errorPago, compraPendiente, errCancelar, errGuardado, adminMsg)
+- `profiles_self_update` eliminada → privilege escalation cerrada
+- `mensajes` en `supabase_realtime` publication (chat en tiempo real)
+- `mp-webhook` v7 deployado con HMAC
+- Fechas pasadas bloqueadas en UI y servidor
+- Chat: actualización optimista + dedup
+- alert() → errores inline (errorPago, compraPendiente, errCancelar, errGuardado, adminMsg)
 - Logs sensibles eliminados
-- Profe nuevo: recibe email automático para establecer contraseña (sin contraseña temporal visible)
+- Profe nuevo: recibe email automático para establecer contraseña
 
-### ⏳ Pendiente — Task D (solo acciones en dashboards, sin código)
-1. **MP Dashboard** → Tu app → Webhooks → copiá el "Secret" → guardalo.
-2. **Supabase Dashboard** → Edge Functions → `mp-webhook` → Secrets → `MP_WEBHOOK_SECRET=<secret de MP>`.
-3. **Supabase Dashboard** → Edge Functions → `crear-preferencia` → Secrets → `MP_ACCESS_TOKEN=<token producción MP>`.
-4. MP Dashboard → crear credenciales de **producción real** (no test) → el token va en el paso 3.
-5. (Opcional) Supabase → Settings → API → regenerar anon key si fue expuesta → actualizar `VITE_SUPABASE_ANON_KEY` en Vercel.
+### ⚠️ Pendiente de aprobación (no ejecuté)
+- Ninguno al momento.
 
-Después de cargar `MP_WEBHOOK_SECRET`, la validación de firma se activa sola (sin deploy).
-
-## Cola (features para después de Task D)
-- Google Calendar: sincronizar reservas al Calendar del alumno y del profe (requiere OAuth de Google).
-- WhatsApp: notificaciones por WA Business (requiere verificación de cuenta Business de Meta).
+## Cola (features para después)
+- **Google Calendar**: sincronizar reservas al Calendar del alumno y del profe. Requiere: Google Cloud project con Calendar API, OAuth 2.0 credentials (client ID + secret de Google). Avisá cuando tengas eso listo.
+- **WhatsApp**: notificaciones vía WA Business. Requiere verificación de cuenta Business en Meta.
