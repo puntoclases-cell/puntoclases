@@ -139,8 +139,11 @@ const Btn = ({children,onClick,disabled,variant="primary",full,style={}}) => {
 
 // ── PANTALLA INICIO ──────────────────────────────────────────────────────────
 function Inicio({onNav, saldo, nombre, reservas, vencimiento}) {
-  const dias = vencimiento ? diasVenc(vencimiento) : 0;
-  const pct = Math.min((saldo/12)*100,100);
+  const dias = vencimiento ? diasVenc(vencimiento) : null;
+  // Saldo efectivo: si venció y era >= 0.8 hs, ya debería ser 0 en DB;
+  // este cálculo defiende contra el window entre vencimiento y próxima carga.
+  const saldoEfectivo = (vencimiento && dias !== null && dias < 0 && saldo >= 0.8) ? 0 : saldo;
+  const pct = Math.min((saldoEfectivo/12)*100,100);
   const hoyInicio = new Date().toISOString().slice(0,10);
   const proximaClase = (reservas||[])
     .filter(r => r.fecha >= hoyInicio && r.estado !== "cancelada")
@@ -156,23 +159,23 @@ function Inicio({onNav, saldo, nombre, reservas, vencimiento}) {
             <div>
               <p style={{margin:0,fontSize:13,opacity:0.8}}>Saldo de horas</p>
               <p style={{margin:"2px 0 0",fontSize:11,opacity:0.55}}>
-                ≈ ${(saldo*CFG.precioInd).toLocaleString("es-AR")} en clases individuales
+                ≈ ${(saldoEfectivo*CFG.precioInd).toLocaleString("es-AR")} en clases individuales
               </p>
             </div>
-            <span style={{fontSize:24,fontWeight:800}}>{saldo} hs</span>
+            <span style={{fontSize:24,fontWeight:800}}>{saldoEfectivo} hs</span>
           </div>
           <div style={{background:"rgba(255,255,255,0.2)",borderRadius:99,height:6,marginBottom:6}}>
             <div style={{background:pct<=25?"#fca5a5":pct<=50?"#fde68a":"#86efac",borderRadius:99,height:6,width:`${pct}%`,transition:"width 0.6s"}}/>
           </div>
           <div style={{display:"flex",justifyContent:"space-between",fontSize:12,opacity:0.65}}>
-            <span>Vence en {dias} días</span>
-            <span>{vencimiento ? fmt(vencimiento) : "—"}</span>
+            <span>{dias === null ? "Sin fecha de vencimiento" : dias >= 0 ? `Vence en ${dias} días` : `Venció el ${fmt(vencimiento)}`}</span>
+            {vencimiento && <span>{fmt(vencimiento)}</span>}
           </div>
         </div>
       </div>
 
       {/* Alerta de vencimiento */}
-      <AlertaVencimiento dias={dias} saldo={saldo} onComprar={()=>onNav("comprar")}/>
+      <AlertaVencimiento dias={dias} saldo={saldoEfectivo} onComprar={()=>onNav("comprar")}/>
 
       {/* Countdown próxima clase */}
       {proximaClase && <CountdownClase clase={proximaClase} onChat={()=>onNav("mensajes")}/>}
@@ -1513,6 +1516,7 @@ function Onboarding({ onTerminar }) {
 
 // ── ALERTA DE VENCIMIENTO ─────────────────────────────────────────────────────
 function AlertaVencimiento({ dias, saldo, onComprar }) {
+  if (dias === null || dias < 0) return null; // null = sin vencimiento; negativo = ya venció (DB se limpia al próxima carga)
   if (saldo === 0) return (
     <button onClick={onComprar} style={{background:PL,border:`1.5px solid ${PB}`,borderRadius:14,padding:"14px 16px",cursor:"pointer",textAlign:"left",display:"flex",alignItems:"center",gap:12,width:"100%"}}>
       <span style={{fontSize:28}}>📦</span>
