@@ -59,9 +59,15 @@ Arrancá del estado de abajo; **no re-diagnostiques lo ✅**.
 - Fix "0 días" (null vencimiento): dias=null, AlertaVencimiento retorna null, display "Sin fecha de vencimiento" ✅
 - Fix saldo fantasma (saldoVivo): centralizado en módulo, aplica en header/Inicio/Perfil/Reservar ✅
 - Fix 2 DB (migración 20260617000000): acreditar_compra aplica umbral 0.8; one-time UPDATE aplicado (0 filas afectadas) ✅
+- Logo oficial transparente en login (`/logo-transparente.png`, 110px, alpha=0 confirmado) ✅
+- Header app y login: fondo LOGO_BG=#DFF2FF (celeste exacto del PNG) — sin cuadrado visible ✅
+- Subtítulo login: color #374151 explícito, sin opacity — legible sobre celeste ✅
 
 ### ⚠️ Pendiente de primera compra real
 - Verificación end-to-end de acreditación en producción (requiere un pago real de usuario).
+
+### Paleta pendiente de decisión (David)
+Ver diagnóstico en la sesión. Superficies grandes a unificar al celeste del logo (#DFF2FF) en decisión futura.
 
 ## Regla de negocio — Vencimiento de horas (fija)
 - `saldo >= 0.8 hs` cuando vence → se pierde todo (saldo = 0). La clase mínima es 0.8 hs; si tenés menos no podés reservar.
