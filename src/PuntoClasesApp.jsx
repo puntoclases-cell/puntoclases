@@ -1756,7 +1756,7 @@ function AppAlumno({ user, onLogout }) {
   const _diasHdr = _venc ? diasVenc(_venc) : null;
   const saldoDisplay = saldoVivo(saldo, _venc);
   return (
-    <div style={{fontFamily:"'DM Sans','Segoe UI',sans-serif",background:BG,minHeight:"100vh",display:"flex",flexDirection:"column",maxWidth:480,margin:"0 auto",position:"relative"}}>
+    <div style={{fontFamily:"'DM Sans','Segoe UI',sans-serif",background:BG,minHeight:"100vh",display:"flex",flexDirection:"column",maxWidth:480,width:"100%",margin:"0 auto",position:"relative"}}>
       {!onboardingVisto && <Onboarding onTerminar={()=>{ localStorage.setItem("pc_onboarding_visto","1"); setOnboardingVisto(true); }}/>}
       {/* Header */}
       <div style={{background:LOGO_BG,borderBottom:"1px solid #c8e5f5",padding:"12px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:10}}>
@@ -3564,7 +3564,7 @@ function AppProfeMain({ user, onLogout }) {
   };
 
   return (
-    <div style={{fontFamily:"'DM Sans','Segoe UI',sans-serif",background:BG,minHeight:"100vh",display:"flex",flexDirection:"column",maxWidth:480,margin:"0 auto",position:"relative"}}>
+    <div style={{fontFamily:"'DM Sans','Segoe UI',sans-serif",background:BG,minHeight:"100vh",display:"flex",flexDirection:"column",maxWidth:480,width:"100%",margin:"0 auto",position:"relative"}}>
       <div style={{background:DK,padding:"12px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:10}}>
         <div style={{display:"flex",alignItems:"center",gap:8}}>
           <Logo size={28}/>
@@ -4592,7 +4592,7 @@ function AppAdminMain({ onLogout }) {
   ];
 
   return (
-    <div style={{fontFamily:"'DM Sans','Segoe UI',sans-serif",background:BG,minHeight:"100vh",display:"flex",flexDirection:"column",maxWidth:480,margin:"0 auto"}}>
+    <div style={{fontFamily:"'DM Sans','Segoe UI',sans-serif",background:BG,minHeight:"100vh",display:"flex",flexDirection:"column",maxWidth:480,width:"100%",margin:"0 auto"}}>
       <div style={{background:DK,padding:"12px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:10}}>
         <div style={{display:"flex",alignItems:"center",gap:8}}>
           <Logo size={28}/>
@@ -5204,7 +5204,7 @@ function OnboardingRegistroAlumno({ onTerminar }) {
   );
 
   return (
-    <div style={{fontFamily:"'DM Sans','Segoe UI',sans-serif",background:BG,minHeight:"100vh",display:"flex",flexDirection:"column",maxWidth:480,margin:"0 auto"}}>
+    <div style={{fontFamily:"'DM Sans','Segoe UI',sans-serif",background:BG,minHeight:"100vh",display:"flex",flexDirection:"column",maxWidth:480,width:"100%",margin:"0 auto"}}>
       <div style={{background:DK,padding:"14px 20px",display:"flex",alignItems:"center",gap:12}}>
         <Logo size={28}/>
         <div>
@@ -5276,7 +5276,7 @@ function OnboardingRegistroAlumno({ onTerminar }) {
         )}
       </div>
 
-      <div style={{position:"fixed",bottom:0,left:0,right:0,maxWidth:480,margin:"0 auto",background:"#fff",borderTop:"1px solid #e2e8f0",padding:"14px 20px",display:"flex",gap:10}}>
+      <div style={{position:"fixed",bottom:0,left:0,right:0,maxWidth:480,width:"100%",margin:"0 auto",background:"#fff",borderTop:"1px solid #e2e8f0",padding:"14px 20px",display:"flex",gap:10}}>
         <Btn variant="secondary" onClick={()=>paso===1?onTerminar(null):setPaso(1)} style={{flex:1}}>
           {paso===1?"Cancelar":"← Volver"}
         </Btn>
@@ -5353,7 +5353,7 @@ function OnboardingRegistroProfe({ onTerminar }) {
   );
 
   return (
-    <div style={{fontFamily:"'DM Sans','Segoe UI',sans-serif",background:BG,minHeight:"100vh",display:"flex",flexDirection:"column",maxWidth:480,margin:"0 auto"}}>
+    <div style={{fontFamily:"'DM Sans','Segoe UI',sans-serif",background:BG,minHeight:"100vh",display:"flex",flexDirection:"column",maxWidth:480,width:"100%",margin:"0 auto"}}>
       {/* Header */}
       <div style={{background:DK,padding:"14px 20px",display:"flex",alignItems:"center",gap:12}}>
         <Logo size={28}/>
@@ -5816,7 +5816,7 @@ function CambiarPasswordScreen({ onTerminar }) {
   const puedeGuardar = pass.length>=8 && pass===pass2;
   const inputSt = {border:"2px solid #e2e8f0",borderRadius:12,padding:"12px 16px",fontSize:14,outline:"none",background:"#fff",color:DK,fontFamily:"inherit",width:"100%",boxSizing:"border-box"};
   return (
-    <div style={{fontFamily:"'DM Sans','Segoe UI',sans-serif",background:BG,minHeight:"100vh",maxWidth:480,margin:"0 auto",padding:"32px 24px",display:"flex",flexDirection:"column",gap:20}}>
+    <div style={{fontFamily:"'DM Sans','Segoe UI',sans-serif",background:BG,minHeight:"100vh",maxWidth:480,width:"100%",boxSizing:"border-box",margin:"0 auto",padding:"32px 24px",display:"flex",flexDirection:"column",gap:20}}>
       <div style={{textAlign:"center"}}>
         <span style={{fontSize:44}}>🔒</span>
         <h2 style={{margin:"10px 0 4px",color:DK,fontSize:20,fontWeight:800}}>Nueva contraseña</h2>
@@ -5879,7 +5879,7 @@ function LoginScreen({ onLogin, onRegistroProfe, onRegistroAlumno }) {
   };
 
   if (recuperar) return (
-    <div style={{fontFamily:"'DM Sans','Segoe UI',sans-serif",background:BG,minHeight:"100vh",maxWidth:480,margin:"0 auto",padding:"32px 24px",display:"flex",flexDirection:"column",gap:20}}>
+    <div style={{fontFamily:"'DM Sans','Segoe UI',sans-serif",background:BG,minHeight:"100vh",maxWidth:480,width:"100%",boxSizing:"border-box",margin:"0 auto",padding:"32px 24px",display:"flex",flexDirection:"column",gap:20}}>
       <button onClick={()=>{setRecuperar(false);setRecOk(false);}} style={{background:"none",border:"none",cursor:"pointer",textAlign:"left",fontSize:14,color:P,fontWeight:700,padding:0}}>← Volver</button>
       <div style={{textAlign:"center"}}>
         <span style={{fontSize:44}}>🔑</span>
@@ -5907,7 +5907,7 @@ function LoginScreen({ onLogin, onRegistroProfe, onRegistroAlumno }) {
   );
 
   return (
-    <div style={{fontFamily:"'DM Sans','Segoe UI',sans-serif",background:BG,minHeight:"100vh",maxWidth:480,margin:"0 auto",display:"flex",flexDirection:"column"}}>
+    <div style={{fontFamily:"'DM Sans','Segoe UI',sans-serif",background:BG,minHeight:"100vh",maxWidth:480,width:"100%",margin:"0 auto",display:"flex",flexDirection:"column"}}>
       {/* Hero */}
       <div style={{background:LOGO_BG,padding:"52px 24px 44px",display:"flex",flexDirection:"column",alignItems:"center",gap:16}}>
         <img src="/logo-transparente.png" width={110} height={110} alt="PuntoClases" style={{display:"block"}}/>

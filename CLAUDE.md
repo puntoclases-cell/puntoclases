@@ -64,10 +64,11 @@ Arrancá del estado de abajo; **no re-diagnostiques lo ✅**.
 - Subtítulo login: color #374151 explícito, sin opacity — legible sobre celeste ✅
 
 - Tarjeta saldo Inicio: celeste #2188B6 (familia logo), textos opacity 0.80 unificado ✅
-- Layout: padding lateral contenido unificado a 20px (= header) ✅
+- Layout: ancho consistente en todas las pestañas — `width:"100%"` en todos los root containers + `boxSizing:"border-box"` donde hay padding lateral; elimina franjas blancas en móvil ✅
 - PWA auto-update: vite-plugin-pwa (Workbox), banner "nueva versión → Actualizar" ✅
   - SW precachea app shell; polling cada hora; skipWaiting en click; cleanupOutdatedCaches ✅
   - Fix vercel.json: eliminado Clear-Site-Data de /sw.js (era destructivo, borraba auth) ✅
+- mp-webhook: soporte dual formato MP — querystring `?type=payment&data.id=X` Y body JSON; firma HMAC usa el id correcto en ambos casos ✅
 
 ### ⚠️ Pendiente de primera compra real
 - Verificación end-to-end de acreditación en producción (requiere un pago real de usuario).
