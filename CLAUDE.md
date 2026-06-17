@@ -63,11 +63,14 @@ Arrancá del estado de abajo; **no re-diagnostiques lo ✅**.
 - Header app y login: fondo LOGO_BG=#DFF2FF (celeste exacto del PNG) — sin cuadrado visible ✅
 - Subtítulo login: color #374151 explícito, sin opacity — legible sobre celeste ✅
 
+- Tarjeta saldo Inicio: celeste #2188B6 (familia logo), textos opacity 0.80 unificado ✅
+- Layout: padding lateral contenido unificado a 20px (= header) ✅
+- PWA auto-update: vite-plugin-pwa (Workbox), banner "nueva versión → Actualizar" ✅
+  - SW precachea app shell; polling cada hora; skipWaiting en click; cleanupOutdatedCaches ✅
+  - Fix vercel.json: eliminado Clear-Site-Data de /sw.js (era destructivo, borraba auth) ✅
+
 ### ⚠️ Pendiente de primera compra real
 - Verificación end-to-end de acreditación en producción (requiere un pago real de usuario).
-
-### Paleta pendiente de decisión (David)
-Ver diagnóstico en la sesión. Superficies grandes a unificar al celeste del logo (#DFF2FF) en decisión futura.
 
 ## Regla de negocio — Vencimiento de horas (fija)
 - `saldo >= 0.8 hs` cuando vence → se pierde todo (saldo = 0). La clase mínima es 0.8 hs; si tenés menos no podés reservar.
