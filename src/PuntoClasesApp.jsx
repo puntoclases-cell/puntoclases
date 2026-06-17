@@ -2615,23 +2615,23 @@ function Ingresos({ reservas }) {
       </div>
 
       {/* Resumen del mes */}
-      <div style={{background:`linear-gradient(135deg,${DK},#3d3d3d)`,borderRadius:20,padding:"20px",color:"#fff"}}>
+      <div style={{background:BL,borderRadius:20,padding:"20px",color:DK}}>
         <p style={{margin:"0 0 16px",fontSize:13,opacity:0.6,textTransform:"uppercase",letterSpacing:0.8}}>
           {nombresMes[mes]} {year}
         </p>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16}}>
-          <div style={{background:"rgba(255,255,255,0.08)",borderRadius:12,padding:"14px"}}>
+          <div style={{background:"rgba(255,255,255,0.45)",borderRadius:12,padding:"14px"}}>
             <p style={{margin:0,fontSize:28,fontWeight:800}}>{totalHoras}</p>
             <p style={{margin:0,fontSize:12,opacity:0.6}}>horas dadas</p>
           </div>
-          <div style={{background:"rgba(255,255,255,0.08)",borderRadius:12,padding:"14px"}}>
+          <div style={{background:"rgba(255,255,255,0.45)",borderRadius:12,padding:"14px"}}>
             <p style={{margin:0,fontSize:28,fontWeight:800}}>{realizadasMes.length}</p>
             <p style={{margin:0,fontSize:12,opacity:0.6}}>clases</p>
           </div>
         </div>
-        <div style={{background:"rgba(217,79,61,0.3)",borderRadius:12,padding:"14px",marginBottom:10}}>
+        <div style={{background:"rgba(255,255,255,0.55)",borderRadius:12,padding:"14px",marginBottom:10}}>
           <p style={{margin:"0 0 4px",fontSize:12,opacity:0.7}}>Lo que te corresponde cobrar</p>
-          <p style={{margin:0,fontSize:32,fontWeight:800,color:"#fff"}}>${totalNeto.toLocaleString("es-AR")}</p>
+          <p style={{margin:0,fontSize:32,fontWeight:800,color:P}}>${totalNeto.toLocaleString("es-AR")}</p>
           <p style={{margin:"4px 0 0",fontSize:11,opacity:0.5}}>{totalHoras}hs · {realizadasMes.length} clases realizadas</p>
         </div>
         <div style={{display:"flex",justifyContent:"space-between",fontSize:12,opacity:0.5}}>
