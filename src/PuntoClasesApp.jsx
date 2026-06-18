@@ -6044,6 +6044,7 @@ function LoginScreen({ onLogin, onRegistroProfe, onRegistroAlumno }) {
   const [recuperar, setRecuperar] = useState(false);
   const [recMail, setRecMail] = useState("");
   const [recOk, setRecOk]     = useState(false);
+  const [guiaOpen, setGuiaOpen] = useState(false);
 
   const handleLogin = async () => {
     setError("");
@@ -6148,8 +6149,12 @@ function LoginScreen({ onLogin, onRegistroProfe, onRegistroAlumno }) {
               Registrate acá
             </button>
           </p>
+          <button onClick={()=>setGuiaOpen(true)} style={{background:"none",border:`1.5px solid #c8e5f5`,borderRadius:12,padding:"13px",fontSize:14,fontWeight:700,color:BL,cursor:"pointer",width:"100%"}}>
+            📲 Instalá la app
+          </button>
         </div>
       </div>
+      {guiaOpen && <GuiaInstalacion onCerrar={()=>setGuiaOpen(false)}/>}
     </div>
   );
 }
