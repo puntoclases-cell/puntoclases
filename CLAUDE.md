@@ -100,6 +100,7 @@ Arrancá del estado de abajo; **no re-diagnostiques lo ✅**.
   - Perfil profe: ídem + fix bug avatar hardcodeado `"DG"` → `initialsProfe(perfil.nombre)`
   - Fix subida silenciosa: try/catch en `img.onload` (Promise no cuelga), fallback JPEG si WebP falla (iOS < 16.4), error visible en modal
   - Fix "No se pudo leer la imagen" (2026-06-18): `comprimirImagen` creaba segundo blob URL fuera de user-gesture → iOS WKWebView dispara `img.onerror`. Fix integral: `FileReader.readAsDataURL` en `onFileChangeAlumno/Profe` → `dataUrl` compartido para preview Y compresión (sin createObjectURL en Canvas). `subirAvatar` acepta `dataUrl`. Errores por paso con mensajes distintos. Elimina `alert()` → `setErrorFoto*` inline.
+  - Fix "The resource already exists" (2026-06-18): `remove + upload` reemplazado por `upload upsert:true`. Agregada `avatar_select_own` SELECT policy en storage.objects (migration 20260618000001) para que el upsert resuelva el conflict check. Cache-busting `?t=timestamp` ya estaba en la URL retornada.
 
 - **RLS profiles_update** (migración 20260618000000) ✅ — 2026-06-18
   - Causa: WITH CHECK tenía subquery `SELECT rol FROM profiles WHERE id = auth.uid()` → Postgres re-evaluaba la misma policy al leer la tabla → recursión infinita (42P17) al hacer UPDATE de avatar_url.

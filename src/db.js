@@ -397,10 +397,9 @@ function comprimirImagen(dataUrl, maxPx, quality) {
 export async function subirAvatar(userId, dataUrl) {
   const blob = await comprimirImagen(dataUrl, 400, 0.85);
   const path = `${userId}/avatar`;
-  await supabase.storage.from("avatars").remove([path]);
   const { error: uploadError } = await supabase.storage
     .from("avatars")
-    .upload(path, blob, { contentType: blob.type });
+    .upload(path, blob, { contentType: blob.type, upsert: true });
   if (uploadError) throw new Error("Error al subir la foto: " + uploadError.message);
   const { data } = supabase.storage.from("avatars").getPublicUrl(path);
   return `${data.publicUrl}?t=${Date.now()}`;
