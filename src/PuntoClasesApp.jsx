@@ -1007,6 +1007,57 @@ function Profes({ onReservar, profes }) {
 }
 
 
+// ── GUÍA DE INSTALACIÓN PWA ──────────────────────────────────────────────────
+const PasoInstalacion = ({ n, texto }) => (
+  <div style={{display:"flex",gap:12,alignItems:"flex-start"}}>
+    <div style={{width:26,height:26,borderRadius:"50%",background:P,color:"#fff",fontWeight:800,fontSize:13,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1}}>{n}</div>
+    <p style={{margin:0,fontSize:14,color:"#374151",lineHeight:1.6}}>{texto}</p>
+  </div>
+);
+
+function GuiaInstalacion({ onCerrar }) {
+  const ua = navigator.userAgent || "";
+  const esIOS = /iPhone|iPad|iPod/i.test(ua);
+  const [tab, setTab] = useState(esIOS ? "iphone" : "android");
+  return (
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.65)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+      <div style={{background:"#fff",borderRadius:20,padding:24,width:"100%",maxWidth:360,display:"flex",flexDirection:"column",gap:16}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <p style={{margin:0,fontWeight:800,fontSize:17,color:DK}}>📲 Instalá la app</p>
+          <button onClick={onCerrar} style={{background:"none",border:"none",fontSize:20,cursor:"pointer",color:"#94a3b8",padding:4,lineHeight:1}}>✕</button>
+        </div>
+        <div style={{display:"flex",background:"#f1f5f9",borderRadius:10,padding:4,gap:4}}>
+          {[["android","🤖 Android"],["iphone","🍎 iPhone"]].map(([id,label])=>(
+            <button key={id} onClick={()=>setTab(id)}
+              style={{flex:1,background:tab===id?"#fff":"none",border:"none",borderRadius:8,padding:"8px",fontSize:13,fontWeight:700,cursor:"pointer",color:tab===id?DK:"#94a3b8",transition:"all 0.15s"}}>
+              {label}
+            </button>
+          ))}
+        </div>
+        {tab==="android" && (
+          <div style={{display:"flex",flexDirection:"column",gap:12}}>
+            <PasoInstalacion n={1} texto={<>Abrí PuntoClases en <strong>Chrome</strong> 🌐</>}/>
+            <PasoInstalacion n={2} texto={<>Tocá los tres puntos <strong>⋮</strong> (arriba a la derecha)</>}/>
+            <PasoInstalacion n={3} texto={<>Elegí <strong>"Instalar app"</strong> o <strong>"Agregar a pantalla de inicio"</strong></>}/>
+            <PasoInstalacion n={4} texto={<>Tocá <strong>Instalar</strong> en el cartel que aparece ✅</>}/>
+            <p style={{margin:0,fontSize:12,color:"#64748b",background:"#f8fafc",borderRadius:10,padding:"10px 12px",lineHeight:1.6}}>💡 A veces Chrome muestra directamente un banner abajo "Instalar PuntoClases" — tocalo y listo.</p>
+          </div>
+        )}
+        {tab==="iphone" && (
+          <div style={{display:"flex",flexDirection:"column",gap:12}}>
+            <PasoInstalacion n={1} texto={<>Abrí PuntoClases en <strong>Safari</strong> 🧭 (no Chrome ni otro browser)</>}/>
+            <PasoInstalacion n={2} texto={<>Tocá el botón <strong>Compartir</strong> 📤 (abajo en el centro)</>}/>
+            <PasoInstalacion n={3} texto={<>Deslizá la lista y tocá <strong>"Agregar a inicio"</strong> ➕</>}/>
+            <PasoInstalacion n={4} texto={<>Tocá <strong>Agregar</strong> (arriba a la derecha) ✅</>}/>
+            <p style={{margin:0,fontSize:12,color:"#64748b",background:"#f8fafc",borderRadius:10,padding:"10px 12px",lineHeight:1.6}}>💡 En iPhone esto solo funciona desde Safari. Si estás en Chrome, abrí el mismo link en Safari primero.</p>
+          </div>
+        )}
+        <button onClick={onCerrar} style={{background:P,border:"none",borderRadius:12,padding:"13px",fontSize:14,fontWeight:700,color:"#fff",cursor:"pointer"}}>Entendido</button>
+      </div>
+    </div>
+  );
+}
+
 // ── PANTALLA PERFIL ──────────────────────────────────────────────────────────
 function Perfil({ onLogout, saldo, compras, datosAlumno, reservas, onAvatarActualizado }) {
   const [editando, setEditando] = useState(false);
@@ -1058,6 +1109,8 @@ function Perfil({ onLogout, saldo, compras, datosAlumno, reservas, onAvatarActua
     finally { setSubiendoFotoAlumno(false); }
   };
   const cancelarFotoAlumno = () => { URL.revokeObjectURL(fotoPreviewAlumno.objectUrl); setFotoPreviewAlumno(null); };
+
+  const [guiaOpen, setGuiaOpen] = useState(false);
   const [notif, setNotif] = useState({ reserva:true, recordatorio:true, devolucion:true, promo:false });
   const [tab, setTab] = useState("progreso");
 
@@ -1265,10 +1318,15 @@ function Perfil({ onLogout, saldo, compras, datosAlumno, reservas, onAvatarActua
         </div>
       )}
 
+      <button onClick={()=>setGuiaOpen(true)} style={{background:"none",border:"1.5px solid #c8e5f5",borderRadius:12,padding:"13px",fontSize:14,fontWeight:700,color:BL,cursor:"pointer",width:"100%"}}>
+        📲 Instalá la app
+      </button>
+
       {/* Cerrar sesión */}
       <button onClick={onLogout} style={{background:"none",border:"1.5px solid #fecaca",borderRadius:12,padding:"13px",fontSize:14,fontWeight:700,color:"#dc2626",cursor:"pointer",marginTop:4,width:"100%"}}>
         Cerrar sesión
       </button>
+      {guiaOpen && <GuiaInstalacion onCerrar={()=>setGuiaOpen(false)}/>}
 
     </div>
   );
@@ -3008,6 +3066,8 @@ function PerfilProfe({ onLogoutProfe, profeData, onAvatarActualizado }) {
   };
   const cancelarFotoProfe = () => { URL.revokeObjectURL(fotoPreviewProfe.objectUrl); setFotoPreviewProfe(null); };
 
+  const [guiaOpenProfe, setGuiaOpenProfe] = useState(false);
+
   const toggleMateria = m => setDraft(p=>({...p,
     materias: p.materias.includes(m) ? p.materias.filter(x=>x!==m) : [...p.materias, m]
   }));
@@ -3275,9 +3335,14 @@ function PerfilProfe({ onLogoutProfe, profeData, onAvatarActualizado }) {
         ✎ Editar perfil
       </Btn>
 
-      <button onClick={onLogoutProfe} style={{background:"none",border:`1.5px solid #fecaca`,borderRadius:12,padding:"13px",fontSize:14,fontWeight:700,color:"#dc2626",cursor:"pointer",width:"100%"}}>
+      <button onClick={()=>setGuiaOpenProfe(true)} style={{background:"none",border:"1.5px solid #c8e5f5",borderRadius:12,padding:"13px",fontSize:14,fontWeight:700,color:BL,cursor:"pointer",width:"100%"}}>
+        📲 Instalá la app
+      </button>
+
+      <button onClick={onLogoutProfe} style={{background:"none",border:`1.5px solid #fecaca`,borderRadius:12,padding:"13px",fontSize:14,fontWeight:700,color:"#dc2626",cursor:"pointer",width:"100%",marginTop:4}}>
         Cerrar sesión
       </button>
+      {guiaOpenProfe && <GuiaInstalacion onCerrar={()=>setGuiaOpenProfe(false)}/>}
 
       {fotoPreviewProfe && (
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
