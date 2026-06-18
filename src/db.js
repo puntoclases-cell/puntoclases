@@ -361,46 +361,47 @@ export async function crearPreferencia(horas, packId = null) {
 
 // ── STORAGE: AVATARES ────────────────────────────────────────────────────────
 
-function comprimirImagen(file, maxPx, quality) {
+// Recibe un dataUrl (ya leído por FileReader en el front) — sin createObjectURL,
+// compatible con WKWebView/iOS donde los blob URLs creados fuera de user-gesture pueden fallar.
+function comprimirImagen(dataUrl, maxPx, quality) {
   return new Promise((resolve, reject) => {
     const img = new Image();
-    const objUrl = URL.createObjectURL(file);
+    img.onerror = () => reject(new Error("Error al decodificar la imagen"));
     img.onload = () => {
       try {
-        URL.revokeObjectURL(objUrl);
         const canvas = document.createElement("canvas");
         canvas.width = maxPx;
         canvas.height = maxPx;
         const ctx = canvas.getContext("2d");
-        if (!ctx) { reject(new Error("Canvas no disponible")); return; }
+        if (!ctx) { reject(new Error("Canvas no disponible en este dispositivo")); return; }
         const side = Math.min(img.width, img.height);
         const sx = (img.width - side) / 2;
         const sy = (img.height - side) / 2;
         ctx.drawImage(img, sx, sy, side, side, 0, 0, maxPx, maxPx);
-        // Intenta WebP; si el navegador lo devuelve null (iOS < 16.4), cae a JPEG
         canvas.toBlob(blob => {
           if (blob) { resolve(blob); return; }
+          // WebP falló (iOS < 16.4) — cae a JPEG
           canvas.toBlob(
-            b => b ? resolve(b) : reject(new Error("No se pudo comprimir la imagen")),
+            b => b ? resolve(b) : reject(new Error("El dispositivo no pudo comprimir la imagen")),
             "image/jpeg", quality
           );
         }, "image/webp", quality);
-      } catch (e) { reject(e); }
+      } catch (e) {
+        reject(new Error("Error al comprimir: " + e.message));
+      }
     };
-    img.onerror = () => { URL.revokeObjectURL(objUrl); reject(new Error("No se pudo leer la imagen")); };
-    img.src = objUrl;
+    img.src = dataUrl;
   });
 }
 
-export async function subirAvatar(userId, file) {
-  const blob = await comprimirImagen(file, 400, 0.85);
+export async function subirAvatar(userId, dataUrl) {
+  const blob = await comprimirImagen(dataUrl, 400, 0.85);
   const path = `${userId}/avatar`;
-  // Eliminar el archivo anterior si existe (primera subida: el error se ignora)
   await supabase.storage.from("avatars").remove([path]);
-  const { error } = await supabase.storage
+  const { error: uploadError } = await supabase.storage
     .from("avatars")
     .upload(path, blob, { contentType: blob.type });
-  if (error) throw error;
+  if (uploadError) throw new Error("Error al subir la foto: " + uploadError.message);
   const { data } = supabase.storage.from("avatars").getPublicUrl(path);
   return `${data.publicUrl}?t=${Date.now()}`;
 }

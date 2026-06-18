@@ -1093,27 +1093,37 @@ function Perfil({ onLogout, saldo, compras, datosAlumno, reservas, onAvatarActua
     const file = e.target.files?.[0];
     if (!file) return;
     e.target.value = "";
-    if (!["image/jpeg","image/png","image/webp"].includes(file.type)) { alert("Solo JPG, PNG o WebP"); return; }
-    if (file.size > 10 * 1024 * 1024) { alert("La imagen no puede superar 10 MB"); return; }
-    setFotoPreviewAlumno({ file, objectUrl: URL.createObjectURL(file) });
+    if (!file.type.startsWith("image/")) {
+      setErrorFotoAlumno("Seleccioná un archivo de imagen (JPG, PNG, etc.)");
+      setFotoPreviewAlumno({ dataUrl: null });
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setErrorFotoAlumno("La imagen no puede superar 10 MB");
+      setFotoPreviewAlumno({ dataUrl: null });
+      return;
+    }
+    setErrorFotoAlumno(null);
+    const reader = new FileReader();
+    reader.onerror = () => { setErrorFotoAlumno("No se pudo leer el archivo"); setFotoPreviewAlumno({ dataUrl: null }); };
+    reader.onload = (ev) => setFotoPreviewAlumno({ dataUrl: ev.target.result });
+    reader.readAsDataURL(file);
   };
   const confirmarFotoAlumno = async () => {
-    if (!fotoPreviewAlumno || subiendoFotoAlumno) return;
+    if (!fotoPreviewAlumno?.dataUrl || subiendoFotoAlumno) return;
     setSubiendoFotoAlumno(true);
     setErrorFotoAlumno(null);
     try {
-      const url = await subirAvatar(datosAlumno.id, fotoPreviewAlumno.file);
+      const url = await subirAvatar(datosAlumno.id, fotoPreviewAlumno.dataUrl);
       await actualizarPerfil(datosAlumno.id, { avatar_url: url });
-      URL.revokeObjectURL(fotoPreviewAlumno.objectUrl);
       setFotoPreviewAlumno(null);
       setErrorFotoAlumno(null);
       onAvatarActualizado?.(url);
     } catch(err) {
-      console.error("Error al subir foto:", err);
       setErrorFotoAlumno(err?.message || "No se pudo subir la foto. Intentá de nuevo.");
     } finally { setSubiendoFotoAlumno(false); }
   };
-  const cancelarFotoAlumno = () => { URL.revokeObjectURL(fotoPreviewAlumno.objectUrl); setFotoPreviewAlumno(null); };
+  const cancelarFotoAlumno = () => { setFotoPreviewAlumno(null); setErrorFotoAlumno(null); };
 
   const [errorFotoAlumno, setErrorFotoAlumno] = useState(null);
   const [guiaOpen, setGuiaOpen] = useState(false);
@@ -1153,12 +1163,12 @@ function Perfil({ onLogout, saldo, compras, datosAlumno, reservas, onAvatarActua
           <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
             <div style={{background:"#fff",borderRadius:20,padding:24,width:"100%",maxWidth:320,display:"flex",flexDirection:"column",gap:16,alignItems:"center"}}>
               <p style={{margin:0,fontWeight:800,fontSize:16,color:DK}}>Previsualización</p>
-              <img src={fotoPreviewAlumno.objectUrl} alt="preview" style={{width:120,height:120,borderRadius:"50%",objectFit:"cover",border:`3px solid ${P}`}}/>
-              <p style={{margin:0,fontSize:13,color:"#64748b",textAlign:"center"}}>Esta foto quedará visible en tu perfil</p>
+              {fotoPreviewAlumno.dataUrl && <img src={fotoPreviewAlumno.dataUrl} alt="preview" style={{width:120,height:120,borderRadius:"50%",objectFit:"cover",border:`3px solid ${P}`}}/>}
+              {fotoPreviewAlumno.dataUrl && <p style={{margin:0,fontSize:13,color:"#64748b",textAlign:"center"}}>Esta foto quedará visible en tu perfil</p>}
               {errorFotoAlumno && <p style={{margin:0,fontSize:13,color:P,textAlign:"center",fontWeight:600}}>{errorFotoAlumno}</p>}
               <div style={{display:"flex",gap:10,width:"100%"}}>
                 <button onClick={cancelarFotoAlumno} disabled={subiendoFotoAlumno} style={{flex:1,background:"#f1f5f9",border:"none",borderRadius:10,padding:"12px",fontSize:14,fontWeight:700,cursor:"pointer",color:"#475569"}}>Cancelar</button>
-                <button onClick={confirmarFotoAlumno} disabled={subiendoFotoAlumno} style={{flex:1,background:P,border:"none",borderRadius:10,padding:"12px",fontSize:14,fontWeight:700,cursor:subiendoFotoAlumno?"not-allowed":"pointer",color:"#fff",opacity:subiendoFotoAlumno?0.7:1}}>{subiendoFotoAlumno?"Subiendo...":"Confirmar"}</button>
+                <button onClick={confirmarFotoAlumno} disabled={subiendoFotoAlumno||!fotoPreviewAlumno.dataUrl} style={{flex:1,background:P,border:"none",borderRadius:10,padding:"12px",fontSize:14,fontWeight:700,cursor:(subiendoFotoAlumno||!fotoPreviewAlumno.dataUrl)?"not-allowed":"pointer",color:"#fff",opacity:(subiendoFotoAlumno||!fotoPreviewAlumno.dataUrl)?0.7:1}}>{subiendoFotoAlumno?"Subiendo...":"Confirmar"}</button>
               </div>
             </div>
           </div>
@@ -3055,27 +3065,37 @@ function PerfilProfe({ onLogoutProfe, profeData, onAvatarActualizado }) {
     const file = e.target.files?.[0];
     if (!file) return;
     e.target.value = "";
-    if (!["image/jpeg","image/png","image/webp"].includes(file.type)) { alert("Solo JPG, PNG o WebP"); return; }
-    if (file.size > 10 * 1024 * 1024) { alert("La imagen no puede superar 10 MB"); return; }
-    setFotoPreviewProfe({ file, objectUrl: URL.createObjectURL(file) });
+    if (!file.type.startsWith("image/")) {
+      setErrorFotoProfe("Seleccioná un archivo de imagen (JPG, PNG, etc.)");
+      setFotoPreviewProfe({ dataUrl: null });
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setErrorFotoProfe("La imagen no puede superar 10 MB");
+      setFotoPreviewProfe({ dataUrl: null });
+      return;
+    }
+    setErrorFotoProfe(null);
+    const reader = new FileReader();
+    reader.onerror = () => { setErrorFotoProfe("No se pudo leer el archivo"); setFotoPreviewProfe({ dataUrl: null }); };
+    reader.onload = (ev) => setFotoPreviewProfe({ dataUrl: ev.target.result });
+    reader.readAsDataURL(file);
   };
   const confirmarFotoProfe = async () => {
-    if (!fotoPreviewProfe || subiendoFotoProfe) return;
+    if (!fotoPreviewProfe?.dataUrl || subiendoFotoProfe) return;
     setSubiendoFotoProfe(true);
     setErrorFotoProfe(null);
     try {
-      const url = await subirAvatar(profeData.id, fotoPreviewProfe.file);
+      const url = await subirAvatar(profeData.id, fotoPreviewProfe.dataUrl);
       await actualizarPerfil(profeData.id, { avatar_url: url });
-      URL.revokeObjectURL(fotoPreviewProfe.objectUrl);
       setFotoPreviewProfe(null);
       setErrorFotoProfe(null);
       onAvatarActualizado?.(url);
     } catch(err) {
-      console.error("Error al subir foto:", err);
       setErrorFotoProfe(err?.message || "No se pudo subir la foto. Intentá de nuevo.");
     } finally { setSubiendoFotoProfe(false); }
   };
-  const cancelarFotoProfe = () => { URL.revokeObjectURL(fotoPreviewProfe.objectUrl); setFotoPreviewProfe(null); };
+  const cancelarFotoProfe = () => { setFotoPreviewProfe(null); setErrorFotoProfe(null); };
   const [errorFotoProfe, setErrorFotoProfe] = useState(null);
 
   const [guiaOpenProfe, setGuiaOpenProfe] = useState(false);
@@ -3360,12 +3380,12 @@ function PerfilProfe({ onLogoutProfe, profeData, onAvatarActualizado }) {
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
           <div style={{background:"#fff",borderRadius:20,padding:24,width:"100%",maxWidth:320,display:"flex",flexDirection:"column",gap:16,alignItems:"center"}}>
             <p style={{margin:0,fontWeight:800,fontSize:16,color:DK}}>Previsualización</p>
-            <img src={fotoPreviewProfe.objectUrl} alt="preview" style={{width:120,height:120,borderRadius:"50%",objectFit:"cover",border:`3px solid ${P}`}}/>
-            <p style={{margin:0,fontSize:13,color:"#64748b",textAlign:"center"}}>Esta foto quedará visible en tu perfil</p>
+            {fotoPreviewProfe.dataUrl && <img src={fotoPreviewProfe.dataUrl} alt="preview" style={{width:120,height:120,borderRadius:"50%",objectFit:"cover",border:`3px solid ${P}`}}/>}
+            {fotoPreviewProfe.dataUrl && <p style={{margin:0,fontSize:13,color:"#64748b",textAlign:"center"}}>Esta foto quedará visible en tu perfil</p>}
             {errorFotoProfe && <p style={{margin:0,fontSize:13,color:P,textAlign:"center",fontWeight:600}}>{errorFotoProfe}</p>}
             <div style={{display:"flex",gap:10,width:"100%"}}>
               <button onClick={cancelarFotoProfe} disabled={subiendoFotoProfe} style={{flex:1,background:"#f1f5f9",border:"none",borderRadius:10,padding:"12px",fontSize:14,fontWeight:700,cursor:"pointer",color:"#475569"}}>Cancelar</button>
-              <button onClick={confirmarFotoProfe} disabled={subiendoFotoProfe} style={{flex:1,background:P,border:"none",borderRadius:10,padding:"12px",fontSize:14,fontWeight:700,cursor:subiendoFotoProfe?"not-allowed":"pointer",color:"#fff",opacity:subiendoFotoProfe?0.7:1}}>{subiendoFotoProfe?"Subiendo...":"Confirmar"}</button>
+              <button onClick={confirmarFotoProfe} disabled={subiendoFotoProfe||!fotoPreviewProfe.dataUrl} style={{flex:1,background:P,border:"none",borderRadius:10,padding:"12px",fontSize:14,fontWeight:700,cursor:(subiendoFotoProfe||!fotoPreviewProfe.dataUrl)?"not-allowed":"pointer",color:"#fff",opacity:(subiendoFotoProfe||!fotoPreviewProfe.dataUrl)?0.7:1}}>{subiendoFotoProfe?"Subiendo...":"Confirmar"}</button>
             </div>
           </div>
         </div>
