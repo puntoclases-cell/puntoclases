@@ -99,6 +99,7 @@ Arrancá del estado de abajo; **no re-diagnostiques lo ✅**.
   - Perfil alumno: botón 📷 sobre avatar, modal de preview antes de confirmar, callback actualiza header en tiempo real
   - Perfil profe: ídem + fix bug avatar hardcodeado `"DG"` → `initialsProfe(perfil.nombre)`
   - Fix subida silenciosa: try/catch en `img.onload` (Promise no cuelga), fallback JPEG si WebP falla (iOS < 16.4), error visible en modal
+  - Fix "No se pudo leer la imagen" (2026-06-18): `comprimirImagen` creaba segundo blob URL fuera de user-gesture → iOS WKWebView dispara `img.onerror`. Fix integral: `FileReader.readAsDataURL` en `onFileChangeAlumno/Profe` → `dataUrl` compartido para preview Y compresión (sin createObjectURL en Canvas). `subirAvatar` acepta `dataUrl`. Errores por paso con mensajes distintos. Elimina `alert()` → `setErrorFoto*` inline.
 
 ### ⚠️ Pendiente de primera compra real
 - Verificación end-to-end de acreditación en producción (requiere un pago real de usuario).
