@@ -91,6 +91,14 @@ Arrancá del estado de abajo; **no re-diagnostiques lo ✅**.
 - Badge mensajes profe: punto rojo en nav cuando hay msgs de alumnos sin leer (localStorage, sin col DB extra) ✅
 - Clases confirmadas (estado ausente/realizada) → Historial aunque fecha >= hoy ✅
 - Modal alumno ausente: monto no duplicado — desglose solo para grupal con >1 alumno ✅
+- **Foto de perfil** (alumnos y profes) ✅ — 2026-06-18
+  - `profiles.avatar_url TEXT` (ADD COLUMN IF NOT EXISTS aplicado)
+  - Bucket `avatars` (público) + 3 policies RLS storage (`avatar_insert_own`, `avatar_update_own`, `avatar_delete_own`) — path-based owner check
+  - `subirAvatar(userId, file)` en db.js: Canvas center-crop → 400×400 webp 0.85 → storage upload → URL con `?t=timestamp`
+  - Componente `Av`: prop `url` → `<img>` circular si existe, fallback a inicial
+  - Perfil alumno: botón 📷 sobre avatar, modal de preview antes de confirmar, callback actualiza header en tiempo real
+  - Perfil profe: ídem + fix bug avatar hardcodeado `"DG"` → `initialsProfe(perfil.nombre)`
+  - Fix subida silenciosa: try/catch en `img.onload` (Promise no cuelga), fallback JPEG si WebP falla (iOS < 16.4), error visible en modal
 
 ### ⚠️ Pendiente de primera compra real
 - Verificación end-to-end de acreditación en producción (requiere un pago real de usuario).
