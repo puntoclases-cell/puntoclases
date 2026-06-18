@@ -93,7 +93,7 @@ export async function getPacks() {
 export async function getAlumno(alumnoId) {
   const { data, error } = await supabase
     .from("alumnos")
-    .select("*, profiles(nombre, mail)")
+    .select("*, profiles(nombre, mail, avatar_url)")
     .eq("id", alumnoId).single();
   if (error) throw error;
   return data; // incluye saldo, saldo_residual, vencimiento, nivel, profiles.nombre
@@ -152,7 +152,7 @@ export async function getProfes() {
 }
 
 export async function getProfesAdmin() {
-  const { data, error } = await supabase.from("profes").select("*, profiles(nombre, mail)");
+  const { data, error } = await supabase.from("profes").select("*, profiles(nombre, mail, avatar_url)");
   if (error) throw error;
   return data;
 }
@@ -357,4 +357,42 @@ export async function crearPreferencia(horas, packId = null) {
   });
   if (error) throw error;
   return data; // { init_point }
+}
+
+// ── STORAGE: AVATARES ────────────────────────────────────────────────────────
+
+function comprimirImagen(file, maxPx, quality) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const objUrl = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(objUrl);
+      const canvas = document.createElement("canvas");
+      canvas.width = maxPx;
+      canvas.height = maxPx;
+      const ctx = canvas.getContext("2d");
+      const side = Math.min(img.width, img.height);
+      const sx = (img.width - side) / 2;
+      const sy = (img.height - side) / 2;
+      ctx.drawImage(img, sx, sy, side, side, 0, 0, maxPx, maxPx);
+      canvas.toBlob(
+        blob => blob ? resolve(blob) : reject(new Error("toBlob failed")),
+        "image/webp",
+        quality
+      );
+    };
+    img.onerror = () => { URL.revokeObjectURL(objUrl); reject(new Error("load failed")); };
+    img.src = objUrl;
+  });
+}
+
+export async function subirAvatar(userId, file) {
+  const blob = await comprimirImagen(file, 400, 0.85);
+  const path = `${userId}/avatar`;
+  const { error } = await supabase.storage
+    .from("avatars")
+    .upload(path, blob, { contentType: "image/webp", upsert: true });
+  if (error) throw error;
+  const { data } = supabase.storage.from("avatars").getPublicUrl(path);
+  return `${data.publicUrl}?t=${Date.now()}`;
 }
