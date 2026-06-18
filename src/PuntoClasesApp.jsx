@@ -446,14 +446,14 @@ function Reservar({ saldo, onReservar, profes, alumnoId }) {
           </div>
 
           {/* Grilla de bloques — todos los horarios posibles del día */}
-          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8}}>
-            {["08:00","09:00","10:00","11:00","12:00","13:00","14:00","15:00","16:00","17:00","18:00","19:00"].map(h => {
+          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6}}>
+            {HORAS_DIA.map(h => {
               const libre = bloquesDelDia.includes(h);
               const sel = horas.includes(h);
               return (
                 <button key={h} onClick={()=>libre && toggleHora(h)} disabled={!libre}
                   style={{
-                    padding:"14px 0",
+                    padding:"10px 0",
                     borderRadius:12,
                     border: sel ? `2px solid ${P}` : libre ? `2px solid ${PB}` : "2px solid #e2e8f0",
                     background: sel ? P : libre ? PL : "#f8fafc",
@@ -2014,7 +2014,12 @@ function AppAlumno({ user, onLogout }) {
 // PANEL DEL PROFE — app separada que monta sobre el mismo archivo
 // ════════════════════════════════════════════════════════════════════════════
 
-const HORAS_DIA = ["08:00","09:00","10:00","11:00","12:00","13:00","14:00","15:00","16:00","17:00","18:00","19:00"];
+const HORAS_DIA = [
+  "08:00","08:30","09:00","09:30","10:00","10:30",
+  "11:00","11:30","12:00","12:30","13:00","13:30",
+  "14:00","14:30","15:00","15:30","16:00","16:30",
+  "17:00","17:30","18:00","18:30","19:00",
+];
 
 // ── SUBPANTALLAS DEL PROFE ───────────────────────────────────────────────────
 
@@ -2538,18 +2543,18 @@ function Disponibilidad({ dispon, setDispon, onRecurrente }) {
               <strong>Cómo usar:</strong> Tocá un bloque para agregarlo como <strong>individual</strong> → volvé a tocar para <strong>grupal</strong> → otra vez para <strong>ambas</strong> → una más para quitarlo
             </p>
           </div>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6}}>
             {HORAS_DIA.map(h=>{
               const tipo = bloquesHoy[h];
               const c = tipo?TIPO_COLOR[tipo]:{bg:"#f8fafc",col:"#94a3b8",icon:"+"};
               return (
                 <button key={h} onClick={()=>toggleBloque(h)}
-                  style={{padding:"14px 0",borderRadius:12,
+                  style={{padding:"10px 0",borderRadius:10,
                     border:`2px solid ${tipo?c.col+"55":"#e2e8f0"}`,
                     background:c.bg,color:c.col,
-                    fontWeight:tipo?700:400,fontSize:13,cursor:"pointer",
-                    display:"flex",flexDirection:"column",alignItems:"center",gap:3,transition:"all 0.15s"}}>
-                  <span style={{fontSize:15}}>{c.icon}</span>
+                    fontWeight:tipo?700:400,fontSize:12,cursor:"pointer",
+                    display:"flex",flexDirection:"column",alignItems:"center",gap:2,transition:"all 0.15s"}}>
+                  <span style={{fontSize:12}}>{c.icon}</span>
                   {h}
                   {tipo && <span style={{fontSize:9,fontWeight:700,textTransform:"uppercase",opacity:0.8}}>{tipo}</span>}
                 </button>
