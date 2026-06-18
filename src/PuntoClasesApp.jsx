@@ -1008,7 +1008,7 @@ function Profes({ onReservar, profes }) {
 
 
 // ── PANTALLA PERFIL ──────────────────────────────────────────────────────────
-function Perfil({ onLogout, saldo, compras, datosAlumno, reservas }) {
+function Perfil({ onLogout, saldo, compras, datosAlumno, reservas, onAvatarActualizado }) {
   const [editando, setEditando] = useState(false);
   const [datos, setDatos] = useState({ nombre:"", mail:"", tel:"" });
   useEffect(() => {
@@ -1019,6 +1019,7 @@ function Perfil({ onLogout, saldo, compras, datosAlumno, reservas }) {
     });
   }, [datosAlumno]);
   const iniciales = (datosAlumno?.profiles?.nombre||"").split(" ").map(n=>n[0]).join("").slice(0,2).toUpperCase() || "?";
+  const avatarUrl = datosAlumno?.profiles?.avatar_url || null;
   const [borrador, setBorrador] = useState({nombre:"",mail:"",tel:""});
   const [guardado, setGuardado] = useState(false);
   const abrirEdicion = () => { setBorrador(datos); setEditando(true); };
@@ -1032,6 +1033,31 @@ function Perfil({ onLogout, saldo, compras, datosAlumno, reservas }) {
     setGuardado(true);
     setTimeout(() => setGuardado(false), 2500);
   };
+
+  const fileRefAlumno = useRef(null);
+  const [fotoPreviewAlumno, setFotoPreviewAlumno] = useState(null);
+  const [subiendoFotoAlumno, setSubiendoFotoAlumno] = useState(false);
+  const onFileChangeAlumno = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+    if (!["image/jpeg","image/png","image/webp"].includes(file.type)) { alert("Solo JPG, PNG o WebP"); return; }
+    if (file.size > 10 * 1024 * 1024) { alert("La imagen no puede superar 10 MB"); return; }
+    setFotoPreviewAlumno({ file, objectUrl: URL.createObjectURL(file) });
+  };
+  const confirmarFotoAlumno = async () => {
+    if (!fotoPreviewAlumno || subiendoFotoAlumno) return;
+    setSubiendoFotoAlumno(true);
+    try {
+      const url = await subirAvatar(datosAlumno.id, fotoPreviewAlumno.file);
+      await actualizarPerfil(datosAlumno.id, { avatar_url: url });
+      URL.revokeObjectURL(fotoPreviewAlumno.objectUrl);
+      setFotoPreviewAlumno(null);
+      onAvatarActualizado?.(url);
+    } catch(err) { console.error("Error al subir foto:", err); }
+    finally { setSubiendoFotoAlumno(false); }
+  };
+  const cancelarFotoAlumno = () => { URL.revokeObjectURL(fotoPreviewAlumno.objectUrl); setFotoPreviewAlumno(null); };
   const [notif, setNotif] = useState({ reserva:true, recordatorio:true, devolucion:true, promo:false });
   const [tab, setTab] = useState("progreso");
 
@@ -1053,8 +1079,10 @@ function Perfil({ onLogout, saldo, compras, datosAlumno, reservas }) {
         <>
         <div style={{display:"flex",alignItems:"center",gap:16,marginBottom:16}}>
           <div style={{position:"relative"}}>
-            <Av i={iniciales} size={64} color={DK}/>
+            <Av i={iniciales} size={64} color={DK} url={avatarUrl}/>
+            <button onClick={()=>fileRefAlumno.current?.click()} title="Cambiar foto" style={{position:"absolute",bottom:0,left:0,width:22,height:22,borderRadius:"50%",background:BL,border:"2px solid #fff",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:10,color:"#fff",lineHeight:1}}>📷</button>
             <button onClick={abrirEdicion} title="Editar perfil" style={{position:"absolute",bottom:0,right:0,width:22,height:22,borderRadius:"50%",background:P,border:"2px solid #fff",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:11,color:"#fff"}}>✎</button>
+            <input ref={fileRefAlumno} type="file" accept="image/jpeg,image/png,image/webp" style={{display:"none"}} onChange={onFileChangeAlumno}/>
           </div>
           <div style={{flex:1}}>
             <p style={{margin:0,fontWeight:800,fontSize:18,color:DK}}>{datos.nombre}</p>
@@ -1062,6 +1090,19 @@ function Perfil({ onLogout, saldo, compras, datosAlumno, reservas }) {
             <Badge bg={PL} col={P}>⏱ {saldo} hs disponibles</Badge>
           </div>
         </div>
+        {fotoPreviewAlumno && (
+          <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+            <div style={{background:"#fff",borderRadius:20,padding:24,width:"100%",maxWidth:320,display:"flex",flexDirection:"column",gap:16,alignItems:"center"}}>
+              <p style={{margin:0,fontWeight:800,fontSize:16,color:DK}}>Previsualización</p>
+              <img src={fotoPreviewAlumno.objectUrl} alt="preview" style={{width:120,height:120,borderRadius:"50%",objectFit:"cover",border:`3px solid ${P}`}}/>
+              <p style={{margin:0,fontSize:13,color:"#64748b",textAlign:"center"}}>Esta foto quedará visible en tu perfil</p>
+              <div style={{display:"flex",gap:10,width:"100%"}}>
+                <button onClick={cancelarFotoAlumno} disabled={subiendoFotoAlumno} style={{flex:1,background:"#f1f5f9",border:"none",borderRadius:10,padding:"12px",fontSize:14,fontWeight:700,cursor:"pointer",color:"#475569"}}>Cancelar</button>
+                <button onClick={confirmarFotoAlumno} disabled={subiendoFotoAlumno} style={{flex:1,background:P,border:"none",borderRadius:10,padding:"12px",fontSize:14,fontWeight:700,cursor:subiendoFotoAlumno?"not-allowed":"pointer",color:"#fff",opacity:subiendoFotoAlumno?0.7:1}}>{subiendoFotoAlumno?"Subiendo...":"Confirmar"}</button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {guardado && (
           <div style={{background:"#f0fdf4",border:"1.5px solid #bbf7d0",borderRadius:10,padding:"8px 12px",marginBottom:12,fontSize:13,color:"#166534",fontWeight:600}}>✓ Perfil actualizado</div>
@@ -1680,6 +1721,8 @@ function AppAlumno({ user, onLogout }) {
       .catch((err) => console.error("Error al cargar alumno:", err));
   }, [user]);
   const nombreAlumno = datosAlumno?.profiles?.nombre || "";
+  const avatarUrlAlumno = datosAlumno?.profiles?.avatar_url || null;
+  const actualizarAvatarAlumno = (url) => setDatosAlumno(prev => prev ? {...prev, profiles:{...prev.profiles, avatar_url:url}} : prev);
 
   const [reservasAlumno, setReservasAlumno] = useState(null);
   useEffect(() => {
@@ -1772,7 +1815,7 @@ function AppAlumno({ user, onLogout }) {
             color:(_diasHdr??999)<=2?"#dc2626":(_diasHdr??999)<=7?"#92400e":P}}>
             {(_diasHdr??999)<=2?"🚨":(_diasHdr??999)<=7?"⏰":"⏱"} {saldoDisplay} hs
           </div>
-          <div onClick={()=>setScreen("perfil")} style={{cursor:"pointer"}}><Av i={(nombreAlumno||"").split(" ").map(n=>n[0]).join("").slice(0,2).toUpperCase()||"?"} size={32} color={DK}/></div>
+          <div onClick={()=>setScreen("perfil")} style={{cursor:"pointer"}}><Av i={(nombreAlumno||"").split(" ").map(n=>n[0]).join("").slice(0,2).toUpperCase()||"?"} size={32} color={DK} url={avatarUrlAlumno}/></div>
         </div>
       </div>
 
@@ -1800,7 +1843,7 @@ function AppAlumno({ user, onLogout }) {
         )}
         {screen==="comprar" && <Comprar compras={comprasAlumno} cfg={cfgLive} packsDB={packsLive} onComprar={(hs)=>setSaldo(s=>+(s+hs).toFixed(2))}/>}
         {screen==="profes" && <Profes profes={profesData} onReservar={()=>setScreen("reservar")}/>}
-        {screen==="perfil" && <Perfil datosAlumno={datosAlumno} reservas={reservasAlumno} compras={comprasAlumno} onLogout={onLogout} saldo={saldoDisplay}/>}
+        {screen==="perfil" && <Perfil datosAlumno={datosAlumno} reservas={reservasAlumno} compras={comprasAlumno} onLogout={onLogout} saldo={saldoDisplay} onAvatarActualizado={actualizarAvatarAlumno}/>}
         {screen==="mensajes" && <Chat reservas={reservasAlumno} userId={user?.id}/>}
       </div>
 
