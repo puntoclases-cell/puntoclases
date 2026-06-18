@@ -101,6 +101,11 @@ Arrancá del estado de abajo; **no re-diagnostiques lo ✅**.
   - Fix subida silenciosa: try/catch en `img.onload` (Promise no cuelga), fallback JPEG si WebP falla (iOS < 16.4), error visible en modal
   - Fix "No se pudo leer la imagen" (2026-06-18): `comprimirImagen` creaba segundo blob URL fuera de user-gesture → iOS WKWebView dispara `img.onerror`. Fix integral: `FileReader.readAsDataURL` en `onFileChangeAlumno/Profe` → `dataUrl` compartido para preview Y compresión (sin createObjectURL en Canvas). `subirAvatar` acepta `dataUrl`. Errores por paso con mensajes distintos. Elimina `alert()` → `setErrorFoto*` inline.
 
+- **RLS profiles_update** (migración 20260618000000) ✅ — 2026-06-18
+  - Causa: WITH CHECK tenía subquery `SELECT rol FROM profiles WHERE id = auth.uid()` → Postgres re-evaluaba la misma policy al leer la tabla → recursión infinita (42P17) al hacer UPDATE de avatar_url.
+  - Fix: reemplazado por `mi_rol()` (ya SECURITY DEFINER + STABLE). Semántica idéntica.
+  - Evidencia: UPDATE propio OK (UPDATE 1 sin recursión), cross-user denegado (UPDATE 0), cambio de rol propio rechazado (RLS error).
+
 ### ⚠️ Pendiente de primera compra real
 - Verificación end-to-end de acreditación en producción (requiere un pago real de usuario).
 
