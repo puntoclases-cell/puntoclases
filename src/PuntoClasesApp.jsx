@@ -22,6 +22,7 @@ const AMB = "#fde68a";
 const GR  = "#15803d";
 const GRL = "#f0fdf4";
 const GRB = "#bbf7d0";
+const ES_PWA = window.matchMedia("(display-mode: standalone)").matches || !!navigator.standalone;
 
 // ════════════════════════════════════════════════════════════════════════════
 // CONFIGURACIÓN DE NEGOCIO — FUENTE ÚNICA DE VERDAD
@@ -1324,9 +1325,9 @@ function Perfil({ onLogout, saldo, compras, datosAlumno, reservas, onAvatarActua
         </div>
       )}
 
-      <button onClick={()=>setGuiaOpen(true)} style={{background:"none",border:"1.5px solid #c8e5f5",borderRadius:12,padding:"13px",fontSize:14,fontWeight:700,color:BL,cursor:"pointer",width:"100%"}}>
+      {!ES_PWA && <button onClick={()=>setGuiaOpen(true)} style={{background:"none",border:"1.5px solid #c8e5f5",borderRadius:12,padding:"13px",fontSize:14,fontWeight:700,color:BL,cursor:"pointer",width:"100%"}}>
         📲 Instalá la app
-      </button>
+      </button>}
 
       {/* Cerrar sesión */}
       <button onClick={onLogout} style={{background:"none",border:"1.5px solid #fecaca",borderRadius:12,padding:"13px",fontSize:14,fontWeight:700,color:"#dc2626",cursor:"pointer",marginTop:4,width:"100%"}}>
@@ -3346,9 +3347,9 @@ function PerfilProfe({ onLogoutProfe, profeData, onAvatarActualizado }) {
         ✎ Editar perfil
       </Btn>
 
-      <button onClick={()=>setGuiaOpenProfe(true)} style={{background:"none",border:"1.5px solid #c8e5f5",borderRadius:12,padding:"13px",fontSize:14,fontWeight:700,color:BL,cursor:"pointer",width:"100%"}}>
+      {!ES_PWA && <button onClick={()=>setGuiaOpenProfe(true)} style={{background:"none",border:"1.5px solid #c8e5f5",borderRadius:12,padding:"13px",fontSize:14,fontWeight:700,color:BL,cursor:"pointer",width:"100%"}}>
         📲 Instalá la app
-      </button>
+      </button>}
 
       <button onClick={onLogoutProfe} style={{background:"none",border:`1.5px solid #fecaca`,borderRadius:12,padding:"13px",fontSize:14,fontWeight:700,color:"#dc2626",cursor:"pointer",width:"100%",marginTop:4}}>
         Cerrar sesión
@@ -6149,9 +6150,9 @@ function LoginScreen({ onLogin, onRegistroProfe, onRegistroAlumno }) {
               Registrate acá
             </button>
           </p>
-          <button onClick={()=>setGuiaOpen(true)} style={{background:"none",border:`1.5px solid #c8e5f5`,borderRadius:12,padding:"13px",fontSize:14,fontWeight:700,color:BL,cursor:"pointer",width:"100%"}}>
+          {!ES_PWA && <button onClick={()=>setGuiaOpen(true)} style={{background:"none",border:`1.5px solid #c8e5f5`,borderRadius:12,padding:"13px",fontSize:14,fontWeight:700,color:BL,cursor:"pointer",width:"100%"}}>
             📲 Instalá la app
-          </button>
+          </button>}
         </div>
       </div>
       {guiaOpen && <GuiaInstalacion onCerrar={()=>setGuiaOpen(false)}/>}
