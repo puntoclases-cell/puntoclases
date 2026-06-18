@@ -7,10 +7,10 @@ import { createClient } from "@supabase/supabase-js";
 
 // Las claves van en variables de entorno, NUNCA hardcodeadas en el repo.
 // En Vite: VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY  (archivo .env.local)
-const URL  = import.meta.env.VITE_SUPABASE_URL;
-const ANON = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const SB_URL = import.meta.env.VITE_SUPABASE_URL;
+const ANON   = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-export const supabase = createClient(URL, ANON);
+export const supabase = createClient(SB_URL, ANON);
 
 // La anon key es pública (segura para el front): RLS protege los datos.
 // La service_role key (que saltea RLS) JAMÁS va en el front — sólo server-side.
