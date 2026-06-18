@@ -2949,7 +2949,7 @@ const MATERIAS_DISPONIBLES = [
 
 const NIVELES = ["Primaria","Secundaria","Preuniversitario","Universitario","Adultos"];
 
-function PerfilProfe({ onLogoutProfe, profeData }) {
+function PerfilProfe({ onLogoutProfe, profeData, onAvatarActualizado }) {
   const [editando, setEditando] = useState(false);
   const [perfil, setPerfil] = useState({
     nombre: "",
@@ -2981,6 +2981,32 @@ function PerfilProfe({ onLogoutProfe, profeData }) {
   }, [profeData]);
   const [draft, setDraft] = useState(perfil);
   const [seccion, setSeccion] = useState("perfil"); // perfil | editar
+
+  const fileRefProfe = useRef(null);
+  const [fotoPreviewProfe, setFotoPreviewProfe] = useState(null);
+  const [subiendoFotoProfe, setSubiendoFotoProfe] = useState(false);
+  const avatarUrlProfe = profeData?.profiles?.avatar_url || null;
+  const onFileChangeProfe = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+    if (!["image/jpeg","image/png","image/webp"].includes(file.type)) { alert("Solo JPG, PNG o WebP"); return; }
+    if (file.size > 10 * 1024 * 1024) { alert("La imagen no puede superar 10 MB"); return; }
+    setFotoPreviewProfe({ file, objectUrl: URL.createObjectURL(file) });
+  };
+  const confirmarFotoProfe = async () => {
+    if (!fotoPreviewProfe || subiendoFotoProfe) return;
+    setSubiendoFotoProfe(true);
+    try {
+      const url = await subirAvatar(profeData.id, fotoPreviewProfe.file);
+      await actualizarPerfil(profeData.id, { avatar_url: url });
+      URL.revokeObjectURL(fotoPreviewProfe.objectUrl);
+      setFotoPreviewProfe(null);
+      onAvatarActualizado?.(url);
+    } catch(err) { console.error("Error al subir foto:", err); }
+    finally { setSubiendoFotoProfe(false); }
+  };
+  const cancelarFotoProfe = () => { URL.revokeObjectURL(fotoPreviewProfe.objectUrl); setFotoPreviewProfe(null); };
 
   const toggleMateria = m => setDraft(p=>({...p,
     materias: p.materias.includes(m) ? p.materias.filter(x=>x!==m) : [...p.materias, m]
@@ -3020,7 +3046,7 @@ function PerfilProfe({ onLogoutProfe, profeData }) {
       {/* Hero como lo ve el alumno */}
       <div style={{background:BL,borderRadius:20,padding:"28px 20px",color:DK,marginBottom:16}}>
         <div style={{display:"flex",alignItems:"center",gap:16,marginBottom:16}}>
-          <div style={{width:72,height:72,borderRadius:"50%",background:P,display:"flex",alignItems:"center",justifyContent:"center",fontSize:26,fontWeight:800,color:"#fff",flexShrink:0}}>{initialsProfe(perfil.nombre)}</div>
+          <Av i={initialsProfe(perfil.nombre)} size={72} color={P} url={avatarUrlProfe}/>
           <div>
             <h2 style={{margin:0,fontSize:20,fontWeight:800}}>{perfil.nombre}</h2>
             <p style={{margin:"4px 0 0",fontSize:13,opacity:0.7}}>{perfil.titulo}</p>
@@ -3173,8 +3199,10 @@ function PerfilProfe({ onLogoutProfe, profeData }) {
       <Card>
         <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:16}}>
           <div style={{position:"relative"}}>
-            <Av i="DG" size={64} color={P}/>
+            <Av i={initialsProfe(perfil.nombre)} size={64} color={P} url={avatarUrlProfe}/>
+            <button onClick={()=>fileRefProfe.current?.click()} title="Cambiar foto" style={{position:"absolute",bottom:0,left:0,width:22,height:22,borderRadius:"50%",background:BL,border:"2px solid #fff",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:10,color:"#fff",lineHeight:1}}>📷</button>
             <button onClick={()=>{setDraft(perfil);setSeccion("editar");}} title="Editar perfil" style={{position:"absolute",bottom:0,right:0,width:22,height:22,borderRadius:"50%",background:P,border:"2px solid #fff",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:11,color:"#fff"}}>✎</button>
+            <input ref={fileRefProfe} type="file" accept="image/jpeg,image/png,image/webp" style={{display:"none"}} onChange={onFileChangeProfe}/>
           </div>
           <div style={{flex:1}}>
             <p style={{margin:0,fontWeight:800,fontSize:18,color:DK}}>{perfil.nombre}</p>
@@ -3250,6 +3278,20 @@ function PerfilProfe({ onLogoutProfe, profeData }) {
       <button onClick={onLogoutProfe} style={{background:"none",border:`1.5px solid #fecaca`,borderRadius:12,padding:"13px",fontSize:14,fontWeight:700,color:"#dc2626",cursor:"pointer",width:"100%"}}>
         Cerrar sesión
       </button>
+
+      {fotoPreviewProfe && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+          <div style={{background:"#fff",borderRadius:20,padding:24,width:"100%",maxWidth:320,display:"flex",flexDirection:"column",gap:16,alignItems:"center"}}>
+            <p style={{margin:0,fontWeight:800,fontSize:16,color:DK}}>Previsualización</p>
+            <img src={fotoPreviewProfe.objectUrl} alt="preview" style={{width:120,height:120,borderRadius:"50%",objectFit:"cover",border:`3px solid ${P}`}}/>
+            <p style={{margin:0,fontSize:13,color:"#64748b",textAlign:"center"}}>Esta foto quedará visible en tu perfil</p>
+            <div style={{display:"flex",gap:10,width:"100%"}}>
+              <button onClick={cancelarFotoProfe} disabled={subiendoFotoProfe} style={{flex:1,background:"#f1f5f9",border:"none",borderRadius:10,padding:"12px",fontSize:14,fontWeight:700,cursor:"pointer",color:"#475569"}}>Cancelar</button>
+              <button onClick={confirmarFotoProfe} disabled={subiendoFotoProfe} style={{flex:1,background:P,border:"none",borderRadius:10,padding:"12px",fontSize:14,fontWeight:700,cursor:subiendoFotoProfe?"not-allowed":"pointer",color:"#fff",opacity:subiendoFotoProfe?0.7:1}}>{subiendoFotoProfe?"Subiendo...":"Confirmar"}</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -3522,6 +3564,8 @@ function AppProfeMain({ user, onLogout }) {
   const [reservas,setReservas] = useState([]);
   const [dispon,setDispon] = useState({});
   const [profeData,setProfeData] = useState(null);
+  const avatarUrlProfeHeader = profeData?.profiles?.avatar_url || null;
+  const actualizarAvatarProfe = (url) => setProfeData(prev => prev ? {...prev, profiles:{...prev.profiles, avatar_url:url}} : prev);
   const [modalR,setModalR] = useState(null);
   const [modalRecurrente,setModalRecurrente] = useState(false);
   const [onboardingVisto,setOnboardingVisto] = useState(false);
@@ -3632,7 +3676,7 @@ function AppProfeMain({ user, onLogout }) {
             <span style={{marginLeft:8,fontSize:11,color:"rgba(46,46,46,0.45)",fontWeight:500}}>/ Profe</span>
           </div>
         </div>
-        <div onClick={()=>setScreen('perfil')} style={{cursor:'pointer'}}><Av i={initialsProfe(profeData?.profiles?.nombre||"")} size={32} color={P}/></div>
+        <div onClick={()=>setScreen('perfil')} style={{cursor:'pointer'}}><Av i={initialsProfe(profeData?.profiles?.nombre||"")} size={32} color={P} url={avatarUrlProfeHeader}/></div>
       </div>
 
       <div style={{flex:1,padding:"16px 16px 80px"}}>
@@ -3643,7 +3687,7 @@ function AppProfeMain({ user, onLogout }) {
         {screen==="alumnos" && <Alumnos reservas={reservas} onDevolucion={r=>setModalR(r)}/>}
         {screen==="ingresos" && <Ingresos reservas={reservas}/>}
         {screen==="mensajes" && <ChatProfe reservas={reservas} userId={user?.id}/>}
-        {screen==="perfil" && <PerfilProfe profeData={profeData} onLogoutProfe={onLogout}/>}
+        {screen==="perfil" && <PerfilProfe profeData={profeData} onLogoutProfe={onLogout} onAvatarActualizado={actualizarAvatarProfe}/>}
       </div>
 
       <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:480,background:"#fff",borderTop:"1px solid #e2e8f0",display:"flex",padding:"8px 0 12px",zIndex:10}}>
