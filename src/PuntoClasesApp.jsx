@@ -1016,6 +1016,35 @@ const PasoInstalacion = ({ n, texto }) => (
   </div>
 );
 
+function ShareBtn() {
+  const [copiado, setCopiado] = useState(false);
+  const handleShare = async () => {
+    const url = window.location.origin;
+    if (navigator.share) {
+      try { await navigator.share({ title: "PuntoClases", text: "Reservá clases particulares con tu profe favorito", url }); }
+      catch(e) { /* usuario canceló */ }
+    } else {
+      try {
+        await navigator.clipboard.writeText(url);
+        setCopiado(true);
+        setTimeout(() => setCopiado(false), 2200);
+      } catch(e) { /* clipboard no disponible */ }
+    }
+  };
+  return (
+    <>
+      <button onClick={handleShare} title="Compartir app" style={{background:"none",border:"none",cursor:"pointer",padding:"4px 6px",display:"flex",alignItems:"center",color:DK,opacity:0.65,lineHeight:1}}>
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/>
+          <polyline points="16 6 12 2 8 6"/>
+          <line x1="12" y1="2" x2="12" y2="15"/>
+        </svg>
+      </button>
+      {copiado && <div style={{position:"fixed",bottom:76,left:"50%",transform:"translateX(-50%)",background:"rgba(30,30,30,0.92)",color:"#fff",borderRadius:12,padding:"9px 20px",fontSize:13,fontWeight:600,zIndex:500,whiteSpace:"nowrap",pointerEvents:"none"}}>Link copiado ✓</div>}
+    </>
+  );
+}
+
 function GuiaInstalacion({ onCerrar }) {
   const ua = navigator.userAgent || "";
   const esIOS = /iPhone|iPad|iPod/i.test(ua);
@@ -1890,6 +1919,7 @@ function AppAlumno({ user, onLogout }) {
             color:(_diasHdr??999)<=2?"#dc2626":(_diasHdr??999)<=7?"#92400e":P}}>
             {(_diasHdr??999)<=2?"🚨":(_diasHdr??999)<=7?"⏰":"⏱"} {saldoDisplay} hs
           </div>
+          <ShareBtn />
           <div onClick={()=>setScreen("perfil")} style={{cursor:"pointer"}}><Av i={(nombreAlumno||"").split(" ").map(n=>n[0]).join("").slice(0,2).toUpperCase()||"?"} size={32} color={DK} url={avatarUrlAlumno}/></div>
         </div>
       </div>
@@ -3774,7 +3804,10 @@ function AppProfeMain({ user, onLogout }) {
             <span style={{marginLeft:8,fontSize:11,color:"rgba(46,46,46,0.45)",fontWeight:500}}>/ Profe</span>
           </div>
         </div>
-        <div onClick={()=>setScreen('perfil')} style={{cursor:'pointer'}}><Av i={initialsProfe(profeData?.profiles?.nombre||"")} size={32} color={P} url={avatarUrlProfeHeader}/></div>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <ShareBtn />
+          <div onClick={()=>setScreen('perfil')} style={{cursor:'pointer'}}><Av i={initialsProfe(profeData?.profiles?.nombre||"")} size={32} color={P} url={avatarUrlProfeHeader}/></div>
+        </div>
       </div>
 
       <div style={{flex:1,padding:"16px 16px 80px"}}>
