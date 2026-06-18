@@ -13,6 +13,10 @@ Arrancá del estado de abajo; **no re-diagnostiques lo ✅**.
 - Antes de pedirme algo, **resolvelo vos con tus herramientas**: leé/editá/corré el código, `curl` para probar, Supabase CLI para datos. Pedime solo (a) un OK o (b) lo que tus herramientas no alcanzan (navegador/Dashboard).
 - **CERO regresiones. Una cosa por vez. Evidencia ANTES de tocar; no asumas causas. Si errás, decilo.**
 - Claude Code puede cargar secrets/credenciales por CLI directamente (corren en la máquina de David, los valores no pasan por chat).
+- **Reads y diagnóstico:** automatizalos siempre.
+- **Writes ADITIVOS / reversibles a la base** (ej: ADD COLUMN IF NOT EXISTS, CREATE POLICY, CREATE TABLE, INSERT … ON CONFLICT DO NOTHING, grants que agregan permisos, crear bucket de Storage, deploy de Edge Functions): corrélos vos por la Supabase CLI y mostrame evidencia de que aplicó. No me los pidas para correrlos yo.
+- **Writes DESTRUCTIVOS / irreversibles** (DROP, DELETE, TRUNCATE, ALTER que borra o renombra columnas, migraciones con pérdida de datos, revocar o quitar permisos, rotar o borrar credenciales): NO ejecutes. Backup primero si aplica, mostrame el bloque y el plan, los corro yo.
+- **Ante la duda:** si no tenés certeza de que un write es aditivo/reversible, tratalo como destructivo y pedime OK.
 
 ## Bitácora viva (regla fija)
 - Después de CADA cambio (código, deploy, migración, RPC, secrets), actualizá este archivo en la misma sesión.
@@ -69,6 +73,13 @@ Arrancá del estado de abajo; **no re-diagnostiques lo ✅**.
   - SW precachea app shell; polling cada hora; skipWaiting en click; cleanupOutdatedCaches ✅
   - Fix vercel.json: eliminado Clear-Site-Data de /sw.js (era destructivo, borraba auth) ✅
 - mp-webhook: soporte dual formato MP — querystring `?type=payment&data.id=X` Y body JSON; firma HMAC usa el id correcto en ambos casos ✅
+- **Foto de perfil** (alumnos y profes) ✅ — 2026-06-18
+  - `profiles.avatar_url TEXT` (ADD COLUMN IF NOT EXISTS aplicado)
+  - Bucket `avatars` (público) + 3 policies RLS storage (`avatar_insert_own`, `avatar_update_own`, `avatar_delete_own`) — path-based owner check
+  - `subirAvatar(userId, file)` en db.js: Canvas center-crop → 400×400 webp 0.85 → storage upload → URL con `?t=timestamp`
+  - Componente `Av`: prop `url` → `<img>` circular si existe, fallback a inicial
+  - Perfil alumno: botón 📷 sobre avatar, modal de preview antes de confirmar, callback actualiza header en tiempo real
+  - Perfil profe: ídem + fix bug avatar hardcodeado `"DG"` → `initialsProfe(perfil.nombre)`
 - Header profe: fondo negro → celeste LOGO_BG igual que vista alumno ✅
 - Tarjeta bienvenida profe (Hoy/Próximas/Sin devolución): fondo negro → BL (#6FA8C0), textos DK (contraste 4.6:1 WCAG AA), alerta en P (rojo) ✅
 - Unificación celeste todos los roles — 6 elementos negros/oscuros → BL/LOGO_BG (criterio único: BL en hero cards, LOGO_BG en headers sticky, textos DK, boxes rgba(255,255,255,0.45), acentos P/GR) ✅
