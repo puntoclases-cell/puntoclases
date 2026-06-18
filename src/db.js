@@ -366,22 +366,28 @@ function comprimirImagen(file, maxPx, quality) {
     const img = new Image();
     const objUrl = URL.createObjectURL(file);
     img.onload = () => {
-      URL.revokeObjectURL(objUrl);
-      const canvas = document.createElement("canvas");
-      canvas.width = maxPx;
-      canvas.height = maxPx;
-      const ctx = canvas.getContext("2d");
-      const side = Math.min(img.width, img.height);
-      const sx = (img.width - side) / 2;
-      const sy = (img.height - side) / 2;
-      ctx.drawImage(img, sx, sy, side, side, 0, 0, maxPx, maxPx);
-      canvas.toBlob(
-        blob => blob ? resolve(blob) : reject(new Error("toBlob failed")),
-        "image/webp",
-        quality
-      );
+      try {
+        URL.revokeObjectURL(objUrl);
+        const canvas = document.createElement("canvas");
+        canvas.width = maxPx;
+        canvas.height = maxPx;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) { reject(new Error("Canvas no disponible")); return; }
+        const side = Math.min(img.width, img.height);
+        const sx = (img.width - side) / 2;
+        const sy = (img.height - side) / 2;
+        ctx.drawImage(img, sx, sy, side, side, 0, 0, maxPx, maxPx);
+        // Intenta WebP; si el navegador lo devuelve null (iOS < 16.4), cae a JPEG
+        canvas.toBlob(blob => {
+          if (blob) { resolve(blob); return; }
+          canvas.toBlob(
+            b => b ? resolve(b) : reject(new Error("No se pudo comprimir la imagen")),
+            "image/jpeg", quality
+          );
+        }, "image/webp", quality);
+      } catch (e) { reject(e); }
     };
-    img.onerror = () => { URL.revokeObjectURL(objUrl); reject(new Error("load failed")); };
+    img.onerror = () => { URL.revokeObjectURL(objUrl); reject(new Error("No se pudo leer la imagen")); };
     img.src = objUrl;
   });
 }
@@ -391,7 +397,7 @@ export async function subirAvatar(userId, file) {
   const path = `${userId}/avatar`;
   const { error } = await supabase.storage
     .from("avatars")
-    .upload(path, blob, { contentType: "image/webp", upsert: true });
+    .upload(path, blob, { contentType: blob.type, upsert: true });
   if (error) throw error;
   const { data } = supabase.storage.from("avatars").getPublicUrl(path);
   return `${data.publicUrl}?t=${Date.now()}`;

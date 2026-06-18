@@ -1099,17 +1099,22 @@ function Perfil({ onLogout, saldo, compras, datosAlumno, reservas, onAvatarActua
   const confirmarFotoAlumno = async () => {
     if (!fotoPreviewAlumno || subiendoFotoAlumno) return;
     setSubiendoFotoAlumno(true);
+    setErrorFotoAlumno(null);
     try {
       const url = await subirAvatar(datosAlumno.id, fotoPreviewAlumno.file);
       await actualizarPerfil(datosAlumno.id, { avatar_url: url });
       URL.revokeObjectURL(fotoPreviewAlumno.objectUrl);
       setFotoPreviewAlumno(null);
+      setErrorFotoAlumno(null);
       onAvatarActualizado?.(url);
-    } catch(err) { console.error("Error al subir foto:", err); }
-    finally { setSubiendoFotoAlumno(false); }
+    } catch(err) {
+      console.error("Error al subir foto:", err);
+      setErrorFotoAlumno(err?.message || "No se pudo subir la foto. Intentá de nuevo.");
+    } finally { setSubiendoFotoAlumno(false); }
   };
   const cancelarFotoAlumno = () => { URL.revokeObjectURL(fotoPreviewAlumno.objectUrl); setFotoPreviewAlumno(null); };
 
+  const [errorFotoAlumno, setErrorFotoAlumno] = useState(null);
   const [guiaOpen, setGuiaOpen] = useState(false);
   const [notif, setNotif] = useState({ reserva:true, recordatorio:true, devolucion:true, promo:false });
   const [tab, setTab] = useState("progreso");
@@ -1149,6 +1154,7 @@ function Perfil({ onLogout, saldo, compras, datosAlumno, reservas, onAvatarActua
               <p style={{margin:0,fontWeight:800,fontSize:16,color:DK}}>Previsualización</p>
               <img src={fotoPreviewAlumno.objectUrl} alt="preview" style={{width:120,height:120,borderRadius:"50%",objectFit:"cover",border:`3px solid ${P}`}}/>
               <p style={{margin:0,fontSize:13,color:"#64748b",textAlign:"center"}}>Esta foto quedará visible en tu perfil</p>
+              {errorFotoAlumno && <p style={{margin:0,fontSize:13,color:P,textAlign:"center",fontWeight:600}}>{errorFotoAlumno}</p>}
               <div style={{display:"flex",gap:10,width:"100%"}}>
                 <button onClick={cancelarFotoAlumno} disabled={subiendoFotoAlumno} style={{flex:1,background:"#f1f5f9",border:"none",borderRadius:10,padding:"12px",fontSize:14,fontWeight:700,cursor:"pointer",color:"#475569"}}>Cancelar</button>
                 <button onClick={confirmarFotoAlumno} disabled={subiendoFotoAlumno} style={{flex:1,background:P,border:"none",borderRadius:10,padding:"12px",fontSize:14,fontWeight:700,cursor:subiendoFotoAlumno?"not-allowed":"pointer",color:"#fff",opacity:subiendoFotoAlumno?0.7:1}}>{subiendoFotoAlumno?"Subiendo...":"Confirmar"}</button>
@@ -3055,16 +3061,21 @@ function PerfilProfe({ onLogoutProfe, profeData, onAvatarActualizado }) {
   const confirmarFotoProfe = async () => {
     if (!fotoPreviewProfe || subiendoFotoProfe) return;
     setSubiendoFotoProfe(true);
+    setErrorFotoProfe(null);
     try {
       const url = await subirAvatar(profeData.id, fotoPreviewProfe.file);
       await actualizarPerfil(profeData.id, { avatar_url: url });
       URL.revokeObjectURL(fotoPreviewProfe.objectUrl);
       setFotoPreviewProfe(null);
+      setErrorFotoProfe(null);
       onAvatarActualizado?.(url);
-    } catch(err) { console.error("Error al subir foto:", err); }
-    finally { setSubiendoFotoProfe(false); }
+    } catch(err) {
+      console.error("Error al subir foto:", err);
+      setErrorFotoProfe(err?.message || "No se pudo subir la foto. Intentá de nuevo.");
+    } finally { setSubiendoFotoProfe(false); }
   };
   const cancelarFotoProfe = () => { URL.revokeObjectURL(fotoPreviewProfe.objectUrl); setFotoPreviewProfe(null); };
+  const [errorFotoProfe, setErrorFotoProfe] = useState(null);
 
   const [guiaOpenProfe, setGuiaOpenProfe] = useState(false);
 
@@ -3350,6 +3361,7 @@ function PerfilProfe({ onLogoutProfe, profeData, onAvatarActualizado }) {
             <p style={{margin:0,fontWeight:800,fontSize:16,color:DK}}>Previsualización</p>
             <img src={fotoPreviewProfe.objectUrl} alt="preview" style={{width:120,height:120,borderRadius:"50%",objectFit:"cover",border:`3px solid ${P}`}}/>
             <p style={{margin:0,fontSize:13,color:"#64748b",textAlign:"center"}}>Esta foto quedará visible en tu perfil</p>
+            {errorFotoProfe && <p style={{margin:0,fontSize:13,color:P,textAlign:"center",fontWeight:600}}>{errorFotoProfe}</p>}
             <div style={{display:"flex",gap:10,width:"100%"}}>
               <button onClick={cancelarFotoProfe} disabled={subiendoFotoProfe} style={{flex:1,background:"#f1f5f9",border:"none",borderRadius:10,padding:"12px",fontSize:14,fontWeight:700,cursor:"pointer",color:"#475569"}}>Cancelar</button>
               <button onClick={confirmarFotoProfe} disabled={subiendoFotoProfe} style={{flex:1,background:P,border:"none",borderRadius:10,padding:"12px",fontSize:14,fontWeight:700,cursor:subiendoFotoProfe?"not-allowed":"pointer",color:"#fff",opacity:subiendoFotoProfe?0.7:1}}>{subiendoFotoProfe?"Subiendo...":"Confirmar"}</button>
