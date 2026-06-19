@@ -107,6 +107,20 @@ Arrancá del estado de abajo; **no re-diagnostiques lo ✅**.
   - Fix: reemplazado por `mi_rol()` (ya SECURITY DEFINER + STABLE). Semántica idéntica.
   - Evidencia: UPDATE propio OK (UPDATE 1 sin recursión), cross-user denegado (UPDATE 0), cambio de rol propio rechazado (RLS error).
 
+- **Botón compartir app** (F) ✅ — 2026-06-19
+  - Componente `ShareBtn` en header alumno y profe. Web Share API en móvil; fallback clipboard + toast "Link copiado ✓" en desktop.
+  - URL: `window.location.origin`. Sin tocar DB.
+
+- **Disponibilidad profe bloques 30 min** (G) ✅ — 2026-06-19
+  - `HORAS_DIA` extendido a 23 slots (08:00–19:00 en intervalos de 30 min). UI only — `hora` es `TEXT` sin CHECK constraint, DB acepta "08:30" sin migración.
+  - Grilla profe: 3 → 4 columnas, padding reducido. Grilla alumno Reservar: array hardcodeado → `HORAS_DIA`, mismas 4 columnas.
+  - Slots existentes en DB (horas enteras) siguen funcionando.
+
+- **Guía PWA auto-abrir** (H) ✅ — 2026-06-19
+  - `useEffect` en `LoginScreen`, `AppAlumno` y `PerfilProfe`: si `!ES_PWA && !localStorage("guia_pwa_vista")`, abre `GuiaInstalacion` a los 800ms y setea el flag.
+  - El primer componente en montar gana; los demás no abren (flag ya seteado).
+  - Acceso manual via botón en Perfil sigue disponible. Key localStorage: `guia_pwa_vista`.
+
 ### ⚠️ Pendiente de primera compra real
 - Verificación end-to-end de acreditación en producción (requiere un pago real de usuario).
 
