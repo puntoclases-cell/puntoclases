@@ -121,6 +121,17 @@ Arrancá del estado de abajo; **no re-diagnostiques lo ✅**.
   - El primer componente en montar gana; los demás no abren (flag ya seteado).
   - Acceso manual via botón en Perfil sigue disponible. Key localStorage: `guia_pwa_vista`.
 
+- **Reserva con duración variable** ✅ — 2026-06-19
+  - Modelo: 1 reserva = 1 fila, `hora` = inicio, `horas` = duración total (0.5, 1.0, 1.5, 2.0…). Sin cambio de schema.
+  - Mínimo 1h (2 slots de 30'); el alumno elige inicio en la grilla y duración con botones (1h / 1.5h / 2h…).
+  - Slot válido como inicio: ≥2 slots consecutivos libres y en disponibilidad. Extensión se detiene en el primer slot ocupado o fuera de disponibilidad.
+  - Costo = `duracion × costoBase` (individual: ×1; grupal: ×factorGrupal). Validado contra saldo antes de confirmar.
+  - Overlap check server-side en `crear_reserva` (migration 20260619000000): `r.hora::time < proposed_end AND r.hora::time + r.horas*'1h' > proposed_start`.
+  - `devolver_horas` usa `r.horas` directamente → compatible sin cambio.
+  - Front: `horaInicio` + `duracionSlots` reemplaza array `horas[]`. Confirm llama `crearReserva` una sola vez (antes era loop).
+  - `getReservasDelDia(profeId, fecha)` en db.js alimenta la grilla de slots ocupados.
+  - Nota: exclusion constraint (`tsrange` + btree_gist) daría garantía absoluta anti-race-condition; deferido, el RPC check es suficiente para la carga actual.
+
 ### ⚠️ Pendiente de primera compra real
 - Verificación end-to-end de acreditación en producción (requiere un pago real de usuario).
 
