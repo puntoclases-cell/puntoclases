@@ -1156,6 +1156,12 @@ function Perfil({ onLogout, saldo, compras, datosAlumno, reservas, onAvatarActua
 
   const [errorFotoAlumno, setErrorFotoAlumno] = useState(null);
   const [guiaOpen, setGuiaOpen] = useState(false);
+  useEffect(() => {
+    if (!ES_PWA && !localStorage.getItem("guia_pwa_vista")) {
+      const t = setTimeout(() => { setGuiaOpen(true); localStorage.setItem("guia_pwa_vista","1"); }, 800);
+      return () => clearTimeout(t);
+    }
+  }, []);
   const [notif, setNotif] = useState({ reserva:true, recordatorio:true, devolucion:true, promo:false });
   const [tab, setTab] = useState("progreso");
 
@@ -3134,6 +3140,12 @@ function PerfilProfe({ onLogoutProfe, profeData, onAvatarActualizado }) {
   const [errorFotoProfe, setErrorFotoProfe] = useState(null);
 
   const [guiaOpenProfe, setGuiaOpenProfe] = useState(false);
+  useEffect(() => {
+    if (!ES_PWA && !localStorage.getItem("guia_pwa_vista")) {
+      const t = setTimeout(() => { setGuiaOpenProfe(true); localStorage.setItem("guia_pwa_vista","1"); }, 800);
+      return () => clearTimeout(t);
+    }
+  }, []);
 
   const toggleMateria = m => setDraft(p=>({...p,
     materias: p.materias.includes(m) ? p.materias.filter(x=>x!==m) : [...p.materias, m]
@@ -6104,6 +6116,12 @@ function LoginScreen({ onLogin, onRegistroProfe, onRegistroAlumno }) {
   const [recMail, setRecMail] = useState("");
   const [recOk, setRecOk]     = useState(false);
   const [guiaOpen, setGuiaOpen] = useState(false);
+  useEffect(() => {
+    if (!ES_PWA && !localStorage.getItem("guia_pwa_vista")) {
+      const t = setTimeout(() => { setGuiaOpen(true); localStorage.setItem("guia_pwa_vista","1"); }, 800);
+      return () => clearTimeout(t);
+    }
+  }, []);
 
   const handleLogin = async () => {
     setError("");
