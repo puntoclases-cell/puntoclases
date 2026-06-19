@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { login, getUsuarioActual, onAuthChange, logout, getAlumno, getCompras, getReservasAlumno, getProfes, getProfesAdmin, getDisponibilidad, getReservasProfe, marcarReserva, cargarDevolucion, reprogramarReserva, setBloque, borrarBloque, getAlumnos, getTodasLasReservas, actualizarAlumno, actualizarProfe, actualizarPerfil, crearCompra, crearReserva, verificarBloqueOcupado, getMensajes, enviarMensaje, suscribirMensajes, registrarAlumno, registrarProfe, enviarRecuperacion, actualizarPassword, onPasswordRecovery, crearResenia, getConfig, updateConfig, getPacks, devolverHoras, addHorasAdmin, crearPreferencia, contarMensajesNuevosProfe, subirAvatar } from "./db";
+import { login, getUsuarioActual, onAuthChange, logout, getAlumno, getCompras, getReservasAlumno, getProfes, getProfesAdmin, getDisponibilidad, getReservasProfe, marcarReserva, cargarDevolucion, reprogramarReserva, setBloque, borrarBloque, getAlumnos, getTodasLasReservas, actualizarAlumno, actualizarProfe, actualizarPerfil, crearCompra, crearReserva, verificarBloqueOcupado, getReservasDelDia, getMensajes, enviarMensaje, suscribirMensajes, registrarAlumno, registrarProfe, enviarRecuperacion, actualizarPassword, onPasswordRecovery, crearResenia, getConfig, updateConfig, getPacks, devolverHoras, addHorasAdmin, crearPreferencia, contarMensajesNuevosProfe, subirAvatar } from "./db";
 
 // ════════════════════════════════════════════════════════════════════════════
 // PUNTOCLASES — APP UNIFICADA
@@ -196,7 +196,9 @@ function Reservar({ saldo, onReservar, profes, alumnoId }) {
   const [materia,setMateria] = useState("");
   const [modalidad,setModalidad] = useState("");
   const [fecha,setFecha] = useState(null);
-  const [horas,setHoras] = useState([]);  // array de bloques tildados
+  const [horaInicio, setHoraInicio] = useState(null);
+  const [duracionSlots, setDuracionSlots] = useState(2); // 2 slots = 1h mínimo
+  const [reservasOcupadas, setReservasOcupadas] = useState([]);
   const [tipo,setTipo] = useState("individual");
 
   const [necesidad,setNecesidad] = useState("");
@@ -218,6 +220,17 @@ function Reservar({ saldo, onReservar, profes, alumnoId }) {
     return () => { cancelled = true; };
   }, [profeId]);
 
+  useEffect(() => {
+    if (!profeId || !fecha) { setReservasOcupadas([]); return; }
+    let cancelled = false;
+    getReservasDelDia(profeId, fecha)
+      .then(d => { if (!cancelled) setReservasOcupadas(d || []); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [profeId, fecha]);
+
+  useEffect(() => { setHoraInicio(null); setDuracionSlots(2); }, [fecha, tipo]);
+
   const profe = (profes||[]).find(p=>p.id===profeId);
   const dispon = disponRaw.reduce((acc, bloque) => {
     if (!acc[bloque.fecha]) acc[bloque.fecha] = {};
@@ -228,10 +241,25 @@ function Reservar({ saldo, onReservar, profes, alumnoId }) {
     .filter(([h,t]) => t==="ambas" || t===tipo)
     .map(([h]) => h)
     .sort() : [];
+  const duracion = duracionSlots * 0.5;
   const costoBase = tipo==="grupal" ? CFG.factorGrupal : 1;
-  const costo = +(costoBase * horas.length).toFixed(1);
+  const costo = +(costoBase * duracion).toFixed(1);
   const saldoInsuficiente = costo > saldo;
-  const toggleHora = (h) => setHoras(prev => prev.includes(h) ? prev.filter(x=>x!==h) : [...prev,h]);
+  const tmins = (h) => { const [hh,mm] = h.split(':').map(Number); return hh*60+mm; };
+  const t2str = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
+  const slotOcupado = (h) => reservasOcupadas.some(r => {
+    const rS = tmins(r.hora), rE = rS + r.horas*60, s = tmins(h);
+    return s >= rS && s < rE;
+  });
+  const slotsCons = (startH) => {
+    let count = 0, m = tmins(startH);
+    while (m < 24*60) {
+      const h = t2str(m);
+      if (!bloquesDelDia.includes(h) || slotOcupado(h)) break;
+      count++; m += 30;
+    }
+    return count;
+  };
 
   const materiasUnicas = [...new Set((profes||[]).flatMap(p=>p.materias||[]))].sort();
   const profesParaMateria = (profes||[]).filter(p=>(p.materias||[]).includes(materia));
@@ -241,9 +269,9 @@ function Reservar({ saldo, onReservar, profes, alumnoId }) {
     <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",minHeight:300,gap:16,textAlign:"center",padding:20}}>
       <div style={{width:80,height:80,background:PL,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:40}}>🎉</div>
       <h2 style={{margin:0,color:DK,fontSize:22}}>¡Clase reservada!</h2>
-      <p style={{margin:0,color:"#64748b",fontSize:15,lineHeight:1.6}}>{materia} con {nombreProfeElegido || profe?.nombre || profe?.titulo}<br/>{fmt(fecha)} — {horas.sort().join(', ')}</p>
+      <p style={{margin:0,color:"#64748b",fontSize:15,lineHeight:1.6}}>{materia} con {nombreProfeElegido || profe?.nombre || profe?.titulo}<br/>{fmt(fecha)} — {horaInicio} → {horaInicio ? t2str(tmins(horaInicio)+duracionSlots*30) : ""} ({duracion} hs)</p>
       <Badge bg="#dcfce7" col="#15803d">-{costo} hs descontadas de tu saldo</Badge>
-      <Btn onClick={()=>{setPaso(1);setProfeId(null);setMateria("");setModalidad("");setFecha(null);setHoras([]);setNecesidad("");setTipo("individual");setNombreProfeElegido("");}}>
+      <Btn onClick={()=>{setPaso(1);setProfeId(null);setMateria("");setModalidad("");setFecha(null);setHoraInicio(null);setDuracionSlots(2);setNecesidad("");setTipo("individual");setNombreProfeElegido("");}}>
         Reservar otra clase
       </Btn>
     </div>
@@ -362,7 +390,8 @@ function Reservar({ saldo, onReservar, profes, alumnoId }) {
                   setNombreProfeElegido(nombreProfe);
                   setModalidad(modalidades[0]);
                   setFecha(null);
-                  setHoras([]);
+                  setHoraInicio(null);
+                  setDuracionSlots(2);
                   setPaso(3);
                 }}>
                   Reservar con {nombreProfe.split(" ")[0]} →
@@ -425,65 +454,79 @@ function Reservar({ saldo, onReservar, profes, alumnoId }) {
             </p>
           </div>
           <div>
-            <h3 style={{margin:"0 0 4px",color:DK}}>Elegí tus horas</h3>
-            <p style={{margin:0,fontSize:13,color:"#64748b"}}>{fmt(fecha)} — tildá los bloques que querés</p>
+            <h3 style={{margin:"0 0 4px",color:DK}}>Elegí horario y duración</h3>
+            <p style={{margin:0,fontSize:13,color:"#64748b"}}>{fmt(fecha)} — tocá un slot para elegir inicio (mín 1h)</p>
           </div>
 
           {/* Leyenda */}
-          <div style={{display:"flex",gap:16,fontSize:12,color:"#64748b"}}>
+          <div style={{display:"flex",gap:14,fontSize:12,color:"#64748b",flexWrap:"wrap"}}>
             <div style={{display:"flex",alignItems:"center",gap:6}}>
               <div style={{width:16,height:16,borderRadius:4,background:P}}/>
-              <span>Seleccionado</span>
+              <span>Rango elegido</span>
             </div>
             <div style={{display:"flex",alignItems:"center",gap:6}}>
               <div style={{width:16,height:16,borderRadius:4,background:PL,border:`1.5px solid ${PB}`}}/>
               <span>Disponible</span>
             </div>
             <div style={{display:"flex",alignItems:"center",gap:6}}>
-              <div style={{width:16,height:16,borderRadius:4,background:"#f1f5f9",border:"1.5px solid #e2e8f0"}}/>
-              <span>Ocupado</span>
+              <div style={{width:16,height:16,borderRadius:4,background:"#f8fafc",border:"1.5px solid #e2e8f0"}}/>
+              <span>No disponible</span>
             </div>
           </div>
 
-          {/* Grilla de bloques — todos los horarios posibles del día */}
+          {/* Grilla de slots: clic elige inicio; el rango seleccionado se pinta en azul */}
           <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6}}>
             {HORAS_DIA.map(h => {
-              const libre = bloquesDelDia.includes(h);
-              const sel = horas.includes(h);
+              const disp = bloquesDelDia.includes(h);
+              const ocup = slotOcupado(h);
+              const inRange = horaInicio
+                ? (tmins(h) >= tmins(horaInicio) && tmins(h) < tmins(horaInicio) + duracionSlots*30)
+                : false;
+              const canStart = disp && !ocup && slotsCons(h) >= 2;
+              const isStart = h === horaInicio;
+              const bg = inRange ? P : canStart ? PL : "#f8fafc";
+              const bord = inRange ? `2px solid ${P}` : canStart ? `2px solid ${PB}` : "2px solid #e2e8f0";
+              const col = inRange ? "#fff" : canStart ? P : "#cbd5e1";
               return (
-                <button key={h} onClick={()=>libre && toggleHora(h)} disabled={!libre}
-                  style={{
-                    padding:"10px 0",
-                    borderRadius:12,
-                    border: sel ? `2px solid ${P}` : libre ? `2px solid ${PB}` : "2px solid #e2e8f0",
-                    background: sel ? P : libre ? PL : "#f8fafc",
-                    color: sel ? "#fff" : libre ? P : "#cbd5e1",
-                    fontWeight:700,
-                    fontSize:13,
-                    cursor:libre?"pointer":"not-allowed",
-                    display:"flex",
-                    flexDirection:"column",
-                    alignItems:"center",
-                    gap:4,
-                    transition:"all 0.15s",
-                    position:"relative",
-                  }}>
-                  {sel ? <span style={{fontSize:10,opacity:0.9}}>✓</span> : libre ? <span style={{fontSize:10}}>{(dispon[fecha]||{})[h]==="ambas"?"✦":"·"}</span> : null}
+                <button key={h}
+                  onClick={() => {
+                    if (isStart) { setHoraInicio(null); setDuracionSlots(2); }
+                    else if (canStart) { setHoraInicio(h); setDuracionSlots(2); }
+                  }}
+                  disabled={!canStart && !isStart}
+                  style={{padding:"10px 0",borderRadius:12,border:bord,background:bg,color:col,fontWeight:700,fontSize:13,cursor:(canStart||isStart)?"pointer":"not-allowed",display:"flex",flexDirection:"column",alignItems:"center",gap:4,transition:"all 0.15s"}}>
+                  {inRange
+                    ? <span style={{fontSize:10,opacity:0.9}}>✓</span>
+                    : canStart ? <span style={{fontSize:10}}>{(dispon[fecha]||{})[h]==="ambas"?"✦":"·"}</span>
+                    : null}
                   {h}
-                  {!libre && <span style={{fontSize:9,color:"#94a3b8",fontWeight:400}}>ocupado</span>}
+                  {disp && ocup && <span style={{fontSize:9,color:"#94a3b8",fontWeight:400}}>ocupado</span>}
                 </button>
               );
             })}
           </div>
 
-          {/* Resumen de selección */}
-          {horas.length > 0 && (
+          {/* Selector de duración — aparece tras elegir inicio */}
+          {horaInicio && (
             <Card style={{background:PL,border:`1.5px solid ${PB}`,padding:14}}>
+              <p style={{margin:"0 0 10px",fontWeight:700,fontSize:13,color:DK}}>
+                Inicio: <strong>{horaInicio}</strong> — ¿Cuánto tiempo?
+              </p>
+              <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:10}}>
+                {Array.from({length: Math.min(slotsCons(horaInicio)-1, 8)}, (_,i) => i+2).map(s => (
+                  <button key={s} onClick={()=>setDuracionSlots(s)}
+                    style={{padding:"8px 14px",borderRadius:10,fontWeight:700,fontSize:13,cursor:"pointer",
+                      border:duracionSlots===s?`2px solid ${P}`:`2px solid #e2e8f0`,
+                      background:duracionSlots===s?P:"#fff",
+                      color:duracionSlots===s?"#fff":DK}}>
+                    {s*0.5}h
+                  </button>
+                ))}
+              </div>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                <div>
-                  <p style={{margin:0,fontWeight:700,fontSize:14,color:DK}}>{horas.length} hora{horas.length>1?"s":""} seleccionada{horas.length>1?"s":""}</p>
-                  <p style={{margin:"4px 0 0",fontSize:12,color:"#64748b"}}>{horas.sort().join(" · ")}</p>
-                </div>
+                <p style={{margin:0,fontSize:13,color:"#64748b"}}>
+                  {horaInicio} → {t2str(tmins(horaInicio)+duracionSlots*30)}
+                </p>
                 <div style={{textAlign:"right"}}>
                   <p style={{margin:0,fontSize:20,fontWeight:800,color:P}}>{costo} hs</p>
                   <p style={{margin:"2px 0 0",fontSize:11,color:"#64748b"}}>de tu saldo</p>
@@ -500,8 +543,8 @@ function Reservar({ saldo, onReservar, profes, alumnoId }) {
               style={{background:tipo==="individual"?PL:"#fff",border:`2px solid ${tipo==="individual"?P:"#e2e8f0"}`,borderRadius:12,padding:"14px",cursor:"pointer",textAlign:"left"}}>
               <div style={{fontSize:22}}>👤</div>
               <div style={{fontWeight:700,fontSize:14,color:DK,marginTop:4}}>Individual</div>
-              <div style={{fontSize:12,color:P,fontWeight:600}}>{horas.length||1} hs de saldo</div>
-              <div style={{fontSize:11,color:"#94a3b8"}}>${((horas.length||1)*CFG.precioInd).toLocaleString("es-AR")}</div>
+              <div style={{fontSize:12,color:P,fontWeight:600}}>{horaInicio ? duracion : "—"} hs de saldo</div>
+              <div style={{fontSize:11,color:"#94a3b8"}}>{horaInicio ? `$${(duracion*CFG.precioInd).toLocaleString("es-AR")}` : "—"}</div>
             </button>
             {/* GRUPAL — solo presencial */}
             {modalidad!=="Virtual" && (
@@ -510,8 +553,8 @@ function Reservar({ saldo, onReservar, profes, alumnoId }) {
               <span style={{position:"absolute",top:-8,right:8,background:"#15803d",color:"#fff",fontSize:10,fontWeight:700,borderRadius:99,padding:"2px 8px"}}>{CFG.packs[CFG.packs.length-1].descuento}% OFF</span>
               <div style={{fontSize:22}}>👥</div>
               <div style={{fontWeight:700,fontSize:14,color:DK,marginTop:4}}>Grupal</div>
-              <div style={{fontSize:12,color:"#15803d",fontWeight:600}}>{horas.length>0?costo:"—"} hs de saldo</div>
-              <div style={{fontSize:11,color:"#94a3b8"}}>${horas.length>0?(costo*CFG.precioInd).toLocaleString("es-AR"):"—"} · ahorrás ${horas.length>0?((horas.length-costo)*CFG.precioInd).toLocaleString("es-AR"):"—"}</div>
+              <div style={{fontSize:12,color:"#15803d",fontWeight:600}}>{horaInicio ? costo : "—"} hs de saldo</div>
+              <div style={{fontSize:11,color:"#94a3b8"}}>{horaInicio ? `$${(costo*CFG.precioInd).toLocaleString("es-AR")} · ahorrás $${((duracion-costo)*CFG.precioInd).toLocaleString("es-AR")}` : "—"}</div>
             </button>
             )}
           </div>
@@ -522,7 +565,7 @@ function Reservar({ saldo, onReservar, profes, alumnoId }) {
           {tipo==="grupal" && (
             <div style={{background:"#f0fdf4",border:"1.5px solid #bbf7d0",borderRadius:10,padding:"10px 12px"}}>
               <p style={{margin:0,fontSize:12,color:"#15803d"}}>
-                💡 La clase grupal vale <strong>{costo} hs</strong> de saldo en lugar de <strong>{horas.length} hs</strong>.
+                💡 La clase grupal vale <strong>{costo} hs</strong> de saldo en lugar de <strong>{duracion} hs</strong>.
                 Pagaste ${CFG.precioInd.toLocaleString("es-AR")}/hs pero gastás menos saldo porque compartís la clase.
               </p>
             </div>
@@ -533,7 +576,7 @@ function Reservar({ saldo, onReservar, profes, alumnoId }) {
           </Card>
           <div style={{display:"flex",gap:8}}>
             <Btn onClick={()=>setPaso(3)} variant="secondary" style={{flex:1}}>← Volver</Btn>
-            <Btn onClick={()=>setMostrarCancelacion(true)} disabled={horas.length===0} style={{flex:2}}>Continuar →</Btn>
+            <Btn onClick={()=>setMostrarCancelacion(true)} disabled={!horaInicio} style={{flex:2}}>Continuar →</Btn>
           </div>
           {mostrarCancelacion && (
             <ModalCancelacion
@@ -556,7 +599,7 @@ function Reservar({ saldo, onReservar, profes, alumnoId }) {
             <p style={{margin:"0 0 8px",fontWeight:700,fontSize:13,color:"#166534"}}>Resumen de tu reserva</p>
             <div style={{display:"flex",flexDirection:"column",gap:4,fontSize:13,color:"#374151"}}>
               <span>👨‍🏫 {nombreProfeElegido || profe?.nombre || profe?.titulo || "—"} — {materia}</span>
-              <span>📅 {fmt(fecha)} — {horas.sort().join(', ')}</span>
+              <span>📅 {fmt(fecha)} — {horaInicio} → {horaInicio ? t2str(tmins(horaInicio)+duracionSlots*30) : ""} ({duracion} hs)</span>
               <span>📍 {modalidad} · Clase {tipo}</span>
               <span>⏱ Se descuentan <strong>{costo} hs</strong> de tu saldo</span>
             </div>
@@ -581,17 +624,7 @@ function Reservar({ saldo, onReservar, profes, alumnoId }) {
                   setErrorReserva("No podés reservar en una fecha pasada.");
                   return;
                 }
-                for (const h of horas) {
-                  const ocupado = await verificarBloqueOcupado(profeId, fecha, h);
-                  if (ocupado) {
-                    setErrorReserva(`El horario ${h} ya no está disponible. Volvé a elegir otro.`);
-                    setPaso(3);
-                    return;
-                  }
-                }
-                for (const h of horas) {
-                  await crearReserva({ profeId, materia, fecha, hora: h, horas: 1, modalidad, tipo, alumnosGrupo: null, necesidad });
-                }
+                await crearReserva({ profeId, materia, fecha, hora: horaInicio, horas: duracion, modalidad, tipo, alumnosGrupo: null, necesidad });
                 onReservar(costo);
                 setPaso(6);
               } catch (err) {
