@@ -48,6 +48,7 @@ Arrancá del estado de abajo; **no re-diagnostiques lo ✅**.
 ### Todo cerrado y verificado en prod
 - Pagos MP end-to-end en prod (credenciales prod cargadas; token rotado 2026-06-17 ~13:00)
 - Webhook HMAC-SHA256 activo (firma inválida → 401, firma válida → 200, idempotente ✅)
+  - Re-verificado 2026-06-19: sin firma → 401 confirmado por HTTP. `acreditar_compra` re-invocada con payment_id existente → `(null, 0.2)` idempotente sin duplicar. Metadata (`alumno_id, horas, precio, pack_id`) coincide exactamente entre `crear-preferencia` y `mp-webhook`. Secrets `MP_ACCESS_TOKEN` y `MP_WEBHOOK_SECRET` confirmados en Supabase (actualizados 2026-06-17). Código dual-format correcto. NO re-diagnosticar.
 - Horas sueltas: botón "Pagar con MP" habilitado al elegir cantidad ✅
 - crear-preferencia: respuesta de error limpia (sin diagnóstico) ✅
 - GRANTs service_role: solo `config (SELECT)` + `packs (SELECT)` en tablas de app ✅
