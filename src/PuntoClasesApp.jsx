@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { login, getUsuarioActual, onAuthChange, logout, getAlumno, getCompras, getReservasAlumno, getProfes, getProfesAdmin, getDisponibilidad, getReservasProfe, marcarReserva, cargarDevolucion, reprogramarReserva, setBloque, borrarBloque, getAlumnos, getTodasLasReservas, actualizarAlumno, actualizarProfe, actualizarPerfil, crearCompra, crearReserva, verificarBloqueOcupado, getReservasDelDia, getMensajes, enviarMensaje, suscribirMensajes, registrarAlumno, registrarProfe, enviarRecuperacion, actualizarPassword, onPasswordRecovery, crearResenia, getConfig, updateConfig, getPacks, devolverHoras, addHorasAdmin, crearPreferencia, contarMensajesNuevosProfe, subirAvatar } from "./db";
+import { login, getUsuarioActual, onAuthChange, logout, getAlumno, getCompras, getReservasAlumno, getProfes, getProfesAdmin, getDisponibilidad, getReservasProfe, marcarReserva, cargarDevolucion, reprogramarReserva, setBloque, borrarBloque, getAlumnos, getTodasLasReservas, actualizarAlumno, actualizarProfe, actualizarPerfil, crearReserva, verificarBloqueOcupado, getReservasDelDia, getMensajes, enviarMensaje, suscribirMensajes, registrarAlumno, registrarProfe, enviarRecuperacion, actualizarPassword, onPasswordRecovery, crearResenia, getConfig, updateConfig, getPacks, devolverHoras, addHorasAdmin, crearPreferencia, contarMensajesNuevosProfe, subirAvatar } from "./db";
 
 // ════════════════════════════════════════════════════════════════════════════
 // PUNTOCLASES — APP UNIFICADA
@@ -1924,10 +1924,6 @@ function AppAlumno({ user, onLogout }) {
     } else {
       const estadoPago = collectionStatus === "pending" ? "pendiente" : "fallido";
       setCompraPendiente({ status: estadoPago });
-      if (horas && precio) {
-        crearCompra(user.id, horas, precio, null, estadoPago, paymentId)
-          .catch(err => console.error("Error al registrar compra " + estadoPago + ":", err));
-      }
     }
   }, [user, datosAlumno]);
 

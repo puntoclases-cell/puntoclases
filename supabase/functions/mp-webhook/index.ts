@@ -18,9 +18,8 @@ Deno.serve(async (req) => {
   const paymentId   = rawId != null ? String(rawId) : "";
 
   // 1. Validar firma HMAC-SHA256 de MP
-  //    El manifest usa el paymentId real (querystring tiene prioridad sobre body)
-  const xSignature   = req.headers.get("x-signature") ?? "";
-  const xRequestId   = req.headers.get("x-request-id") ?? "";
+  const xSignature    = req.headers.get("x-signature") ?? "";
+  const xRequestId    = req.headers.get("x-request-id") ?? "";
   const webhookSecret = Deno.env.get("MP_WEBHOOK_SECRET");
 
   if (webhookSecret) {
@@ -57,33 +56,45 @@ Deno.serve(async (req) => {
 
   if (payment.status !== "approved") return new Response("ok", { status: 200 });
 
-  // 4. Extraer datos del alumno desde la metadata que pusimos al crear la preferencia
-  const { alumno_id, horas, precio, pack_id } = payment.metadata ?? {};
-  if (!alumno_id || !horas || !precio) {
-    console.error("Metadata incompleta en payment", paymentId, payment.metadata);
-    return new Response("ok", { status: 200 }); // no retryar — datos faltantes
-  }
-
-  // 5. Acreditar horas con la RPC idempotente (service_role bypasea RLS)
-  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  const safePackId = pack_id && UUID_RE.test(String(pack_id)) ? pack_id : null;
-
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
-  const { error } = await supabase.rpc("acreditar_compra", {
-    p_alumno_id: alumno_id,
-    p_horas:     horas,
-    p_precio:    precio,
-    p_payment_id: String(paymentId),
-    p_pack_id:   safePackId,
-  });
 
-  if (error) {
-    console.error("Error en acreditar_compra:", error);
-    return new Response("error", { status: 500 }); // MP reintenta en 500
+  const extRef = String(payment.external_reference ?? "");
+
+  // 4a. Nuevo patrón: external_reference = id numérico de la fila en compras
+  if (/^\d+$/.test(extRef)) {
+    const compraId = parseInt(extRef, 10);
+    const { error } = await supabase.rpc("aprobar_compra", {
+      p_compra_id:  compraId,
+      p_payment_id: String(paymentId),
+    });
+    if (error) {
+      console.error("Error en aprobar_compra:", error);
+      return new Response("error", { status: 500 }); // MP reintenta en 500
+    }
+    return new Response("ok", { status: 200 });
   }
 
+  // 4b. Patrón legado: external_reference = alumno_id (UUID), datos en metadata
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const { alumno_id, horas, precio, pack_id } = payment.metadata ?? {};
+  if (!alumno_id || !horas || !precio) {
+    console.error("Metadata incompleta (patrón legado), external_reference:", extRef, "payment:", paymentId);
+    return new Response("error", { status: 500 }); // MP reintenta — requiere fix manual
+  }
+  const safePackId = pack_id && UUID_RE.test(String(pack_id)) ? pack_id : null;
+  const { error } = await supabase.rpc("acreditar_compra", {
+    p_alumno_id:  alumno_id,
+    p_horas:      horas,
+    p_precio:     precio,
+    p_payment_id: String(paymentId),
+    p_pack_id:    safePackId,
+  });
+  if (error) {
+    console.error("Error en acreditar_compra (legado):", error);
+    return new Response("error", { status: 500 });
+  }
   return new Response("ok", { status: 200 });
 });

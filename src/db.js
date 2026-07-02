@@ -100,7 +100,7 @@ export async function getAlumno(alumnoId) {
 }
 
 export async function getCompras(alumnoId) {
-  const { data, error } = await supabase.from("compras").select("*").eq("alumno_id", alumnoId).order("creado_en", { ascending: false });
+  const { data, error } = await supabase.from("compras").select("*").eq("alumno_id", alumnoId).eq("estado_pago", "aprobado").order("creado_en", { ascending: false });
   if (error) throw error;
   return data;
 }
@@ -267,14 +267,6 @@ export async function actualizarProfe(profeId, cambios) {
 
 export async function actualizarAlumno(alumnoId, cambios) {
   const { data, error } = await supabase.from("alumnos").update(cambios).eq("id", alumnoId).select().single();
-  if (error) throw error;
-  return data;
-}
-
-export async function crearCompra(alumnoId, horas, precio, packId = null, estadoPago = "aprobado", paymentId = null) {
-  const { data, error } = await supabase.from("compras")
-    .insert({ alumno_id: alumnoId, horas, precio, medio: "mercadopago", pack_id: packId, estado_pago: estadoPago, payment_id: paymentId })
-    .select().single();
   if (error) throw error;
   return data;
 }

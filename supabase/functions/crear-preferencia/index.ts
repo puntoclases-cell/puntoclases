@@ -52,7 +52,19 @@ Deno.serve(async (req) => {
     actualPrecio = actualHoras * precioInd;
   }
 
-  // 4. Crear preferencia en MP — el token nunca sale al cliente
+  // 4. Registrar compra pendiente en DB — el id sirve de external_reference para el webhook
+  const { data: compraId, error: pendErr } = await admin.rpc("registrar_compra_pendiente", {
+    p_alumno_id: user.id,
+    p_horas:     actualHoras,
+    p_precio:    actualPrecio,
+    p_pack_id:   resolvedPackId,
+  });
+  if (pendErr || compraId == null) {
+    console.error("Error al registrar compra pendiente:", pendErr);
+    return new Response("Error al registrar compra", { status: 500, headers: corsHeaders });
+  }
+
+  // 5. Crear preferencia en MP — external_reference = id de DB para que el webhook la encuentre
   const mpRes = await fetch("https://api.mercadopago.com/checkout/preferences", {
     method: "POST",
     headers: {
@@ -61,9 +73,7 @@ Deno.serve(async (req) => {
     },
     body: JSON.stringify({
       items: [{ title: `${actualHoras} horas PuntoClases`, quantity: 1, unit_price: actualPrecio, currency_id: "ARS" }],
-      // metadata viaja intacta con el pago — el webhook la lee para acreditar
-      metadata: { alumno_id: user.id, horas: actualHoras, precio: actualPrecio, pack_id: resolvedPackId },
-      external_reference: user.id,
+      external_reference: String(compraId),
       notification_url: `${Deno.env.get("SUPABASE_URL")}/functions/v1/mp-webhook`,
       back_urls: {
         success: "https://puntoclases.vercel.app",
@@ -80,7 +90,7 @@ Deno.serve(async (req) => {
   }
 
   return new Response(
-    JSON.stringify({ init_point: pref.init_point }),
+    JSON.stringify({ init_point: pref.init_point, compra_id: compraId }),
     { headers: { ...corsHeaders, "Content-Type": "application/json" } },
   );
 });
