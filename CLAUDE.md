@@ -40,101 +40,63 @@ Arrancá del estado de abajo; **no re-diagnostiques lo ✅**.
 
 ## Esquema (ojo)
 - La tabla `compras` **NO tiene columna `created_at`** (sí tiene `creado_en`). Leé las columnas reales antes de consultarla.
-- `service_role` tiene: `SELECT` en `config` y `packs`; `EXECUTE` en `acreditar_compra`. Ningún grant directo en `alumnos`, `compras`, `reservas`, `profiles`, `mensajes`.
-- `acreditar_compra` es SECURITY DEFINER (owner postgres): inserta en `compras` y actualiza `alumnos` sin necesitar grants directos.
+- `service_role` tiene: `SELECT` en `config` y `packs`; `EXECUTE` en `acreditar_compra`, `registrar_compra_pendiente`, `aprobar_compra`. Ningún grant directo en `alumnos`, `compras`, `reservas`, `profiles`, `mensajes`.
+- `acreditar_compra`, `registrar_compra_pendiente`, `aprobar_compra` son SECURITY DEFINER (owner postgres): operan sobre `compras` y `alumnos` sin grants directos.
+- `registrar_compra_pendiente(alumno_id, horas, precio, pack_id)` → inserta fila con `estado_pago='pendiente'`, devuelve `id BIGINT`.
+- `aprobar_compra(compra_id, payment_id)` → idempotente: si ya está `'aprobado'` devuelve saldo sin tocar nada; si no, actualiza `compras` y `alumnos` en un solo tx.
 
-## ESTADO ACTUAL — al 2026-06-17 ✅ PRODUCCIÓN LISTA
+## ESTADO ACTUAL — al 2026-07-02 ✅ PRODUCCIÓN LISTA
 
-### Todo cerrado y verificado en prod
-- Pagos MP end-to-end en prod (credenciales prod cargadas; token rotado 2026-06-17 ~13:00)
-- Webhook HMAC-SHA256 activo (firma inválida → 401, firma válida → 200, idempotente ✅)
-  - Re-verificado 2026-06-19: sin firma → 401 confirmado por HTTP. `acreditar_compra` re-invocada con payment_id existente → `(null, 0.2)` idempotente sin duplicar. Metadata (`alumno_id, horas, precio, pack_id`) coincide exactamente entre `crear-preferencia` y `mp-webhook`. Secrets `MP_ACCESS_TOKEN` y `MP_WEBHOOK_SECRET` confirmados en Supabase (actualizados 2026-06-17). Código dual-format correcto. NO re-diagnosticar.
-- Horas sueltas: botón "Pagar con MP" habilitado al elegir cantidad ✅
-- crear-preferencia: respuesta de error limpia (sin diagnóstico) ✅
-- GRANTs service_role: solo `config (SELECT)` + `packs (SELECT)` en tablas de app ✅
-- `crear_reserva`: fecha pasada + vencimiento validados en DB ✅
-- `acreditar_compra`: renueva vencimiento al comprar ✅
-- Privilege escalation en profiles cerrada ✅
-- Chat en tiempo real (`mensajes` en publication realtime) ✅
-- Profe nuevo: email automático para establecer contraseña ✅
-- Errores inline, sin alert(), sin logs sensibles ✅
-- Login/home: fondo celeste (#3D7A95→BL) reemplaza gris oscuro ✅
-- CountdownClase: clases pasadas sin confirmar → "Pendiente de confirmación" en vez de tiempo negativo ✅
-- Profe historial: botones "Clase dada / No se dio" para confirmar asistencia ✅
-- Fix "0 días" (null vencimiento): dias=null, AlertaVencimiento retorna null, display "Sin fecha de vencimiento" ✅
-- Fix saldo fantasma (saldoVivo): centralizado en módulo, aplica en header/Inicio/Perfil/Reservar ✅
-- Fix 2 DB (migración 20260617000000): acreditar_compra aplica umbral 0.8; one-time UPDATE aplicado (0 filas afectadas) ✅
-- Logo oficial transparente en login (`/logo-transparente.png`, 110px, alpha=0 confirmado) ✅
-- Header app y login: fondo LOGO_BG=#DFF2FF (celeste exacto del PNG) — sin cuadrado visible ✅
-- Subtítulo login: color #374151 explícito, sin opacity — legible sobre celeste ✅
+✅ Pagos prod — fix definitivo (2026-07-02): causa raíz real era que MP Checkout Pro **no propaga `metadata` de la preferencia al payment**. El webhook leía `payment.metadata` → vacío → devolvía 200 silencioso → nunca acreditaba. Fix: patrón "compra pendiente en DB" (Opción B): `crear-preferencia` llama a `registrar_compra_pendiente` antes de ir a MP y usa el id numérico de DB como `external_reference`; `mp-webhook` usa `external_reference` para llamar a `aprobar_compra` (idempotente). 500 en lugar de 200 silencioso cuando algo falla (MP reintenta).
 
-- Tarjeta saldo Inicio: celeste #2188B6 (familia logo), textos opacity 0.80 unificado ✅
-- Layout: ancho consistente en todas las pestañas — `width:"100%"` en todos los root containers + `boxSizing:"border-box"` donde hay padding lateral; elimina franjas blancas en móvil ✅
-- PWA auto-update: vite-plugin-pwa (Workbox), banner "nueva versión → Actualizar" ✅
-  - SW precachea app shell; polling cada hora; skipWaiting en click; cleanupOutdatedCaches ✅
-  - Fix vercel.json: eliminado Clear-Site-Data de /sw.js (era destructivo, borraba auth) ✅
-- mp-webhook: soporte dual formato MP — querystring `?type=payment&data.id=X` Y body JSON; firma HMAC usa el id correcto en ambos casos ✅
-- **Foto de perfil** (alumnos y profes) ✅ — 2026-06-18
-  - `profiles.avatar_url TEXT` (ADD COLUMN IF NOT EXISTS aplicado)
-  - Bucket `avatars` (público) + 3 policies RLS storage (`avatar_insert_own`, `avatar_update_own`, `avatar_delete_own`) — path-based owner check
-  - `subirAvatar(userId, file)` en db.js: Canvas center-crop → 400×400 webp 0.85 → storage upload → URL con `?t=timestamp`
-  - Componente `Av`: prop `url` → `<img>` circular si existe, fallback a inicial
-  - Perfil alumno: botón 📷 sobre avatar, modal de preview antes de confirmar, callback actualiza header en tiempo real
-  - Perfil profe: ídem + fix bug avatar hardcodeado `"DG"` → `initialsProfe(perfil.nombre)`
-- Header profe: fondo negro → celeste LOGO_BG igual que vista alumno ✅
-- Tarjeta bienvenida profe (Hoy/Próximas/Sin devolución): fondo negro → BL (#6FA8C0), textos DK (contraste 4.6:1 WCAG AA), alerta en P (rojo) ✅
-- Unificación celeste todos los roles — 6 elementos negros/oscuros → BL/LOGO_BG (criterio único: BL en hero cards, LOGO_BG en headers sticky, textos DK, boxes rgba(255,255,255,0.45), acentos P/GR) ✅
-  - Profe Ingresos: tarjeta hero → BL, monto en P
-  - Profe PerfilProfe: preview hero → BL; botón editar avatar DK → P
-  - Admin Header: → LOGO_BG (igual a alumno y profe)
-  - Admin Dashboard: hero → BL, ganancia negativa en P
-  - Admin Finanzas P&L: card → BL, ganancia en GR (positiva) / P (negativa)
-- Badge mensajes profe: punto rojo en nav cuando hay msgs de alumnos sin leer (localStorage, sin col DB extra) ✅
-- Clases confirmadas (estado ausente/realizada) → Historial aunque fecha >= hoy ✅
-- Modal alumno ausente: monto no duplicado — desglose solo para grupal con >1 alumno ✅
-- **Foto de perfil** (alumnos y profes) ✅ — 2026-06-18
-  - `profiles.avatar_url TEXT` (ADD COLUMN IF NOT EXISTS aplicado)
-  - Bucket `avatars` (público) + 3 policies RLS storage (`avatar_insert_own`, `avatar_update_own`, `avatar_delete_own`) — path-based owner check
-  - `subirAvatar(userId, file)` en db.js: Canvas center-crop → 400×400 webp 0.85 → storage upload → URL con `?t=timestamp`
-  - Componente `Av`: prop `url` → `<img>` circular si existe, fallback a inicial
-  - Perfil alumno: botón 📷 sobre avatar, modal de preview antes de confirmar, callback actualiza header en tiempo real
-  - Perfil profe: ídem + fix bug avatar hardcodeado `"DG"` → `initialsProfe(perfil.nombre)`
-  - Fix subida silenciosa: try/catch en `img.onload` (Promise no cuelga), fallback JPEG si WebP falla (iOS < 16.4), error visible en modal
-  - Fix "No se pudo leer la imagen" (2026-06-18): `comprimirImagen` creaba segundo blob URL fuera de user-gesture → iOS WKWebView dispara `img.onerror`. Fix integral: `FileReader.readAsDataURL` en `onFileChangeAlumno/Profe` → `dataUrl` compartido para preview Y compresión (sin createObjectURL en Canvas). `subirAvatar` acepta `dataUrl`. Errores por paso con mensajes distintos. Elimina `alert()` → `setErrorFoto*` inline.
-  - Fix "The resource already exists" (2026-06-18): `remove + upload` reemplazado por `upload upsert:true`. Agregada `avatar_select_own` SELECT policy en storage.objects (migration 20260618000001) para que el upsert resuelva el conflict check. Cache-busting `?t=timestamp` ya estaba en la URL retornada.
+✅ Regresiones cerradas: `getCompras` filtra `estado_pago='aprobado'` (filas pendientes no aparecen en UI ni afectan `esNuevoAlumno`). `crearCompra` eliminada (tenía columna incorrecta `precio` en lugar de `monto`).
 
-- **RLS profiles_update** (migración 20260618000000) ✅ — 2026-06-18
-  - Causa: WITH CHECK tenía subquery `SELECT rol FROM profiles WHERE id = auth.uid()` → Postgres re-evaluaba la misma policy al leer la tabla → recursión infinita (42P17) al hacer UPDATE de avatar_url.
-  - Fix: reemplazado por `mi_rol()` (ya SECURITY DEFINER + STABLE). Semántica idéntica.
-  - Evidencia: UPDATE propio OK (UPDATE 1 sin recursión), cross-user denegado (UPDATE 0), cambio de rol propio rechazado (RLS error).
+✅ `MP_WEBHOOK_SECRET` rotado (2026-06-24): valor anterior pasó por chat; nuevo valor cargado en Supabase.
 
-- **Botón compartir app** (F) ✅ — 2026-06-19
-  - Componente `ShareBtn` en header alumno y profe. Web Share API en móvil; fallback clipboard + toast "Link copiado ✓" en desktop.
-  - URL: `window.location.origin`. Sin tocar DB.
+### ⚠️ PENDIENTE: correr SQL en producción (vos)
+El código ya está deployado pero las RPCs aún no existen en la DB. **Hasta que corras esto, `crear-preferencia` devuelve 500 y los pagos no funcionan.**
 
-- **Disponibilidad profe bloques 30 min** (G) ✅ — 2026-06-19
-  - `HORAS_DIA` extendido a 23 slots (08:00–19:00 en intervalos de 30 min). UI only — `hora` es `TEXT` sin CHECK constraint, DB acepta "08:30" sin migración.
-  - Grilla profe: 3 → 4 columnas, padding reducido. Grilla alumno Reservar: array hardcodeado → `HORAS_DIA`, mismas 4 columnas.
-  - Slots existentes en DB (horas enteras) siguen funcionando.
+```sql
+CREATE OR REPLACE FUNCTION public.registrar_compra_pendiente(
+  p_alumno_id uuid, p_horas numeric, p_precio numeric, p_pack_id text DEFAULT NULL
+) RETURNS bigint LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE v_id BIGINT;
+BEGIN
+  INSERT INTO compras (alumno_id, horas, monto, pack_id, estado_pago, metodo)
+  VALUES (p_alumno_id, p_horas, p_precio::integer, p_pack_id, 'pendiente', 'mercadopago')
+  RETURNING id INTO v_id;
+  RETURN v_id;
+END; $$;
+GRANT EXECUTE ON FUNCTION public.registrar_compra_pendiente TO service_role;
 
-- **Guía PWA auto-abrir** (H) ✅ — 2026-06-19
-  - `useEffect` en `LoginScreen`, `AppAlumno` y `PerfilProfe`: si `!ES_PWA && !localStorage("guia_pwa_vista")`, abre `GuiaInstalacion` a los 800ms y setea el flag.
-  - El primer componente en montar gana; los demás no abren (flag ya seteado).
-  - Acceso manual via botón en Perfil sigue disponible. Key localStorage: `guia_pwa_vista`.
+CREATE OR REPLACE FUNCTION public.aprobar_compra(p_compra_id bigint, p_payment_id text)
+RETURNS numeric LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE v_compra RECORD; v_saldo NUMERIC;
+BEGIN
+  SELECT * INTO v_compra FROM compras WHERE id = p_compra_id FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Compra % no encontrada', p_compra_id; END IF;
+  IF v_compra.estado_pago = 'aprobado' THEN
+    SELECT saldo INTO v_saldo FROM alumnos WHERE id = v_compra.alumno_id;
+    RETURN v_saldo;
+  END IF;
+  UPDATE compras SET payment_id = p_payment_id, estado_pago = 'aprobado' WHERE id = p_compra_id;
+  UPDATE alumnos
+     SET saldo = CASE WHEN vencimiento IS NOT NULL AND CURRENT_DATE > vencimiento AND saldo >= 0.8
+                      THEN v_compra.horas ELSE saldo + v_compra.horas END,
+         vencimiento = CURRENT_DATE + (SELECT vencimiento_dias FROM config WHERE id = 1) * INTERVAL '1 day'
+   WHERE id = v_compra.alumno_id RETURNING saldo INTO v_saldo;
+  RETURN v_saldo;
+END; $$;
+GRANT EXECUTE ON FUNCTION public.aprobar_compra TO service_role;
+```
 
-- **Reserva con duración variable** ✅ — 2026-06-19
-  - Modelo: 1 reserva = 1 fila, `hora` = inicio, `horas` = duración total (0.5, 1.0, 1.5, 2.0…). Sin cambio de schema.
-  - Mínimo 1h (2 slots de 30'); el alumno elige inicio en la grilla y duración con botones (1h / 1.5h / 2h…).
-  - Slot válido como inicio: ≥2 slots consecutivos libres y en disponibilidad. Extensión se detiene en el primer slot ocupado o fuera de disponibilidad.
-  - Costo = `duracion × costoBase` (individual: ×1; grupal: ×factorGrupal). Validado contra saldo antes de confirmar.
-  - Overlap check server-side en `crear_reserva` (migration 20260619000000): `r.hora::time < proposed_end AND r.hora::time + r.horas*'1h' > proposed_start`.
-  - `devolver_horas` usa `r.horas` directamente → compatible sin cambio.
-  - Front: `horaInicio` + `duracionSlots` reemplaza array `horas[]`. Confirm llama `crearReserva` una sola vez (antes era loop).
-  - `getReservasDelDia(profeId, fecha)` en db.js alimenta la grilla de slots ocupados.
-  - Nota: exclusion constraint (`tsrange` + btree_gist) daría garantía absoluta anti-race-condition; deferido, el RPC check es suficiente para la carga actual.
-
-### ⚠️ Pendiente de primera compra real
-- Verificación end-to-end de acreditación en producción (requiere un pago real de usuario).
+Después de correrlo, verificar con la próxima compra real:
+```sql
+-- Debe mostrar una fila con estado_pago='aprobado' y payment_id no nulo
+SELECT id, payment_id, horas, monto, estado_pago, creado_en FROM compras ORDER BY creado_en DESC LIMIT 3;
+-- Debe mostrar saldo aumentado
+SELECT p.nombre, a.saldo, a.vencimiento FROM alumnos a JOIN profiles p ON p.id = a.id WHERE a.saldo > 0;
+```
 
 ## Regla de negocio — Vencimiento de horas (fija)
 - `saldo >= 0.8 hs` cuando vence → se pierde todo (saldo = 0). La clase mínima es 0.8 hs; si tenés menos no podés reservar.
@@ -143,5 +105,8 @@ Arrancá del estado de abajo; **no re-diagnostiques lo ✅**.
 - Front: `saldoVivo(sal, venc)` en `AlumnoApp` → `saldoDisplay` se pasa a todos los componentes que muestran saldo (header badge, Inicio, Perfil, Reservar)..
 
 ## A futuro (no prioritario)
+- **Filas pendientes colgadas**: cada vez que un pago termina en `pending` o `failure`, `registrar_compra_pendiente` deja una fila con `estado_pago='pendiente'` que nunca se actualiza (el webhook solo toca filas de pagos `approved`). No afecta correctitud (getCompras filtra `aprobado`), pero acumula basura. Fix futuro: al volver del back_url con failure, leer `compra_id` de localStorage (devuelto por `crear-preferencia`) y llamar una RPC `marcar_compra_fallida(p_compra_id)`.
 - **Google Calendar**: sincronizar reservas al Calendar del alumno y del profe. Requiere Google Cloud project con Calendar API habilitada + OAuth 2.0 credentials de Google. Iniciarlo cuando se decida.
 - **WhatsApp**: notificaciones vía WA Business. Requiere cuenta Business en Meta verificada — el trámite tarda, conviene iniciarlo con tiempo.
+- **Reembolsos/contracargos — HUECO DE FLUJO DE DINERO**: el webhook ignora pagos con `status != "approved"` (correcto, no acredita). PERO si un pago ya acreditado pasa luego a `refunded` o `charged_back`, MP envía notificación y el webhook vuelve a retornar 200 sin acción: el alumno conserva las horas, `compras.estado_pago` queda en `'aprobado'`. No hay descuento automático de horas ni cambio de estado. Solución pendiente: handler para notificaciones de reembolso que (a) actualice `compras.estado_pago = 'reembolsado'` y (b) descuente `alumnos.saldo`. **No implementar aún** — requiere diseño (¿qué pasa si el alumno ya usó las horas?).
+- **Pago al profe — FALTA (no es bug)**: el flujo de dinero alumno→profe no está implementado. Lo existente es solo visual: campo `pagado_mes` (boolean manual) en la vista de Ingresos del profe, y una alerta de cierre mensual sin automatización. No hay cálculo server-side del monto a pagar al profe, ni transferencia real, ni liquidación automática. Pendiente diseñar: modelo de comisión, frecuencia de pago, integración con MP para transferencias o instrucciones de pago manual.
