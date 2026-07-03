@@ -14,6 +14,11 @@ export default defineConfig({
         cleanupOutdatedCaches: true,
         runtimeCaching: [
           {
+            // Auth: nunca cachear — las respuestas son por-sesión
+            urlPattern: /^https:\/\/ihwtdblkrxgzhdnzhzsh\.supabase\.co\/auth\/.*/i,
+            handler: 'NetworkOnly',
+          },
+          {
             // Supabase API: NetworkFirst — online usa red, offline usa cache
             urlPattern: /^https:\/\/ihwtdblkrxgzhdnzhzsh\.supabase\.co\/.*/i,
             handler: 'NetworkFirst',

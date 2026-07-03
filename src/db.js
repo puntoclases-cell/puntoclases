@@ -40,11 +40,11 @@ export async function logout() {
 
 // Devuelve el usuario actual con su rol y nombre (de profiles), o null.
 export async function getUsuarioActual() {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return null;
-  const { data: perfil, error: perfilError } = await supabase.from("profiles").select("rol,nombre,mail").eq("id", user.id).single();
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.user) return null;
+  const { data: perfil, error: perfilError } = await supabase.from("profiles").select("rol,nombre,mail").eq("id", session.user.id).single();
   if (perfilError || !perfil) throw new Error("Perfil no encontrado");
-  return { id: user.id, mail: user.email, ...perfil };
+  return { id: session.user.id, mail: session.user.email, ...perfil };
 }
 
 // Escuchar cambios de sesión (login/logout) para actualizar la UI.
