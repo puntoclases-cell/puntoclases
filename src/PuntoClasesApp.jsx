@@ -136,7 +136,7 @@ const Btn = ({children,onClick,disabled,variant="primary",full,style={}}) => {
 };
 
 // ── PANTALLA INICIO ──────────────────────────────────────────────────────────
-function Inicio({onNav, saldo, nombre, reservas, vencimiento}) {
+function Inicio({onNav, saldo, nombre, reservas, vencimiento, cfg}) {
   // saldo ya viene como saldoDisplay (saldoVivo aplicado en AlumnoApp)
   const dias = vencimiento ? diasVenc(vencimiento) : null;
   const pct = Math.min((saldo/12)*100,100);
@@ -155,7 +155,7 @@ function Inicio({onNav, saldo, nombre, reservas, vencimiento}) {
             <div>
               <p style={{margin:0,fontSize:13,opacity:0.8}}>Saldo de horas</p>
               <p style={{margin:"2px 0 0",fontSize:11,opacity:0.8}}>
-                ≈ ${(saldo*CFG.precioInd).toLocaleString("es-AR")} en clases individuales
+                ≈ ${(saldo*(cfg?.precioInd ?? CFG.precioInd)).toLocaleString("es-AR")} en clases individuales
               </p>
             </div>
             <span style={{fontSize:24,fontWeight:800}}>{saldo} hs</span>
@@ -286,16 +286,16 @@ function Reservar({ saldo, onReservar, profes, alumnoId }) {
 
   return (
     <div style={{display:"flex",flexDirection:"column",gap:16}}>
-      {/* Banner reserva recurrente */}
-      <button onClick={()=>setModalRecurrenteAlumno(true)}
+      {/* Banner reserva recurrente — oculto hasta implementar (F5/F6) */}
+      {false && <button onClick={()=>setModalRecurrenteAlumno(true)}
         style={{background:"#f0f6fa",border:"1.5px solid #a8d4e8",borderRadius:14,padding:"12px 16px",cursor:"pointer",textAlign:"left",display:"flex",alignItems:"center",gap:12}}>
         <span style={{fontSize:24}}>🔄</span>
         <div style={{flex:1}}>
           <p style={{margin:0,fontWeight:700,fontSize:13,color:BL}}>¿Siempre el mismo día y hora?</p>
           <p style={{margin:"2px 0 0",fontSize:12,color:"#64748b"}}>Configurá una reserva recurrente semanal →</p>
         </div>
-      </button>
-      {modalRecurrenteAlumno && (
+      </button>}
+      {false && modalRecurrenteAlumno && (
         <ModalRecurrenteAlumno
           profes={profes}
           onConfirmar={(datos)=>{ console.log("Recurrente:", datos); }}
@@ -1979,7 +1979,7 @@ function AppAlumno({ user, onLogout }) {
 
       {/* Contenido */}
       <div style={{flex:1,padding:"16px 20px 80px"}}>
-        {screen==="inicio" && <Inicio onNav={setScreen} saldo={saldoDisplay} nombre={nombreAlumno} reservas={reservasAlumno} vencimiento={datosAlumno?.vencimiento}/>}
+        {screen==="inicio" && <Inicio onNav={setScreen} saldo={saldoDisplay} nombre={nombreAlumno} reservas={reservasAlumno} vencimiento={datosAlumno?.vencimiento} cfg={cfgLive}/>}
         {screen==="reservar" && <Reservar profes={profesData} saldo={saldoDisplay} alumnoId={user?.id} onReservar={(costo)=>{setSaldo(s=>+(s-costo).toFixed(2));getReservasAlumno(user.id).then(r=>setReservasAlumno(r)).catch(()=>{});}}/>}
         {screen==="historial" && (
           <Historial
