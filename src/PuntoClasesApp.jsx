@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+﻿import { useState, useEffect, useRef } from "react";
 import { login, getUsuarioActual, onAuthChange, logout, getAlumno, getCompras, getReservasAlumno, getProfes, getProfesAdmin, getDisponibilidad, getReservasProfe, marcarReserva, cargarDevolucion, reprogramarReserva, setBloque, borrarBloque, getAlumnos, getTodasLasReservas, actualizarAlumno, actualizarProfe, actualizarPerfil, crearReserva, verificarBloqueOcupado, getReservasDelDia, getMensajes, enviarMensaje, suscribirMensajes, registrarAlumno, registrarProfe, enviarRecuperacion, actualizarPassword, onPasswordRecovery, crearResenia, getConfig, updateConfig, getPacks, devolverHoras, addHorasAdmin, crearPreferencia, contarMensajesNuevosProfe, subirAvatar } from "./db";
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -204,26 +204,24 @@ function Inicio({onNav, saldo, nombre, reservas, vencimiento, cfg}) {
 }
 
 // ── PANTALLA RESERVAR ─────────────────────────────────────────────────────────
-function Reservar({ saldo, onReservar, profes, alumnoId }) {
-  const [paso,setPaso] = useState(1);
-  const [profeId,setProfeId] = useState(null);
-  const [materia,setMateria] = useState("");
-  const [modalidad,setModalidad] = useState("");
-  const [fecha,setFecha] = useState(null);
-  const [horaInicio, setHoraInicio] = useState(null);
-  const [duracionSlots, setDuracionSlots] = useState(2); // 2 slots = 1h mínimo
-  const [reservasOcupadas, setReservasOcupadas] = useState([]);
-  const [tipo,setTipo] = useState("individual");
-
-  const [necesidad,setNecesidad] = useState("");
-  const [mes,setMes] = useState(new Date().getMonth());
-  const [mostrarCancelacion,setMostrarCancelacion] = useState(false);
-  const [modalRecurrenteAlumno, setModalRecurrenteAlumno] = useState(false);
-  const [errorReserva, setErrorReserva] = useState("");
-  const year = new Date().getFullYear();
+function Reservar({ saldo, onReservar, profes, alumnoId, onNav, cfg }) {
+  const [paso, setPaso] = useState(1);
+  const [profeId, setProfeId] = useState(null);
   const [nombreProfeElegido, setNombreProfeElegido] = useState("");
-
+  const [materia, setMateria] = useState("");
+  const [tipo, setTipo] = useState("individual");
+  const [modalidad, setModalidad] = useState("Presencial");
+  const [fecha, setFecha] = useState(null);
+  const [horaInicio, setHoraInicio] = useState(null);
+  const [duracionHoras, setDuracionHoras] = useState(1);
+  const [necesidad, setNecesidad] = useState("");
+  const [errorReserva, setErrorReserva] = useState("");
+  const [mes, setMes] = useState(new Date().getMonth());
+  const [calYear, setCalYear] = useState(new Date().getFullYear());
   const [disponRaw, setDisponRaw] = useState([]);
+  const [reservasOcupadas, setReservasOcupadas] = useState([]);
+  const [aceptaCancelacion, setAceptaCancelacion] = useState(false);
+
   useEffect(() => {
     if (!profeId) return;
     let cancelled = false;
@@ -243,387 +241,334 @@ function Reservar({ saldo, onReservar, profes, alumnoId }) {
     return () => { cancelled = true; };
   }, [profeId, fecha]);
 
-  useEffect(() => { setHoraInicio(null); setDuracionSlots(2); }, [fecha, tipo]);
+  useEffect(() => { setHoraInicio(null); setDuracionHoras(1); }, [fecha, tipo]);
 
-  const profe = (profes||[]).find(p=>p.id===profeId);
+  const profe = (profes || []).find(p => p.id === profeId);
   const dispon = disponRaw.reduce((acc, bloque) => {
     if (!acc[bloque.fecha]) acc[bloque.fecha] = {};
     acc[bloque.fecha][bloque.hora] = bloque.tipo;
     return acc;
   }, {});
-  const bloquesDelDia = fecha ? Object.entries(dispon[fecha]||{})
-    .filter(([h,t]) => t==="ambas" || t===tipo)
-    .map(([h]) => h)
-    .sort() : [];
-  const duracion = duracionSlots * 0.5;
-  const costoBase = tipo==="grupal" ? CFG.factorGrupal : 1;
-  const costo = +(costoBase * duracion).toFixed(1);
-  const saldoInsuficiente = costo > saldo;
-  const tmins = (h) => { const [hh,mm] = h.split(':').map(Number); return hh*60+mm; };
-  const t2str = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
-  const slotOcupado = (h) => reservasOcupadas.some(r => {
-    const rS = tmins(r.hora), rE = rS + r.horas*60, s = tmins(h);
+
+  const tmins = h => { const [hh, mm] = h.split(':').map(Number); return hh * 60 + mm; };
+  const t2str = m => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+
+  const bloquesDelDia = fecha
+    ? Object.entries(dispon[fecha] || {})
+        .filter(([h, t]) => t === "ambas" || t === tipo)
+        .map(([h]) => h)
+        .sort()
+    : [];
+
+  const slotOcupado = h => reservasOcupadas.some(r => {
+    const rS = tmins(r.hora), rE = rS + r.horas * 60, s = tmins(h);
     return s >= rS && s < rE;
   });
-  const slotsCons = (startH) => {
+
+  // slotsCons: pasos de 60 min (DB tiene slots horarios, no de 30 min)
+  const slotsCons = startH => {
     let count = 0, m = tmins(startH);
-    while (m < 24*60) {
+    while (m < 24 * 60) {
       const h = t2str(m);
       if (!bloquesDelDia.includes(h) || slotOcupado(h)) break;
-      count++; m += 30;
+      count++; m += 60;
     }
     return count;
   };
 
-  const materiasUnicas = [...new Set((profes||[]).flatMap(p=>p.materias||[]))].sort();
-  const profesParaMateria = (profes||[]).filter(p=>(p.materias||[]).includes(materia));
-  const pasoDisplay = Math.min(paso, 5); // 5 pasos reales: materia·profe·día·horario·confirmar
+  const hoyISO = toISO(new Date().getFullYear(), new Date().getMonth(), new Date().getDate());
+  const fechasDisponibles = [...new Set(
+    disponRaw
+      .filter(b => b.tipo === "ambas" || b.tipo === tipo)
+      .map(b => b.fecha)
+  )].sort().filter(f => f >= hoyISO);
 
-  if (paso===6) return (
+  const horariosDisponibles = bloquesDelDia.filter(h => !slotOcupado(h) && slotsCons(h) >= 1);
+
+  const duracion = duracionHoras;
+  const costoBase = tipo === "grupal" ? CFG.factorGrupal : 1;
+  const costo = +(costoBase * duracion).toFixed(1);
+  const saldoInsuficiente = costo > saldo;
+
+  const materiasUnicas = [...new Set((profes || []).flatMap(p => p.materias || []))].sort();
+  const profesParaMateria = (profes || []).filter(p => (p.materias || []).includes(materia));
+  const TOTAL_PASOS = 8;
+
+  const MESES_ES = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
+  const DIAS_ES = ["Dom","Lun","Mar","Mié","Jue","Vie","Sáb"];
+  const fmtLarga = fechaStr => {
+    const [y, m, d] = fechaStr.split('-').map(Number);
+    const date = new Date(y, m - 1, d);
+    return `${DIAS_ES[date.getDay()]} ${d} de ${MESES_ES[m - 1]}`;
+  };
+
+  if (paso === 9) return (
     <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",minHeight:300,gap:16,textAlign:"center",padding:20}}>
       <div style={{width:80,height:80,background:PL,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:40}}>🎉</div>
       <h2 style={{margin:0,color:DK,fontSize:22}}>¡Clase reservada!</h2>
-      <p style={{margin:0,color:"#64748b",fontSize:15,lineHeight:1.6}}>{materia} con {nombreProfeElegido || profe?.nombre || profe?.titulo}<br/>{fmt(fecha)} — {horaInicio} → {horaInicio ? t2str(tmins(horaInicio)+duracionSlots*30) : ""} ({duracion} hs)</p>
+      <p style={{margin:0,color:"#64748b",fontSize:15,lineHeight:1.6}}>
+        {materia} con {nombreProfeElegido}<br/>
+        {fecha ? fmtLarga(fecha) : ""} — {horaInicio} → {horaInicio ? t2str(tmins(horaInicio) + duracionHoras * 60) : ""} ({duracionHoras} hs)
+      </p>
       <Badge bg="#dcfce7" col="#15803d">-{costo} hs descontadas de tu saldo</Badge>
-      <Btn onClick={()=>{setPaso(1);setProfeId(null);setMateria("");setModalidad("");setFecha(null);setHoraInicio(null);setDuracionSlots(2);setNecesidad("");setTipo("individual");setNombreProfeElegido("");}}>
-        Reservar otra clase
-      </Btn>
+      <Btn onClick={() => {
+        setPaso(1); setProfeId(null); setMateria(""); setTipo("individual"); setModalidad("Presencial");
+        setFecha(null); setHoraInicio(null); setDuracionHoras(1); setNecesidad(""); setNombreProfeElegido("");
+        setAceptaCancelacion(false);
+      }}>Reservar otra clase</Btn>
     </div>
   );
 
   return (
     <div style={{display:"flex",flexDirection:"column",gap:16}}>
-      {/* Banner reserva recurrente — oculto hasta implementar (F5/F6) */}
-      {false && <button onClick={()=>setModalRecurrenteAlumno(true)}
-        style={{background:"#f0f6fa",border:"1.5px solid #a8d4e8",borderRadius:14,padding:"12px 16px",cursor:"pointer",textAlign:"left",display:"flex",alignItems:"center",gap:12}}>
-        <span style={{fontSize:24}}>🔄</span>
-        <div style={{flex:1}}>
-          <p style={{margin:0,fontWeight:700,fontSize:13,color:BL}}>¿Siempre el mismo día y hora?</p>
-          <p style={{margin:"2px 0 0",fontSize:12,color:"#64748b"}}>Configurá una reserva recurrente semanal →</p>
-        </div>
-      </button>}
-      {false && modalRecurrenteAlumno && (
-        <ModalRecurrenteAlumno
-          profes={profes}
-          onConfirmar={(datos)=>{ console.log("Recurrente:", datos); }}
-          onCerrar={()=>setModalRecurrenteAlumno(false)}
-        />
-      )}
-      {/* Progreso */}
+      {/* Barra de progreso */}
       <div style={{display:"flex",alignItems:"center",gap:10}}>
         <div style={{display:"flex",gap:4,flex:1}}>
-          {[1,2,3,4,5].map(n=>(
-            <div key={n} style={{flex:1,height:4,borderRadius:99,background:n<=pasoDisplay?PRIMARY:"#e2e8f0",transition:"background 0.3s"}}/>
+          {Array.from({length: TOTAL_PASOS}, (_, i) => (
+            <div key={i} style={{flex:1,height:4,borderRadius:99,background:i < paso ? PRIMARY : "#e2e8f0",transition:"background 0.3s"}}/>
           ))}
         </div>
-        <span style={{fontSize:13,color:INK_SOFT,fontWeight:600,whiteSpace:"nowrap"}}>Paso {pasoDisplay} de 5</span>
+        <span style={{fontSize:13,color:INK_SOFT,fontWeight:600,whiteSpace:"nowrap"}}>Paso {paso} de {TOTAL_PASOS}</span>
       </div>
 
-      {/* PASO 1: Materia */}
-      {paso===1 && (
+      {/* P1: Materia */}
+      {paso === 1 && (
         <div style={{display:"flex",flexDirection:"column",gap:14}}>
           <h3 style={{margin:0,color:DK}}>¿Qué materia necesitás?</h3>
           {!profes ? (
-            <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
-              {[90,70,110,85,75,95].map((w,i)=>(
-                <div key={i} style={{width:w,height:42,borderRadius:99,background:"#e2e8f0",opacity:0.7}}/>
-              ))}
-            </div>
-          ) : materiasUnicas.length===0 ? (
-            <p style={{color:"#64748b",textAlign:"center",padding:20}}>No hay materias disponibles.</p>
+            <p style={{color:"#94a3b8",fontSize:13}}>Cargando materias...</p>
           ) : (
-            <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
-              {materiasUnicas.map(m=>(
-                <button key={m} onClick={()=>setMateria(m)}
-                  style={{
-                    background:materia===m?P:"#fff",
-                    color:materia===m?"#fff":P,
-                    border:`2px solid ${P}`,
-                    borderRadius:99,
-                    padding:"10px 18px",
-                    fontSize:14,
-                    fontWeight:700,
-                    cursor:"pointer",
-                    transition:"all 0.15s",
-                  }}>
+            <div style={{display:"flex",flexDirection:"column",gap:8}}>
+              {materiasUnicas.map(m => (
+                <button key={m} onClick={() => { setMateria(m); setPaso(2); }}
+                  style={{background:materia===m?PRIMARY:"#fff",color:materia===m?"#fff":DK,border:`2px solid ${materia===m?PRIMARY:"#e2e8f0"}`,borderRadius:12,padding:"14px 18px",fontSize:15,fontWeight:600,cursor:"pointer",textAlign:"left",transition:"all 0.15s"}}>
                   {m}
                 </button>
               ))}
             </div>
           )}
-          <Btn onClick={()=>setPaso(2)} disabled={!materia}>Continuar →</Btn>
+          <Btn onClick={() => onNav?.("inicio")} variant="secondary">← Volver al inicio</Btn>
         </div>
       )}
 
-      {/* PASO 2: Profe para esa materia */}
-      {paso===2 && (
+      {/* P2: Tipo de clase */}
+      {paso === 2 && (
         <div style={{display:"flex",flexDirection:"column",gap:14}}>
-          <button onClick={()=>{setPaso(1);setProfeId(null);setModalidad("");}}
-            style={{background:"none",border:"none",cursor:"pointer",textAlign:"left",fontSize:14,color:P,fontWeight:700,padding:0}}>
-            ← Cambiar materia
+          <h3 style={{margin:0,color:DK}}>¿Cómo querés la clase?</h3>
+          <button onClick={() => { setTipo("individual"); setPaso(3); }}
+            style={{background:"#fff",border:`2px solid ${tipo==="individual"?PRIMARY:"#e2e8f0"}`,borderRadius:14,padding:18,cursor:"pointer",textAlign:"left",display:"flex",gap:14,alignItems:"flex-start"}}>
+            <span style={{fontSize:28}}>👤</span>
+            <div>
+              <p style={{margin:0,fontWeight:700,fontSize:15,color:DK}}>Individual</p>
+              <p style={{margin:"4px 0 0",fontSize:13,color:INK_SOFT}}>La clase es solo para vos. Usás 1 hora de tu saldo por hora de clase.</p>
+            </div>
           </button>
-          <h3 style={{margin:0,color:DK}}>Elegí tu profe de {materia}</h3>
-          {profesParaMateria.length===0 ? (
-            <Card>
-              <p style={{margin:"0 0 12px",color:"#64748b",textAlign:"center",fontSize:14}}>
-                No hay profes disponibles para <strong>{materia}</strong> en este momento.
-              </p>
-              <Btn onClick={()=>setPaso(1)} variant="secondary">← Elegir otra materia</Btn>
-            </Card>
-          ) : profesParaMateria.map(p=>{
-            const nombreProfe = p.nombre || p.titulo || "";
-            const initials = nombreProfe.split(" ").map(n=>n[0]).join("").slice(0,2).toUpperCase() || "P";
-            const modalidades = p.modalidad || p.modalidades || ["Presencial","Virtual"];
-            const modalText = modalidades.length===1 ? modalidades[0] : "Presencial y Virtual";
-            return (
-              <div key={p.id} style={{
-                border:`2px solid #e2e8f0`,
-                borderRadius:16,
-                padding:16,
-                background:"#fff",
-                boxShadow:"0 1px 6px rgba(0,0,0,0.04)",
-              }}>
-                <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:12}}>
-                  <Av i={initials} color={P} size={48}/>
-                  <div style={{flex:1}}>
-                    <p style={{margin:0,fontWeight:800,fontSize:15,color:DK}}>{nombreProfe}</p>
-                    <p style={{margin:"2px 0 6px",fontSize:12,color:"#64748b"}}>{modalText}</p>
-                    <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
-                      {(p.materias||[]).map(m=>(
-                        <span key={m} style={{
-                          background:m===materia?P:"#f1f5f9",
-                          color:m===materia?"#fff":"#64748b",
-                          borderRadius:99,
-                          padding:"3px 10px",
-                          fontSize:11,
-                          fontWeight:600,
-                        }}>{m}</span>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-                <Btn onClick={()=>{
-                  setProfeId(p.id);
-                  setNombreProfeElegido(nombreProfe);
-                  setModalidad(modalidades[0]);
-                  setFecha(null);
-                  setHoraInicio(null);
-                  setDuracionSlots(2);
-                  setPaso(3);
-                }}>
-                  Reservar con {nombreProfe.split(" ")[0]} →
-                </Btn>
+          <button onClick={() => { setTipo("grupal"); setPaso(3); }}
+            style={{background:"#fff",border:`2px solid ${tipo==="grupal"?"#15803d":"#e2e8f0"}`,borderRadius:14,padding:18,cursor:"pointer",textAlign:"left",display:"flex",gap:14,alignItems:"flex-start",position:"relative"}}>
+            <span style={{position:"absolute",top:-8,right:12,background:"#15803d",color:"#fff",fontSize:10,fontWeight:700,borderRadius:99,padding:"2px 8px"}}>{CFG.packs?.[CFG.packs.length-1]?.descuento ?? 20}% OFF</span>
+            <span style={{fontSize:28}}>👥</span>
+            <div>
+              <p style={{margin:0,fontWeight:700,fontSize:15,color:DK}}>Grupal</p>
+              <p style={{margin:"4px 0 0",fontSize:13,color:INK_SOFT}}>Compartís la clase con otros alumnos. 20% más barata en saldo.</p>
+            </div>
+          </button>
+          <Btn onClick={() => setPaso(1)} variant="secondary">← Volver</Btn>
+        </div>
+      )}
+
+      {/* P3: Modalidad */}
+      {paso === 3 && (
+        <div style={{display:"flex",flexDirection:"column",gap:14}}>
+          <h3 style={{margin:0,color:DK}}>¿Presencial o virtual?</h3>
+          <button onClick={() => { setModalidad("Presencial"); setPaso(4); }}
+            style={{background:"#fff",border:`2px solid ${modalidad==="Presencial"?PRIMARY:"#e2e8f0"}`,borderRadius:14,padding:18,cursor:"pointer",textAlign:"left",display:"flex",gap:14,alignItems:"flex-start"}}>
+            <span style={{fontSize:28}}>🏫</span>
+            <div>
+              <p style={{margin:0,fontWeight:700,fontSize:15,color:DK}}>Presencial</p>
+              <p style={{margin:"4px 0 0",fontSize:13,color:INK_SOFT}}>En el domicilio del profe. Individual o grupal.</p>
+            </div>
+          </button>
+          {tipo !== "grupal" && (
+            <button onClick={() => { setModalidad("Virtual"); setPaso(4); }}
+              style={{background:"#fff",border:`2px solid ${modalidad==="Virtual"?PRIMARY:"#e2e8f0"}`,borderRadius:14,padding:18,cursor:"pointer",textAlign:"left",display:"flex",gap:14,alignItems:"flex-start"}}>
+              <span style={{fontSize:28}}>💻</span>
+              <div>
+                <p style={{margin:0,fontWeight:700,fontSize:15,color:DK}}>Virtual</p>
+                <p style={{margin:"4px 0 0",fontSize:13,color:INK_SOFT}}>Por videollamada. Solo para clases individuales.</p>
               </div>
+            </button>
+          )}
+          {tipo === "grupal" && (
+            <p style={{margin:0,fontSize:12,color:INK_SOFT}}>ℹ️ Las clases grupales son siempre presenciales.</p>
+          )}
+          <Btn onClick={() => setPaso(2)} variant="secondary">← Volver</Btn>
+        </div>
+      )}
+
+      {/* P4: Profe */}
+      {paso === 4 && (
+        <div style={{display:"flex",flexDirection:"column",gap:14}}>
+          <h3 style={{margin:0,color:DK}}>¿Con qué profe?</h3>
+          {profesParaMateria.length === 0 && (
+            <p style={{color:"#94a3b8",fontSize:13}}>No hay profes para {materia}.</p>
+          )}
+          {profesParaMateria.map(p => {
+            const modalidades = (p.modalidades || ["Presencial"]);
+            return (
+              <button key={p.id} onClick={() => {
+                setProfeId(p.id);
+                setNombreProfeElegido(p.nombre || p.titulo || "");
+                setFecha(null); setHoraInicio(null); setDuracionHoras(1);
+                setPaso(5);
+              }}
+                style={{background:"#fff",border:`2px solid ${profeId===p.id?PRIMARY:"#e2e8f0"}`,borderRadius:14,padding:16,cursor:"pointer",textAlign:"left",display:"flex",gap:12,alignItems:"center"}}>
+                {p.avatar_url
+                  ? <img src={p.avatar_url} alt="" style={{width:44,height:44,borderRadius:"50%",objectFit:"cover",flexShrink:0}}/>
+                  : <div style={{width:44,height:44,borderRadius:"50%",background:PRIMARY,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:700,fontSize:18,flexShrink:0}}>{(p.nombre||p.titulo||"P")[0]}</div>
+                }
+                <div style={{flex:1,minWidth:0}}>
+                  <p style={{margin:0,fontWeight:700,fontSize:15,color:DK}}>{p.nombre || p.titulo}</p>
+                  <p style={{margin:"2px 0 0",fontSize:12,color:INK_SOFT}}>{modalidades.join(" · ")}</p>
+                </div>
+                <span style={{fontSize:18,color:INK_SOFT}}>›</span>
+              </button>
             );
           })}
+          <Btn onClick={() => setPaso(3)} variant="secondary">← Volver</Btn>
         </div>
       )}
 
-      {/* PASO 3: Calendario */}
-      {paso===3 && (
+      {/* P5: Día */}
+      {paso === 5 && (
         <div style={{display:"flex",flexDirection:"column",gap:14}}>
           <div style={{background:PL,border:`1.5px solid ${PB}`,borderRadius:12,padding:"10px 14px"}}>
             <p style={{margin:0,fontSize:13,color:P,fontWeight:600}}>
-              {materia} · con {(nombreProfeElegido || profe?.nombre || profe?.titulo || "el profe").split(" ")[0]}
+              {materia} · {tipo} · {modalidad} · con {nombreProfeElegido.split(" ")[0]}
             </p>
           </div>
-          <h3 style={{margin:0,color:DK}}>Elegí el día</h3>
-          <Card style={{padding:16}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-              <button onClick={()=>setMes(m=>Math.max(m-1,0))} style={{background:"none",border:"none",fontSize:22,cursor:"pointer",color:P}}>‹</button>
-              <span style={{fontWeight:700,fontSize:15,color:DK}}>{MESES[mes]} {year}</span>
-              <button onClick={()=>setMes(m=>Math.min(m+1,11))} style={{background:"none",border:"none",fontSize:22,cursor:"pointer",color:P}}>›</button>
+          <h3 style={{margin:0,color:DK}}>¿Qué día?</h3>
+          {disponRaw.length === 0 ? (
+            <p style={{color:"#94a3b8",fontSize:13}}>Cargando disponibilidad...</p>
+          ) : fechasDisponibles.length === 0 ? (
+            <p style={{color:"#94a3b8",fontSize:13}}>No hay días disponibles por el momento.</p>
+          ) : (
+            <div style={{display:"flex",flexDirection:"column",gap:8}}>
+              {fechasDisponibles.map(f => (
+                <button key={f} onClick={() => { setFecha(f); setPaso(6); }}
+                  style={{background:fecha===f?PRIMARY:"#fff",color:fecha===f?"#fff":DK,border:`2px solid ${fecha===f?PRIMARY:"#e2e8f0"}`,borderRadius:12,padding:"14px 18px",fontSize:14,fontWeight:600,cursor:"pointer",textAlign:"left",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <span>{fmtLarga(f)}</span>
+                  <span style={{fontSize:12,opacity:0.7}}>›</span>
+                </button>
+              ))}
             </div>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:4,textAlign:"center"}}>
-              {DIAS.map(d=><div key={d} style={{fontSize:11,color:"#94a3b8",fontWeight:600,paddingBottom:4}}>{d}</div>)}
-              {Array(primerDia(year,mes)).fill(null).map((_,i)=><div key={`e${i}`}/>)}
-              {Array(diasEnMes(year,mes)).fill(null).map((_,i)=>{
-                const d=i+1, iso=toISO(year,mes,d), sel=fecha===iso;
-                const bloqDia = Object.entries(dispon[iso]||{})
-                  .filter(([h,t]) => t==="ambas" || t===tipo);
-                const tiene = bloqDia.length > 0;
-                const hoy = toISO(new Date().getFullYear(), new Date().getMonth(), new Date().getDate());
-                const esPasado = iso < hoy;
-                const disponible = tiene && !esPasado;
+          )}
+          <Btn onClick={() => setPaso(4)} variant="secondary">← Volver</Btn>
+        </div>
+      )}
+
+      {/* P6: Hora */}
+      {paso === 6 && (
+        <div style={{display:"flex",flexDirection:"column",gap:14}}>
+          <div style={{background:PL,border:`1.5px solid ${PB}`,borderRadius:12,padding:"10px 14px"}}>
+            <p style={{margin:0,fontSize:13,color:P,fontWeight:600}}>
+              {fecha ? fmtLarga(fecha) : ""} · {nombreProfeElegido.split(" ")[0]}
+            </p>
+          </div>
+          <h3 style={{margin:0,color:DK}}>¿A qué hora?</h3>
+          {horariosDisponibles.length === 0 ? (
+            <div style={{display:"flex",flexDirection:"column",gap:12,padding:"16px 0"}}>
+              <p style={{margin:0,color:"#94a3b8",fontSize:14,textAlign:"center"}}>No hay horarios disponibles para este día.</p>
+              <div style={{display:"flex",gap:8}}>
+                <Btn onClick={() => { setFecha(null); setPaso(5); }} variant="secondary" style={{flex:1}}>← Elegir otro día</Btn>
+              </div>
+            </div>
+          ) : (
+            <div style={{display:"flex",flexDirection:"column",gap:8}}>
+              {horariosDisponibles.map(h => {
+                const maxH = slotsCons(h);
+                const sel = horaInicio === h;
                 return (
-                  <button key={d} disabled={!disponible} onClick={()=>setFecha(iso)}
-                    style={{aspectRatio:"1",borderRadius:8,border:sel?`2px solid ${P}`:"none",background:sel?P:disponible?PL:"transparent",color:sel?"#fff":disponible?P:"#cbd5e1",fontSize:13,fontWeight:disponible?700:400,cursor:disponible?"pointer":"default"}}>
-                    {d}
-                  </button>
+                  <div key={h}>
+                    <button onClick={() => { setHoraInicio(sel ? null : h); setDuracionHoras(1); }}
+                      style={{width:"100%",background:sel?PRIMARY:"#fff",color:sel?"#fff":DK,border:`2px solid ${sel?PRIMARY:"#e2e8f0"}`,borderRadius:12,padding:"14px 18px",fontSize:14,fontWeight:600,cursor:"pointer",textAlign:"left",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                      <span>{h} hs</span>
+                      <span style={{fontSize:12,opacity:0.7}}>{sel ? "▼" : "›"}</span>
+                    </button>
+                    {sel && (
+                      <Card style={{background:"#f8fafc",border:`1.5px solid ${PB}`,padding:14,marginTop:4}}>
+                        <p style={{margin:"0 0 10px",fontWeight:700,fontSize:13,color:DK}}>¿Cuánto tiempo?</p>
+                        <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                          {Array.from({length: Math.min(maxH, 4)}, (_, i) => i + 1).map(n => (
+                            <button key={n} onClick={() => setDuracionHoras(n)}
+                              style={{padding:"10px 18px",borderRadius:10,fontWeight:700,fontSize:14,cursor:"pointer",
+                                border:duracionHoras===n?`2px solid ${PRIMARY}`:`2px solid #e2e8f0`,
+                                background:duracionHoras===n?PRIMARY:"#fff",
+                                color:duracionHoras===n?"#fff":DK}}>
+                              {n}h
+                            </button>
+                          ))}
+                        </div>
+                        <p style={{margin:"10px 0 0",fontSize:13,color:INK_SOFT}}>
+                          {h} → {t2str(tmins(h) + duracionHoras * 60)} · <strong>{costo} hs</strong> de saldo
+                        </p>
+                      </Card>
+                    )}
+                  </div>
                 );
               })}
             </div>
-          </Card>
-          <p style={{margin:0,fontSize:12,color:"#94a3b8",textAlign:"center"}}>Los días resaltados tienen horarios disponibles</p>
-          <div style={{display:"flex",gap:8}}>
-            <Btn onClick={()=>setPaso(2)} variant="secondary" style={{flex:1}}>← Volver</Btn>
-            <Btn onClick={()=>setPaso(4)} disabled={!fecha} style={{flex:2}}>Continuar →</Btn>
-          </div>
-        </div>
-      )}
-
-      {/* PASO 4: Selector de bloques horarios */}
-      {paso===4 && (
-        <div style={{display:"flex",flexDirection:"column",gap:16}}>
-          <div style={{background:PL,border:`1.5px solid ${PB}`,borderRadius:12,padding:"10px 14px"}}>
-            <p style={{margin:0,fontSize:13,color:P,fontWeight:600}}>
-              {materia} · con {(nombreProfeElegido || profe?.nombre || profe?.titulo || "el profe").split(" ")[0]}
-            </p>
-          </div>
-          <div>
-            <h3 style={{margin:"0 0 4px",color:DK}}>Elegí horario y duración</h3>
-            <p style={{margin:0,fontSize:13,color:"#64748b"}}>{fmt(fecha)} — tocá un slot para elegir inicio (mín 1h)</p>
-          </div>
-
-          {/* Leyenda */}
-          <div style={{display:"flex",gap:14,fontSize:12,color:"#64748b",flexWrap:"wrap"}}>
-            <div style={{display:"flex",alignItems:"center",gap:6}}>
-              <div style={{width:16,height:16,borderRadius:4,background:P}}/>
-              <span>Rango elegido</span>
-            </div>
-            <div style={{display:"flex",alignItems:"center",gap:6}}>
-              <div style={{width:16,height:16,borderRadius:4,background:PL,border:`1.5px solid ${PB}`}}/>
-              <span>Disponible</span>
-            </div>
-            <div style={{display:"flex",alignItems:"center",gap:6}}>
-              <div style={{width:16,height:16,borderRadius:4,background:"#f8fafc",border:"1.5px solid #e2e8f0"}}/>
-              <span>No disponible</span>
-            </div>
-          </div>
-
-          {/* Grilla de slots: clic elige inicio; el rango seleccionado se pinta en azul */}
-          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6}}>
-            {HORAS_DIA.map(h => {
-              const disp = bloquesDelDia.includes(h);
-              const ocup = slotOcupado(h);
-              const inRange = horaInicio
-                ? (tmins(h) >= tmins(horaInicio) && tmins(h) < tmins(horaInicio) + duracionSlots*30)
-                : false;
-              const canStart = disp && !ocup && slotsCons(h) >= 2;
-              const isStart = h === horaInicio;
-              const bg = inRange ? P : canStart ? PL : "#f8fafc";
-              const bord = inRange ? `2px solid ${P}` : canStart ? `2px solid ${PB}` : "2px solid #e2e8f0";
-              const col = inRange ? "#fff" : canStart ? P : "#cbd5e1";
-              return (
-                <button key={h}
-                  onClick={() => {
-                    if (isStart) { setHoraInicio(null); setDuracionSlots(2); }
-                    else if (canStart) { setHoraInicio(h); setDuracionSlots(2); }
-                  }}
-                  disabled={!canStart && !isStart}
-                  style={{padding:"10px 0",borderRadius:12,border:bord,background:bg,color:col,fontWeight:700,fontSize:13,cursor:(canStart||isStart)?"pointer":"not-allowed",display:"flex",flexDirection:"column",alignItems:"center",gap:4,transition:"all 0.15s"}}>
-                  {inRange
-                    ? <span style={{fontSize:10,opacity:0.9}}>✓</span>
-                    : canStart ? <span style={{fontSize:10}}>{(dispon[fecha]||{})[h]==="ambas"?"✦":"·"}</span>
-                    : null}
-                  {h}
-                  {disp && ocup && <span style={{fontSize:9,color:"#94a3b8",fontWeight:400}}>ocupado</span>}
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Selector de duración — aparece tras elegir inicio */}
+          )}
           {horaInicio && (
-            <Card style={{background:PL,border:`1.5px solid ${PB}`,padding:14}}>
-              <p style={{margin:"0 0 10px",fontWeight:700,fontSize:13,color:DK}}>
-                Inicio: <strong>{horaInicio}</strong> — ¿Cuánto tiempo?
-              </p>
-              <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:10}}>
-                {Array.from({length: Math.min(slotsCons(horaInicio)-1, 8)}, (_,i) => i+2).map(s => (
-                  <button key={s} onClick={()=>setDuracionSlots(s)}
-                    style={{padding:"8px 14px",borderRadius:10,fontWeight:700,fontSize:13,cursor:"pointer",
-                      border:duracionSlots===s?`2px solid ${P}`:`2px solid #e2e8f0`,
-                      background:duracionSlots===s?P:"#fff",
-                      color:duracionSlots===s?"#fff":DK}}>
-                    {s*0.5}h
-                  </button>
-                ))}
-              </div>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                <p style={{margin:0,fontSize:13,color:"#64748b"}}>
-                  {horaInicio} → {t2str(tmins(horaInicio)+duracionSlots*30)}
-                </p>
-                <div style={{textAlign:"right"}}>
-                  <p style={{margin:0,fontSize:20,fontWeight:800,color:P}}>{costo} hs</p>
-                  <p style={{margin:"2px 0 0",fontSize:11,color:"#64748b"}}>de tu saldo</p>
-                </div>
-              </div>
-            </Card>
+            <Btn onClick={() => setPaso(7)} disabled={!horaInicio}>Continuar →</Btn>
           )}
-
-          {/* Tipo de clase — las clases virtuales son solo individuales */}
-          <p style={{margin:"4px 0 0",fontWeight:600,color:DK,fontSize:14}}>Tipo de clase:</p>
-          <div style={{display:"grid",gridTemplateColumns:modalidad==="Virtual"?"1fr":"1fr 1fr",gap:10}}>
-            {/* INDIVIDUAL */}
-            <button onClick={()=>setTipo("individual")}
-              style={{background:tipo==="individual"?PL:"#fff",border:`2px solid ${tipo==="individual"?P:"#e2e8f0"}`,borderRadius:12,padding:"14px",cursor:"pointer",textAlign:"left"}}>
-              <div style={{fontSize:22}}>👤</div>
-              <div style={{fontWeight:700,fontSize:14,color:DK,marginTop:4}}>Individual</div>
-              <div style={{fontSize:12,color:P,fontWeight:600}}>{horaInicio ? duracion : "—"} hs de saldo</div>
-              <div style={{fontSize:11,color:"#94a3b8"}}>{horaInicio ? `$${(duracion*CFG.precioInd).toLocaleString("es-AR")}` : "—"}</div>
-            </button>
-            {/* GRUPAL — solo presencial */}
-            {modalidad!=="Virtual" && (
-            <button onClick={()=>setTipo("grupal")}
-              style={{background:tipo==="grupal"?"#f0fdf4":"#fff",border:`2px solid ${tipo==="grupal"?"#15803d":"#e2e8f0"}`,borderRadius:12,padding:"14px",cursor:"pointer",textAlign:"left",position:"relative"}}>
-              <span style={{position:"absolute",top:-8,right:8,background:"#15803d",color:"#fff",fontSize:10,fontWeight:700,borderRadius:99,padding:"2px 8px"}}>{CFG.packs[CFG.packs.length-1].descuento}% OFF</span>
-              <div style={{fontSize:22}}>👥</div>
-              <div style={{fontWeight:700,fontSize:14,color:DK,marginTop:4}}>Grupal</div>
-              <div style={{fontSize:12,color:"#15803d",fontWeight:600}}>{horaInicio ? costo : "—"} hs de saldo</div>
-              <div style={{fontSize:11,color:"#94a3b8"}}>{horaInicio ? `$${(costo*CFG.precioInd).toLocaleString("es-AR")} · ahorrás $${((duracion-costo)*CFG.precioInd).toLocaleString("es-AR")}` : "—"}</div>
-            </button>
-            )}
-          </div>
-          {modalidad==="Virtual" && (
-            <p style={{margin:"2px 0 0",fontSize:12,color:"#64748b"}}>ℹ️ Las clases virtuales son siempre individuales.</p>
-          )}
-          {/* Explicación del descuento */}
-          {tipo==="grupal" && (
-            <div style={{background:"#f0fdf4",border:"1.5px solid #bbf7d0",borderRadius:10,padding:"10px 12px"}}>
-              <p style={{margin:0,fontSize:12,color:"#15803d"}}>
-                💡 La clase grupal vale <strong>{costo} hs</strong> de saldo en lugar de <strong>{duracion} hs</strong>.
-                Pagaste ${CFG.precioInd.toLocaleString("es-AR")}/hs pero gastás menos saldo porque compartís la clase.
-              </p>
-            </div>
-          )}
-
-          <Card style={{background:"#fefce8",border:"1.5px solid #fde68a",padding:12}}>
-            <p style={{margin:0,fontSize:13,color:"#92400e"}}>⚠️ Cancelaciones con menos de 24hs pierden el 50% por hora.</p>
-          </Card>
-          <div style={{display:"flex",gap:8}}>
-            <Btn onClick={()=>setPaso(3)} variant="secondary" style={{flex:1}}>← Volver</Btn>
-            <Btn onClick={()=>setMostrarCancelacion(true)} disabled={!horaInicio} style={{flex:2}}>Continuar →</Btn>
-          </div>
-          {mostrarCancelacion && (
-            <ModalCancelacion
-              onAceptar={()=>{setMostrarCancelacion(false);setPaso(5);}}
-              onCerrar={()=>setMostrarCancelacion(false)}
-            />
-          )}
+          <Btn onClick={() => setPaso(5)} variant="secondary">← Volver</Btn>
         </div>
       )}
 
-      {/* PASO 5: Confirmar */}
-      {paso===5 && (
+      {/* P7: Notas */}
+      {paso === 7 && (
         <div style={{display:"flex",flexDirection:"column",gap:14}}>
           <h3 style={{margin:0,color:DK}}>¿Qué necesitás trabajar?</h3>
-          <p style={{margin:0,fontSize:13,color:"#64748b"}}>Contale a {(nombreProfeElegido || profe?.nombre || profe?.titulo || "el profe").split(" ")[0]} qué temas traer preparados. Cuanto más detalle, mejor la clase.</p>
-          <textarea value={necesidad} onChange={e=>setNecesidad(e.target.value)}
+          <p style={{margin:0,fontSize:13,color:INK_SOFT}}>
+            Contale a {nombreProfeElegido.split(" ")[0]} qué temas preparar. Cuanto más detalle, mejor la clase.
+          </p>
+          <textarea value={necesidad} onChange={e => setNecesidad(e.target.value)}
             placeholder="Ej: Tengo parcial de funciones cuadráticas la semana que viene y no entiendo factorización..."
-            style={{width:"100%",minHeight:120,borderRadius:12,border:`2px solid ${necesidad?P:"#e2e8f0"}`,padding:14,fontSize:14,fontFamily:"inherit",resize:"vertical",boxSizing:"border-box",outline:"none",transition:"border 0.2s"}}/>
+            style={{width:"100%",minHeight:100,borderRadius:12,border:`2px solid ${necesidad?PRIMARY:"#e2e8f0"}`,padding:14,fontSize:14,fontFamily:"inherit",resize:"vertical",boxSizing:"border-box",outline:"none",transition:"border 0.2s"}}/>
+          <p style={{margin:0,fontSize:12,color:INK_SOFT}}>Podés saltear este paso si no sabés qué poner.</p>
+          <div style={{display:"flex",gap:8}}>
+            <Btn onClick={() => setPaso(6)} variant="secondary" style={{flex:1}}>← Volver</Btn>
+            <Btn onClick={() => setPaso(8)} style={{flex:2}}>Continuar →</Btn>
+          </div>
+        </div>
+      )}
+
+      {/* P8: Confirmar */}
+      {paso === 8 && (
+        <div style={{display:"flex",flexDirection:"column",gap:14}}>
+          <h3 style={{margin:0,color:DK}}>Confirmá tu reserva</h3>
           <Card style={{background:"#f0fdf4",border:"1.5px solid #bbf7d0",padding:14}}>
-            <p style={{margin:"0 0 8px",fontWeight:700,fontSize:13,color:"#166534"}}>Resumen de tu reserva</p>
-            <div style={{display:"flex",flexDirection:"column",gap:4,fontSize:13,color:"#374151"}}>
-              <span>👨‍🏫 {nombreProfeElegido || profe?.nombre || profe?.titulo || "—"} — {materia}</span>
-              <span>📅 {fmt(fecha)} — {horaInicio} → {horaInicio ? t2str(tmins(horaInicio)+duracionSlots*30) : ""} ({duracion} hs)</span>
+            <p style={{margin:"0 0 10px",fontWeight:700,fontSize:13,color:"#166534"}}>Resumen</p>
+            <div style={{display:"flex",flexDirection:"column",gap:6,fontSize:14,color:"#374151"}}>
+              <span>👨‍🏫 {nombreProfeElegido} — {materia}</span>
+              <span>📅 {fecha ? fmtLarga(fecha) : ""}</span>
+              <span>🕐 {horaInicio} → {horaInicio ? t2str(tmins(horaInicio) + duracionHoras * 60) : ""} ({duracionHoras} hs)</span>
               <span>📍 {modalidad} · Clase {tipo}</span>
-              <span>⏱ Se descuentan <strong>{costo} hs</strong> de tu saldo</span>
+              <span style={{fontWeight:700,color:P}}>⏱ Se descuentan {costo} hs de tu saldo</span>
             </div>
           </Card>
+          <Card style={{background:"#fefce8",border:"1.5px solid #fde68a",padding:12}}>
+            <p style={{margin:"0 0 8px",fontSize:13,color:"#92400e",fontWeight:600}}>Política de cancelación</p>
+            <p style={{margin:0,fontSize:13,color:"#92400e"}}>Cancelaciones con menos de 24hs de anticipación pierden el 50% del costo de la clase.</p>
+          </Card>
+          <label style={{display:"flex",alignItems:"flex-start",gap:10,cursor:"pointer",fontSize:13,color:DK}}>
+            <input type="checkbox" checked={aceptaCancelacion} onChange={e => setAceptaCancelacion(e.target.checked)}
+              style={{marginTop:2,width:16,height:16,cursor:"pointer",accentColor:PRIMARY}}/>
+            Entendí la política de cancelación
+          </label>
           {saldoInsuficiente && (
             <div style={{background:"#fff5f5",border:"1.5px solid #fecaca",borderRadius:12,padding:"10px 14px",fontSize:13,color:"#dc2626"}}>
-              ⚠️ No te alcanza el saldo: esta reserva cuesta {costo} hs y tenés {saldo} hs. Comprá más horas para continuar.
+              ⚠️ Saldo insuficiente: esta reserva cuesta {costo} hs y tenés {saldo} hs.
             </div>
           )}
           {errorReserva && (
@@ -632,22 +577,21 @@ function Reservar({ saldo, onReservar, profes, alumnoId }) {
             </div>
           )}
           <div style={{display:"flex",gap:8}}>
-            <Btn onClick={()=>setPaso(4)} variant="secondary" style={{flex:1}}>← Volver</Btn>
-            <Btn onClick={async ()=>{
+            <Btn onClick={() => setPaso(7)} variant="secondary" style={{flex:1}}>← Volver</Btn>
+            <Btn onClick={async () => {
               setErrorReserva("");
               try {
                 const hoy = toISO(new Date().getFullYear(), new Date().getMonth(), new Date().getDate());
-                if (fecha < hoy) {
-                  setErrorReserva("No podés reservar en una fecha pasada.");
-                  return;
-                }
+                if (fecha < hoy) { setErrorReserva("No podés reservar en una fecha pasada."); return; }
                 await crearReserva({ profeId, materia, fecha, hora: horaInicio, horas: duracion, modalidad, tipo, alumnosGrupo: null, necesidad });
                 onReservar(costo);
-                setPaso(6);
+                setPaso(9);
               } catch (err) {
                 setErrorReserva(err.message || "No se pudo confirmar la reserva. Intentá de nuevo.");
               }
-            }} disabled={saldoInsuficiente} style={{flex:2}}>Confirmar reserva ✓</Btn>
+            }} disabled={saldoInsuficiente || !aceptaCancelacion} style={{flex:2}}>
+              Confirmar reserva ✓
+            </Btn>
           </div>
         </div>
       )}
@@ -1987,7 +1931,7 @@ function AppAlumno({ user, onLogout }) {
       {/* Contenido */}
       <div style={{flex:1,padding:"16px 20px 80px"}}>
         {screen==="inicio" && <Inicio onNav={setScreen} saldo={saldoDisplay} nombre={nombreAlumno} reservas={reservasAlumno} vencimiento={datosAlumno?.vencimiento} cfg={cfgLive}/>}
-        {screen==="reservar" && <Reservar profes={profesData} saldo={saldoDisplay} alumnoId={user?.id} onReservar={(costo)=>{setSaldo(s=>+(s-costo).toFixed(2));getReservasAlumno(user.id).then(r=>setReservasAlumno(r)).catch(()=>{});}}/>}
+        {screen==="reservar" && <Reservar profes={profesData} saldo={saldoDisplay} alumnoId={user?.id} cfg={cfgLive} onNav={setScreen} onReservar={(costo)=>{setSaldo(s=>+(s-costo).toFixed(2));getReservasAlumno(user.id).then(r=>setReservasAlumno(r)).catch(()=>{});}}/>}
         {screen==="historial" && (
           <Historial
             reservas={reservasAlumno}
