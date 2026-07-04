@@ -45,7 +45,7 @@ Arrancá del estado de abajo; **no re-diagnostiques lo ✅**.
 - `registrar_compra_pendiente(alumno_id, horas, precio, pack_id)` → inserta fila con `estado_pago='pendiente'`, devuelve `id BIGINT`.
 - `aprobar_compra(compra_id, payment_id)` → idempotente: si ya está `'aprobado'` devuelve saldo sin tocar nada; si no, actualiza `compras` y `alumnos` en un solo tx.
 
-## ESTADO ACTUAL — al 2026-07-02 ✅ PRODUCCIÓN LISTA
+## ESTADO ACTUAL — al 2026-07-04
 
 ✅ Pagos prod — fix definitivo (2026-07-02): causa raíz real era que MP Checkout Pro **no propaga `metadata` de la preferencia al payment**. El webhook leía `payment.metadata` → vacío → devolvía 200 silencioso → nunca acreditaba. Fix: patrón "compra pendiente en DB" (Opción B): `crear-preferencia` llama a `registrar_compra_pendiente` antes de ir a MP y usa el id numérico de DB como `external_reference`; `mp-webhook` usa `external_reference` para llamar a `aprobar_compra` (idempotente). 500 en lugar de 200 silencioso cuando algo falla (MP reintenta).
 
@@ -97,6 +97,26 @@ SELECT id, payment_id, horas, monto, estado_pago, creado_en FROM compras ORDER B
 -- Debe mostrar saldo aumentado
 SELECT p.nombre, a.saldo, a.vencimiento FROM alumnos a JOIN profiles p ON p.id = a.id WHERE a.saldo > 0;
 ```
+
+## INVARIANTES DE INTEGRIDAD (obligatorias en todas las fases)
+1. Dinero y saldo solo se mueven server-side en RPCs atómicas e idempotentes (clave: payment_id / reserva_id). El front jamás confirma pagos ni descuenta saldo.
+2. Toda reserva paga nace `'pendiente_pago'` con TTL de 30 min que retiene cupo; el webhook la confirma vía external_reference; vencida, libera cupo. Revalidar cupo al aprobar.
+3. Cupo grupal y overlap de slots se validan y descuentan DENTRO de la transacción SQL (lock), nunca en el front.
+4. La tabla `reservas` es la única fuente de verdad del calendario (alumno y profe leen de ahí, sin copias).
+5. Precios se leen de la DB también para display (nada de precios hardcodeados en el front).
+6. Al volver de MP: polling del estado real en DB (cada ~3s, mensaje "Estamos confirmando tu pago…"), no setTimeout ciego.
+7. Cancelaciones: RPC atómica idempotente con regla de 24hs (nunca devolver dos veces).
+
+Toda fase nueva se diseña para que violar estas reglas sea imposible, y agrega verificación de esto en sus criterios de aceptación.
+
+## REDISEÑO — COLA DE FASES
+- **F1 ✅ 2026-07-04**: design system accesible + fixes front (tokens CSS, flash login, ← volver, progreso real, a11y, recurrente oculto, precio desde DB). Commits `13c0307`..`969df6e`. **Local, NO pusheado** — esperando OK de David.
+- **F2 ← PRÓXIMA**: saldo simple — packs solo individual; sacar factor 0.8 del saldo.
+- **F3**: flujo de reserva nuevo — tipo temprano, romper paso 4, días como lista.
+- **F4**: agenda del alumno — tab Clases = mini-calendario + lista de cards.
+- **F5**: grupal real — tabla grupos, cupo con lock, "cuántos anotados", capturar alumnos_grupo.
+- **F6**: modelo tren — pago por clase: reserva pendiente_pago + MP external_reference=reserva_id + TTL.
+- **F7** (opcional): carrito progresivo "Agregar otra clase".
 
 ## Regla de negocio — Vencimiento de horas (fija)
 - `saldo >= 0.8 hs` cuando vence → se pierde todo (saldo = 0). La clase mínima es 0.8 hs; si tenés menos no podés reservar.
