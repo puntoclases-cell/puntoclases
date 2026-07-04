@@ -152,9 +152,9 @@ function Inicio({onNav, saldo, nombre, reservas, vencimiento, cfg}) {
         <h2 style={{margin:"0 0 14px",fontSize:22,fontWeight:700}}>¡Hola, {nombre.split(" ")[0]}! 👋</h2>
         <div style={{background:"rgba(255,255,255,0.1)",borderRadius:12,padding:"12px 16px"}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-            <div>
-              <p style={{margin:0,fontSize:13,opacity:0.8}}>Saldo de horas</p>
-              <p style={{margin:"2px 0 0",fontSize:11,opacity:0.8}}>
+            <div style={{flex:1,minWidth:0}}>
+              <p style={{margin:0,fontSize:17,opacity:0.8}}>Saldo de horas</p>
+              <p style={{margin:"2px 0 0",fontSize:16,opacity:0.8}}>
                 ≈ ${(saldo*(cfg?.precioInd ?? CFG.precioInd)).toLocaleString("es-AR")} en clases individuales
               </p>
             </div>
@@ -163,7 +163,7 @@ function Inicio({onNav, saldo, nombre, reservas, vencimiento, cfg}) {
           <div style={{background:"rgba(255,255,255,0.2)",borderRadius:99,height:6,marginBottom:6}}>
             <div style={{background:pct<=25?"#fca5a5":pct<=50?"#fde68a":"#86efac",borderRadius:99,height:6,width:`${pct}%`,transition:"width 0.6s"}}/>
           </div>
-          <div style={{display:"flex",justifyContent:"space-between",fontSize:12,opacity:0.8}}>
+          <div style={{display:"flex",justifyContent:"space-between",fontSize:16,opacity:0.8}}>
             <span>{dias === null ? "Sin fecha de vencimiento" : dias >= 0 ? `Vence en ${dias} días` : `Venció el ${fmt(vencimiento)}`}</span>
             {vencimiento && <span>{fmt(vencimiento)}</span>}
           </div>
@@ -1968,7 +1968,7 @@ function AppAlumno({ user, onLogout }) {
           <div style={{
             background:(_diasHdr??999)<=2?"#fff5f5":(_diasHdr??999)<=7?"#fefce8":PL,
             border:`1.5px solid ${(_diasHdr??999)<=2?"#fecaca":(_diasHdr??999)<=7?"#fde68a":PB}`,
-            borderRadius:99,padding:"4px 12px",fontSize:13,fontWeight:700,
+            borderRadius:99,padding:"4px 12px",fontSize:16,fontWeight:700,
             color:(_diasHdr??999)<=2?"#dc2626":(_diasHdr??999)<=7?"#92400e":P}}>
             {(_diasHdr??999)<=2?"🚨":(_diasHdr??999)<=7?"⏰":"⏱"} {saldoDisplay} hs
           </div>
