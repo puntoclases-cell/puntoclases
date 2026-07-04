@@ -791,7 +791,7 @@ function Historial({ reservas, onReprogramar, onCancelar, alumnoId, cfg }) {
 }
 
 // ── PANTALLA COMPRAR ─────────────────────────────────────────────────────────
-function Comprar({ onComprar, compras, cfg: cfgProp, packsDB }) {
+function Comprar({ onComprar, onVolver, compras, cfg: cfgProp, packsDB }) {
   const [sel, setSel] = useState(null);
   const [tab, setTab] = useState("packs"); // "packs" | "sueltas"
   const [cantSueltas, setCantSueltas] = useState(1);
@@ -839,9 +839,13 @@ function Comprar({ onComprar, compras, cfg: cfgProp, packsDB }) {
 
   return (
     <div style={{display:"flex",flexDirection:"column",gap:14}}>
+      <button onClick={onVolver} aria-label="Volver a Inicio"
+        style={{background:"none",border:"none",cursor:"pointer",padding:"4px 0",fontSize:16,color:PRIMARY,fontWeight:700,alignSelf:"flex-start",display:"flex",alignItems:"center",gap:4}}>
+        ← Volver
+      </button>
       <div>
         <h3 style={{margin:"0 0 4px",color:DK}}>Comprar horas</h3>
-        <p style={{margin:0,fontSize:13,color:"#64748b"}}>Las horas vencen a los {cfgEfectiva.vencimiento||cfgEfectiva.vencimientoDias||CFG.vencimientoDias} días desde la compra.</p>
+        <p style={{margin:0,fontSize:16,color:INK_SOFT}}>Las horas vencen a los {cfgEfectiva.vencimiento||cfgEfectiva.vencimientoDias||CFG.vencimientoDias} días desde la compra.</p>
       </div>
 
       {/* Tabs */}
@@ -1008,10 +1012,14 @@ function Comprar({ onComprar, compras, cfg: cfgProp, packsDB }) {
 }
 
 // ── PANTALLA PROFES ──────────────────────────────────────────────────────────
-function Profes({ onReservar, profes }) {
-  if (!profes) return <p style={{color:"#64748b",textAlign:"center",padding:20}}>Cargando...</p>;
+function Profes({ onReservar, onVolver, profes }) {
+  if (!profes) return <p style={{color:INK_SOFT,textAlign:"center",padding:20}}>Cargando...</p>;
   return (
     <div style={{display:"flex",flexDirection:"column",gap:14}}>
+      <button onClick={onVolver} aria-label="Volver a Inicio"
+        style={{background:"none",border:"none",cursor:"pointer",padding:"4px 0",fontSize:16,color:PRIMARY,fontWeight:700,alignSelf:"flex-start",display:"flex",alignItems:"center",gap:4}}>
+        ← Volver
+      </button>
       <h3 style={{margin:0,color:DK}}>Nuestro profe</h3>
       {profes.map(p=>{
         const nombreProfe = p.nombre || "";
@@ -1986,8 +1994,8 @@ function AppAlumno({ user, onLogout }) {
             }}
           />
         )}
-        {screen==="comprar" && <Comprar compras={comprasAlumno} cfg={cfgLive} packsDB={packsLive} onComprar={(hs)=>setSaldo(s=>+(s+hs).toFixed(2))}/>}
-        {screen==="profes" && <Profes profes={profesData} onReservar={()=>setScreen("reservar")}/>}
+        {screen==="comprar" && <Comprar compras={comprasAlumno} cfg={cfgLive} packsDB={packsLive} onComprar={(hs)=>setSaldo(s=>+(s+hs).toFixed(2))} onVolver={()=>setScreen("inicio")}/>}
+        {screen==="profes" && <Profes profes={profesData} onReservar={()=>setScreen("reservar")} onVolver={()=>setScreen("inicio")}/>}
         {screen==="perfil" && <Perfil datosAlumno={datosAlumno} reservas={reservasAlumno} compras={comprasAlumno} onLogout={onLogout} saldo={saldoDisplay} onAvatarActualizado={actualizarAvatarAlumno}/>}
         {screen==="mensajes" && <Chat reservas={reservasAlumno} userId={user?.id}/>}
       </div>
