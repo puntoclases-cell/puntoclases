@@ -110,12 +110,12 @@ SELECT p.nombre, a.saldo, a.vencimiento FROM alumnos a JOIN profiles p ON p.id =
 Toda fase nueva se diseña para que violar estas reglas sea imposible, y agrega verificación de esto en sus criterios de aceptación.
 
 ## REDISEÑO — COLA DE FASES
-- **F1 ✅ 2026-07-04**: design system accesible + fixes front (tokens CSS, flash login, ← volver, progreso real, a11y, recurrente oculto, precio desde DB). Commits `13c0307`..`969df6e`. **Local, NO pusheado** — esperando OK de David.
-- **F2 ← PRÓXIMA**: saldo simple — packs solo individual; sacar factor 0.8 del saldo.
-- **F3**: flujo de reserva nuevo — tipo temprano, romper paso 4, días como lista.
+- **F1 ✅ 2026-07-04**: design system accesible + fixes front (tokens CSS, flash login, ← volver, progreso real, a11y, recurrente oculto, precio desde DB). Commits `13c0307`..`439bb62`. En prod.
+- **F1.1 ✅ 2026-07-04**: hotfix 5 textos <16px (header badge ⏱, card saldo Inicio). Commit `470f2f9`.
+- **F3 ← PRÓXIMA**: flujo de reserva nuevo (front-only, sin tocar DB/RPCs/pagos) — inicio jerárquico (1 CTA primario), wizard 7 pasos (tipo temprano, días como lista + mini-cal, hora como lista, duración como chips), saldo gate al inicio, cancelación integrada en confirmar, count anotados en grupal (read-only).
 - **F4**: agenda del alumno — tab Clases = mini-calendario + lista de cards.
 - **F5**: grupal real — tabla grupos, cupo con lock, "cuántos anotados", capturar alumnos_grupo.
-- **F6**: modelo tren — pago por clase: reserva pendiente_pago + MP external_reference=reserva_id + TTL.
+- **F6**: modelo tren + saldo simple — pago por clase (reserva pendiente_pago + MP + TTL); absorbe F2 (packs solo individual, sacar factor 0.8 del saldo).
 - **F7** (opcional): carrito progresivo "Agregar otra clase".
 
 ## Regla de negocio — Vencimiento de horas (fija)
