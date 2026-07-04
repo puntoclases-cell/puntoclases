@@ -295,7 +295,7 @@ function Reservar({ saldo, onReservar, profes, alumnoId, onNav, cfg }) {
   const TOTAL_PASOS = 8;
 
   const MESES_ES = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
-  const DIAS_ES = ["Dom","Lun","Mar","Mié","Jue","Vie","Sáb"];
+  const DIAS_ES = ["Domingo","Lunes","Martes","Miércoles","Jueves","Viernes","Sábado"];
   const fmtLarga = fechaStr => {
     const [y, m, d] = fechaStr.split('-').map(Number);
     const date = new Date(y, m - 1, d);
@@ -308,9 +308,9 @@ function Reservar({ saldo, onReservar, profes, alumnoId, onNav, cfg }) {
       <h2 style={{margin:0,color:DK,fontSize:22}}>¡Clase reservada!</h2>
       <p style={{margin:0,color:"#64748b",fontSize:15,lineHeight:1.6}}>
         {materia} con {nombreProfeElegido}<br/>
-        {fecha ? fmtLarga(fecha) : ""} — {horaInicio} → {horaInicio ? t2str(tmins(horaInicio) + duracionHoras * 60) : ""} ({duracionHoras} hs)
+        {fecha ? fmtLarga(fecha) : ""} — {horaInicio} → {horaInicio ? t2str(tmins(horaInicio) + duracionHoras * 60) : ""} ({duracionHoras} hora{duracionHoras===1?"":"s"})
       </p>
-      <Badge bg="#dcfce7" col="#15803d">-{costo} hs descontadas de tu saldo</Badge>
+      <Badge bg="#dcfce7" col="#15803d">-{costo} hora{costo===1?"":"s"} descontada{costo===1?"":"s"} de tu saldo</Badge>
       <Btn onClick={() => {
         setPaso(1); setProfeId(null); setMateria(""); setTipo("individual"); setModalidad("Presencial");
         setFecha(null); setHoraInicio(null); setDuracionHoras(1); setNecesidad(""); setNombreProfeElegido("");
@@ -452,14 +452,45 @@ function Reservar({ saldo, onReservar, profes, alumnoId, onNav, cfg }) {
           ) : fechasDisponibles.length === 0 ? (
             <p style={{color:"#94a3b8",fontSize:13}}>No hay días disponibles por el momento.</p>
           ) : (
-            <div style={{display:"flex",flexDirection:"column",gap:8}}>
-              {fechasDisponibles.map(f => (
-                <button key={f} onClick={() => { setFecha(f); setPaso(6); }}
-                  style={{background:fecha===f?PRIMARY:"#fff",color:fecha===f?"#fff":DK,border:`2px solid ${fecha===f?PRIMARY:"#e2e8f0"}`,borderRadius:12,padding:"14px 18px",fontSize:14,fontWeight:600,cursor:"pointer",textAlign:"left",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                  <span>{fmtLarga(f)}</span>
-                  <span style={{fontSize:12,opacity:0.7}}>›</span>
-                </button>
-              ))}
+            <div style={{display:"flex",flexDirection:"column",gap:12}}>
+              {/* Mini-calendario */}
+              <div style={{background:"#fff",border:"1.5px solid #e2e8f0",borderRadius:14,padding:14}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                  <button onClick={() => { const d=new Date(calYear,mes-1,1); setCalYear(d.getFullYear()); setMes(d.getMonth()); }}
+                    style={{background:"none",border:"none",cursor:"pointer",padding:"4px 10px",fontSize:20,color:INK_SOFT}}>‹</button>
+                  <span style={{fontWeight:700,fontSize:14,color:DK}}>{MESES[mes]} {calYear}</span>
+                  <button onClick={() => { const d=new Date(calYear,mes+1,1); setCalYear(d.getFullYear()); setMes(d.getMonth()); }}
+                    style={{background:"none",border:"none",cursor:"pointer",padding:"4px 10px",fontSize:20,color:INK_SOFT}}>›</button>
+                </div>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:2,textAlign:"center"}}>
+                  {DIAS.map(d => <div key={d} style={{fontSize:11,fontWeight:600,color:INK_SOFT,paddingBottom:4}}>{d}</div>)}
+                  {Array(primerDia(calYear,mes)).fill(null).map((_,i)=><div key={`e${i}`}/>)}
+                  {Array(diasEnMes(calYear,mes)).fill(null).map((_,i)=>{
+                    const d=i+1, iso=toISO(calYear,mes,d);
+                    const disponible=fechasDisponibles.includes(iso), sel=fecha===iso;
+                    return (
+                      <button key={d} onClick={()=>{ if(disponible){ setFecha(iso); setPaso(6); } }}
+                        disabled={!disponible}
+                        style={{aspectRatio:"1",borderRadius:8,border:"none",
+                          background:sel?PRIMARY:disponible?PL:"transparent",
+                          color:sel?"#fff":disponible?P:"#cbd5e1",
+                          fontSize:13,fontWeight:disponible?700:400,cursor:disponible?"pointer":"default"}}>
+                        {d}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              {/* Lista */}
+              <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                {fechasDisponibles.map(f => (
+                  <button key={f} onClick={() => { setFecha(f); setPaso(6); }}
+                    style={{background:fecha===f?PRIMARY:"#fff",color:fecha===f?"#fff":DK,border:`2px solid ${fecha===f?PRIMARY:"#e2e8f0"}`,borderRadius:12,padding:"14px 18px",fontSize:14,fontWeight:600,cursor:"pointer",textAlign:"left",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                    <span>{fmtLarga(f)}</span>
+                    <span style={{fontSize:12,opacity:0.7}}>›</span>
+                  </button>
+                ))}
+              </div>
             </div>
           )}
           <Btn onClick={() => setPaso(4)} variant="secondary">← Volver</Btn>
@@ -509,7 +540,7 @@ function Reservar({ saldo, onReservar, profes, alumnoId, onNav, cfg }) {
                           ))}
                         </div>
                         <p style={{margin:"10px 0 0",fontSize:13,color:INK_SOFT}}>
-                          {h} → {t2str(tmins(h) + duracionHoras * 60)} · <strong>{costo} hs</strong> de saldo
+                          {h} → {t2str(tmins(h) + duracionHoras * 60)} · <strong>{costo} hora{costo!==1?"s":""}</strong> de saldo
                         </p>
                       </Card>
                     )}
@@ -552,9 +583,9 @@ function Reservar({ saldo, onReservar, profes, alumnoId, onNav, cfg }) {
             <div style={{display:"flex",flexDirection:"column",gap:6,fontSize:14,color:"#374151"}}>
               <span>👨‍🏫 {nombreProfeElegido} — {materia}</span>
               <span>📅 {fecha ? fmtLarga(fecha) : ""}</span>
-              <span>🕐 {horaInicio} → {horaInicio ? t2str(tmins(horaInicio) + duracionHoras * 60) : ""} ({duracionHoras} hs)</span>
+              <span>🕐 {horaInicio} → {horaInicio ? t2str(tmins(horaInicio) + duracionHoras * 60) : ""} ({duracionHoras} hora{duracionHoras===1?"":"s"})</span>
               <span>📍 {modalidad} · Clase {tipo}</span>
-              <span style={{fontWeight:700,color:P}}>⏱ Se descuentan {costo} hs de tu saldo</span>
+              <span style={{fontWeight:700,color:P}}>⏱ {costo===1?"Se descuenta":"Se descuentan"} {costo} hora{costo===1?"":"s"} de tu saldo</span>
             </div>
           </Card>
           <Card style={{background:"#fefce8",border:"1.5px solid #fde68a",padding:12}}>
@@ -568,7 +599,7 @@ function Reservar({ saldo, onReservar, profes, alumnoId, onNav, cfg }) {
           </label>
           {saldoInsuficiente && (
             <div style={{background:"#fff5f5",border:"1.5px solid #fecaca",borderRadius:12,padding:"10px 14px",fontSize:13,color:"#dc2626"}}>
-              ⚠️ Saldo insuficiente: esta reserva cuesta {costo} hs y tenés {saldo} hs.
+              ⚠️ Saldo insuficiente: esta reserva cuesta {costo} hora{costo===1?"":"s"} y tenés {saldo} hora{saldo===1?"":"s"}.
             </div>
           )}
           {errorReserva && (
