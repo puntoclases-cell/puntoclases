@@ -184,9 +184,11 @@ function Inicio({onNav, saldo, nombre, reservas, vencimiento}) {
           {icon:"💰",label:"Comprar horas",sc:"comprar",bg:"#fefce8",border:"#fde68a"},
           {icon:"👤",label:"Mi profe",sc:"profes",bg:"#f0f6fa",border:"#a8d4e8"},
         ].map(a=>(
-          <button key={a.sc} onClick={()=>onNav(a.sc)} style={{background:a.bg,border:`1.5px solid ${a.border}`,borderRadius:14,padding:"16px 12px",cursor:"pointer",textAlign:"left",display:"flex",flexDirection:"column",gap:6}}>
-            <span style={{fontSize:24}}>{a.icon}</span>
-            <span style={{fontSize:14,fontWeight:600,color:DK}}>{a.label}</span>
+          <button key={a.sc} onClick={()=>onNav(a.sc)}
+            aria-label={a.label}
+            style={{background:a.bg,border:`1.5px solid ${a.border}`,borderRadius:14,padding:"18px 14px",cursor:"pointer",textAlign:"left",display:"flex",flexDirection:"column",gap:8,minHeight:80}}>
+            <span style={{fontSize:26}} aria-hidden="true">{a.icon}</span>
+            <span style={{fontSize:16,fontWeight:600,color:DK,lineHeight:1.3}}>{a.label}</span>
           </button>
         ))}
       </div>
@@ -2047,13 +2049,15 @@ function AppAlumno({ user, onLogout }) {
       )}
 
       {/* Nav */}
-      <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:480,background:"#fff",borderTop:"1px solid #e2e8f0",display:"flex",padding:"8px 0 12px",zIndex:10}}>
+      <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:480,background:"#fff",borderTop:"1px solid #e2e8f0",display:"flex",padding:"6px 0 10px",zIndex:10}}>
         {nav.map(n=>(
           <button key={n.id} onClick={()=>setScreen(n.id)}
-            style={{flex:1,background:"none",border:"none",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
-            <span style={{fontSize:20}}>{n.icon}</span>
-            <span style={{fontSize:10,fontWeight:screen===n.id?700:400,color:screen===n.id?P:"#94a3b8"}}>{n.label}</span>
-            {screen===n.id && <div style={{width:4,height:4,borderRadius:"50%",background:P}}/>}
+            aria-label={n.label}
+            aria-current={screen===n.id?"page":undefined}
+            style={{flex:1,background:"none",border:"none",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:2,minHeight:52,paddingTop:6}}>
+            <span style={{fontSize:22}} aria-hidden="true">{n.icon}</span>
+            <span style={{fontSize:16,fontWeight:screen===n.id?700:500,color:screen===n.id?PRIMARY:INK_SOFT}}>{n.label}</span>
+            {screen===n.id && <div style={{width:4,height:4,borderRadius:"50%",background:PRIMARY}}/>}
           </button>
         ))}
       </div>
