@@ -6298,7 +6298,15 @@ export default function PuntoClasesApp() {
 
   const handleLogout = async () => { await logout(); setUser(null); };
 
-  
+  // Pantalla de carga mientras resuelve la sesión — evita flash de LoginScreen
+  if (cargandoSesion) return (
+    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:BG,flexDirection:"column",gap:16}}>
+      <div style={{width:40,height:40,border:`4px solid ${PRIMARY}`,borderTopColor:"transparent",borderRadius:"50%",animation:"spin 0.8s linear infinite"}}/>
+      <p style={{margin:0,fontSize:16,color:INK_SOFT,fontWeight:500}}>Cargando…</p>
+      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+    </div>
+  );
+
   // Registro nuevo alumno
   if (registrandoAlumno) return (
     <OnboardingRegistroAlumno onTerminar={()=>setRegistrandoAlumno(false)}/>
