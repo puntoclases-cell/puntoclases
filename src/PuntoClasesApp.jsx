@@ -176,18 +176,25 @@ function Inicio({onNav, saldo, nombre, reservas, vencimiento, cfg}) {
       {/* Countdown próxima clase */}
       {proximaClase && <CountdownClase clase={proximaClase} onChat={()=>onNav("mensajes")}/>}
 
-      {/* Accesos rápidos */}
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+      {/* Accesos rápidos — CTA primario + 3 secundarios */}
+      <button onClick={()=>onNav("reservar")} aria-label="Reservar clase"
+        style={{background:PRIMARY,color:"#fff",border:"none",borderRadius:16,padding:"20px",
+          fontSize:20,fontWeight:800,cursor:"pointer",display:"flex",alignItems:"center",
+          justifyContent:"center",gap:10,minHeight:60,width:"100%"}}>
+        <span aria-hidden="true">📅</span> Reservar clase
+      </button>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
         {[
-          {icon:"📅",label:"Reservar clase",sc:"reservar",bg:"#fdecea",border:PB},
-          {icon:"📚",label:"Mis clases",sc:"historial",bg:"#f0fdf4",border:"#bbf7d0"},
           {icon:"💰",label:"Comprar horas",sc:"comprar",bg:"#fefce8",border:"#fde68a"},
+          {icon:"📚",label:"Mis clases",sc:"historial",bg:"#f0fdf4",border:"#bbf7d0"},
           {icon:"👤",label:"Mi profe",sc:"profes",bg:"#f0f6fa",border:"#a8d4e8"},
         ].map(a=>(
           <button key={a.sc} onClick={()=>onNav(a.sc)}
             aria-label={a.label}
-            style={{background:a.bg,border:`1.5px solid ${a.border}`,borderRadius:14,padding:"18px 14px",cursor:"pointer",textAlign:"left",display:"flex",flexDirection:"column",gap:8,minHeight:80}}>
-            <span style={{fontSize:26}} aria-hidden="true">{a.icon}</span>
+            style={{background:a.bg,border:`1.5px solid ${a.border}`,borderRadius:14,
+              padding:"14px 8px",cursor:"pointer",textAlign:"center",display:"flex",
+              flexDirection:"column",alignItems:"center",gap:6,minHeight:76}}>
+            <span style={{fontSize:22}} aria-hidden="true">{a.icon}</span>
             <span style={{fontSize:16,fontWeight:600,color:DK,lineHeight:1.3}}>{a.label}</span>
           </button>
         ))}
