@@ -268,7 +268,7 @@ function Reservar({ saldo, onReservar, profes, alumnoId }) {
 
   const materiasUnicas = [...new Set((profes||[]).flatMap(p=>p.materias||[]))].sort();
   const profesParaMateria = (profes||[]).filter(p=>(p.materias||[]).includes(materia));
-  const seg = paso>=5?4:paso>=3?3:paso;
+  const pasoDisplay = Math.min(paso, 5); // 5 pasos reales: materia·profe·día·horario·confirmar
 
   if (paso===6) return (
     <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",minHeight:300,gap:16,textAlign:"center",padding:20}}>
@@ -301,10 +301,13 @@ function Reservar({ saldo, onReservar, profes, alumnoId }) {
         />
       )}
       {/* Progreso */}
-      <div style={{display:"flex",gap:6}}>
-        {[1,2,3,4].map(n=>(
-          <div key={n} style={{flex:1,height:4,borderRadius:99,background:seg>=n?P:"#e2e8f0",transition:"background 0.3s"}}/>
-        ))}
+      <div style={{display:"flex",alignItems:"center",gap:10}}>
+        <div style={{display:"flex",gap:4,flex:1}}>
+          {[1,2,3,4,5].map(n=>(
+            <div key={n} style={{flex:1,height:4,borderRadius:99,background:n<=pasoDisplay?PRIMARY:"#e2e8f0",transition:"background 0.3s"}}/>
+          ))}
+        </div>
+        <span style={{fontSize:13,color:INK_SOFT,fontWeight:600,whiteSpace:"nowrap"}}>Paso {pasoDisplay} de 5</span>
       </div>
 
       {/* PASO 1: Materia */}
