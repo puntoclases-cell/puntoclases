@@ -112,7 +112,8 @@ Toda fase nueva se diseña para que violar estas reglas sea imposible, y agrega 
 ## REDISEÑO — COLA DE FASES
 - **F1 ✅ 2026-07-04**: design system accesible + fixes front (tokens CSS, flash login, ← volver, progreso real, a11y, recurrente oculto, precio desde DB). Commits `13c0307`..`439bb62`. En prod.
 - **F1.1 ✅ 2026-07-04**: hotfix 5 textos <16px (header badge ⏱, card saldo Inicio). Commit `470f2f9`.
-- **F3 ← PRÓXIMA**: flujo de reserva nuevo (front-only, sin tocar DB/RPCs/pagos) — inicio jerárquico (1 CTA primario), wizard 7 pasos (tipo temprano, días como lista + mini-cal, hora como lista, duración como chips), saldo gate al inicio, cancelación integrada en confirmar, count anotados en grupal (read-only).
+- **F3 ✅ 2026-07-04**: wizard reserva 8 pasos — fix slotsCons (DB es horaria, no 30 min), tipo/modalidad en pasos separados, lenguaje humano en tipo, "Elegir otro día" en P6 sin horarios. Commit `42dffcb`. En prod.
+  - **F3.1 ← PRÓXIMA** (polish, no bloqueante): re-agregar mini-calendario arriba de la lista de días (híbrido acordado) · días con palabra completa ("Miércoles 8 de julio") · corregir "1 hs"→"1 hora" y "Se descuentan 1 hs"→"Se descuenta 1 hora".
 - **F4**: agenda del alumno — tab Clases = mini-calendario + lista de cards.
 - **F5**: grupal real — tabla grupos, cupo con lock, "cuántos anotados", capturar alumnos_grupo.
 - **F6**: modelo tren + saldo simple — pago por clase (reserva pendiente_pago + MP + TTL); absorbe F2 (packs solo individual, sacar factor 0.8 del saldo).
