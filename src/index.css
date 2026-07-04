@@ -1,4 +1,14 @@
 :root {
+  /* ── PuntoClases design tokens ── */
+  --pc-primary:    #0E5C85; /* CTAs, active state  — 6.73:1 sobre blanco */
+  --pc-brand:      #2188B6; /* header, card saldo  — NO usar como texto sobre blanco */
+  --pc-brand-soft: #DFF2FF; /* fondos de marca */
+  --pc-bg:         #F0F6FA; /* fondo general */
+  --pc-alert:      #D94F3D; /* solo alertas / cancelaciones */
+  --pc-alert-text: #C0392B; /* texto alerta sobre blanco — 5.10:1 ✓ */
+  --pc-ink:        #2E2E2E; /* texto principal — 11.7:1 ✓ */
+  --pc-ink-soft:   #4A5568; /* texto secundario — 6.77:1 ✓ */
+
   --text: #6b6375;
   --text-h: #08060d;
   --bg: #fff;

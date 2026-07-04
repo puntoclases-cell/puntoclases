@@ -24,6 +24,11 @@ const GRL = "#f0fdf4";
 const GRB = "#bbf7d0";
 const ES_PWA = window.matchMedia("(display-mode: standalone)").matches || !!navigator.standalone;
 
+// ── DESIGN TOKENS (mapeados a --pc-* en index.css) ───────────────────────────
+const PRIMARY   = "#0E5C85"; // CTAs, estado activo      — 6.73:1 sobre blanco ✓
+const INK_SOFT  = "#4A5568"; // texto secundario          — 6.77:1 sobre blanco ✓
+const ALERT_TX  = "#C0392B"; // texto alerta sobre blanco — 5.10:1 ✓
+
 // ════════════════════════════════════════════════════════════════════════════
 // CONFIGURACIÓN DE NEGOCIO — FUENTE ÚNICA DE VERDAD
 // Cambiá un valor acá y se actualiza en TODOS los paneles (alumno, profe, admin).
@@ -116,15 +121,15 @@ const Card = ({children,style={}}) => (
 
 const Btn = ({children,onClick,disabled,variant="primary",full,style={}}) => {
   const styles = {
-    primary: {background:disabled?"#ccc":P,color:"#fff"},
-    secondary: {background:"#f1f5f9",color:"#475569"},
-    danger: {background:"#fff5f5",color:"#dc2626",border:"1.5px solid #fecaca"},
-    success: {background:disabled?"#ccc":"#15803d",color:"#fff"},
-    warning: {background:"#fefce8",color:"#92400e",border:"1.5px solid #fde68a"},
+    primary: {background:disabled?"#ccc":PRIMARY,color:"#fff",fontSize:18,padding:"16px",minHeight:56},
+    secondary: {background:"#f1f5f9",color:"#475569",minHeight:48},
+    danger: {background:"#fff5f5",color:ALERT_TX,border:`1.5px solid #fecaca`,minHeight:48},
+    success: {background:disabled?"#ccc":"#15803d",color:"#fff",fontSize:18,padding:"16px",minHeight:56},
+    warning: {background:"#fefce8",color:"#92400e",border:"1.5px solid #fde68a",minHeight:48},
   };
   return (
     <button onClick={onClick} disabled={disabled}
-      style={{border:"none",borderRadius:12,padding:"13px 16px",fontSize:14,fontWeight:700,cursor:disabled?"not-allowed":"pointer",width:"100%",...styles[variant],...style}}>
+      style={{border:"none",borderRadius:12,padding:"13px 16px",fontSize:16,fontWeight:700,cursor:disabled?"not-allowed":"pointer",width:"100%",...styles[variant],...style}}>
       {children}
     </button>
   );
