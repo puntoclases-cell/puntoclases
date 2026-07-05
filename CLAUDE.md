@@ -53,6 +53,8 @@ Arrancá del estado de abajo; **no re-diagnostiques lo ✅**.
 
 ✅ `MP_WEBHOOK_SECRET` rotado (2026-06-24): valor anterior pasó por chat; nuevo valor cargado en Supabase.
 
+✅ `devolver_horas` bigint fix (2026-07-05): `p_reserva_id` era `uuid` pero `reservas.id` es `BIGINT` → "invalid input syntax for type uuid". Migración `20260705000001`: DROP uuid, CREATE bigint, GRANT PUBLIC+authenticated. En prod. Commit `cb395f3`.
+
 ## INVARIANTES DE INTEGRIDAD (obligatorias en todas las fases)
 1. Dinero y saldo solo se mueven server-side en RPCs atómicas e idempotentes (clave: payment_id / reserva_id). El front jamás confirma pagos ni descuenta saldo.
 2. Toda reserva paga nace `'pendiente_pago'` con TTL de 30 min que retiene cupo; el webhook la confirma vía external_reference; vencida, libera cupo. Revalidar cupo al aprobar.
