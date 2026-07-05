@@ -55,6 +55,11 @@ Arrancá del estado de abajo; **no re-diagnostiques lo ✅**.
 
 ✅ `devolver_horas` bigint fix (2026-07-05): `p_reserva_id` era `uuid` pero `reservas.id` es `BIGINT` → "invalid input syntax for type uuid". Migración `20260705000001`: DROP uuid, CREATE bigint, GRANT PUBLIC+authenticated. En prod. Commit `cb395f3`.
 
+✅ F6 Etapa 1 — migraciones additive aplicadas a prod (2026-07-05):
+- `20260705000002_f6_enum_states.sql`: `estado_reserva` tiene `pendiente_pago` y `expirada`.
+- `20260705000003_f6_reserva_pago.sql`: columnas `expira_en`+`payment_id` en `reservas`; tabla `pagos_huerfanos` (RLS on, GRANT INSERT/SELECT a service_role); índices únicos reconstruidos con `pendiente_pago`; funciones nuevas `crear_reserva_pendiente_pago` (GRANT PUBLIC) y `confirmar_reserva_pago` (GRANT service_role only, REVOKE PUBLIC); `crear_reserva`+`get_grupo_info`+`devolver_horas` actualizadas (grants preservados). Rama `f6-review`, commit `7423780`. NO mergeado a main.
+- Backup pre-migración: definiciones de `crear_reserva`, `get_grupo_info`, `devolver_horas` + definiciones de los 2 índices DROPeados → guardado en scratchpad de sesión.
+
 ## INVARIANTES DE INTEGRIDAD (obligatorias en todas las fases)
 1. Dinero y saldo solo se mueven server-side en RPCs atómicas e idempotentes (clave: payment_id / reserva_id). El front jamás confirma pagos ni descuenta saldo.
 2. Toda reserva paga nace `'pendiente_pago'` con TTL de 30 min que retiene cupo; el webhook la confirma vía external_reference; vencida, libera cupo. Revalidar cupo al aprobar.
@@ -76,7 +81,10 @@ Toda fase nueva se diseña para que violar estas reglas sea imposible, y agrega 
   - **F5.1 ✅ 2026-07-05**: fix slot grupal — `slotOcupado` ignora reservas grupales cuando `tipo=grupal` (solo individuales bloquean). P6 muestra "N de 4 lugares" / "Ya estás anotado" / "Grupo lleno" según cupo real. `getReservasDelDia` agrega `tipo`; nueva `getMisReservasDelDia`. Commit `58c1f5d`. En prod.
   - **RADAR F6**: cancelar grupo → devolver saldo a todos los inscriptos · reconciliar tipo 'ambas' de disponibilidad con F6.
   - **LÍMITE CONOCIDO (no bloqueante)**: `unirse_grupo` NO valida solapamiento entre dos grupos del mismo profe a horas distintas (ej: grupo A 10:00-12:00 y grupo B 11:00-12:00 coexistirían). El chequeo individual-vs-grupal SÍ usa rango completo. Resolver en F6 si se necesita.
-- **F6**: modelo tren + saldo simple — pago por clase (reserva pendiente_pago + MP + TTL); absorbe F2 (packs solo individual, sacar factor 0.8 del saldo).
+- **F6 Etapa 1 ✅ 2026-07-05**: migraciones DB en prod (ver ESTADO ACTUAL). Front + Edge Functions: Etapa 2 pendiente.
+  - **RADAR (a) — BLOQUEANTE antes de activar pago en el front**: cuando `confirmar_reserva_pago` retorna `'expirada_pago_tardio'` (TTL vencido, cupo lleno, o alumno canceló), el webhook necesita insertar en `pagos_huerfanos` Y llamar a MP para reembolsar al alumno. El webhook actual (`mp-webhook`) no hace ni lo uno ni lo otro todavía. Resolver en Etapa 2 junto con la edge function, ANTES de conectar el botón de pago en el front.
+  - **RADAR (b) — Etapa 2**: `crear_reserva` actualmente acepta `p_tipo = 'grupal'` y descuenta saldo. En F6 el path grupal usa `crear_reserva_pendiente_pago`. Agregar guardia en `crear_reserva` para rechazar `'grupal'` con RAISE EXCEPTION (o simplemente el front deja de llamarla con grupal).
+- **F6 Etapa 2** (próxima): front wizard pago (P8 nuevo flujo), Edge Function `crear-preferencia` acepta `reservaId`, `mp-webhook` llama `confirmar_reserva_pago` + inserta `pagos_huerfanos` + reembolso MP.
 - **F7** (opcional): carrito progresivo "Agregar otra clase".
 
 ## Regla de negocio — Vencimiento de horas (fija)
