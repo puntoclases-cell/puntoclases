@@ -188,14 +188,16 @@ BEGIN
     RAISE EXCEPTION 'Ese horario no está habilitado para clases grupales.';
   END IF;
 
-  -- Verificar que no hay individual activo pisando este slot
+  -- Verificar que no hay individual activo que solape el rango [p_hora, p_hora+p_horas)
+  -- (igual que el overlap check de crear_reserva, para cubrir individuales largos que empiecen antes)
   IF EXISTS (
-    SELECT 1 FROM reservas
-    WHERE profe_id = p_profe_id
-      AND fecha    = p_fecha
-      AND hora     = p_hora
-      AND tipo     = 'individual'
-      AND estado   IN ('confirmada', 'pendiente')
+    SELECT 1 FROM reservas r
+    WHERE r.profe_id = p_profe_id
+      AND r.fecha    = p_fecha
+      AND r.tipo     = 'individual'
+      AND r.estado   IN ('confirmada', 'pendiente')
+      AND r.hora::time < (p_hora::time + p_horas * interval '1 hour')
+      AND (r.hora::time + r.horas * interval '1 hour') > p_hora::time
   ) THEN
     RAISE EXCEPTION 'El profe tiene una clase individual en ese horario.';
   END IF;

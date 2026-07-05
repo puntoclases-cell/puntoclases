@@ -119,6 +119,7 @@ Toda fase nueva se diseña para que violar estas reglas sea imposible, y agrega 
   - Migración: `supabase/migrations/20260704000001_f5_grupal_real.sql`. BACKUP obligatorio antes de correr (`reservas`, `config`). Additive primero; DROP INDEX al final.
   - Front: `unirseGrupo` / `getGrupoInfo` en db.js · P6 muestra cupo real · P8 llama `unirseGrupo` si grupal.
   - **PENDIENTE (RADAR F6)**: cancelar grupo → devolver saldo a todos los inscriptos · cupo_max se copia de config.cupo_grupal al crear grupo (ya implementado) · reconciliar tipo 'ambas' de disponibilidad con F6 (¿migración pendiente a individual/grupal?).
+  - **LÍMITE CONOCIDO (no bloqueante)**: `unirse_grupo` NO valida solapamiento entre dos grupos del mismo profe que arranquen a horas distintas (ej: grupo A 10:00-12:00 y grupo B 11:00-12:00 coexistirían sin error). El advisory lock usa `p_hora` exacto → no serializa esos casos. El chequeo individual-vs-grupal SÍ usa rango completo. Resolver en F6 si se necesita: agregar overlap check contra `grupos` con lógica de rango, análoga a la de `crear_reserva`.
 - **F6**: modelo tren + saldo simple — pago por clase (reserva pendiente_pago + MP + TTL); absorbe F2 (packs solo individual, sacar factor 0.8 del saldo).
 - **F7** (opcional): carrito progresivo "Agregar otra clase".
 
