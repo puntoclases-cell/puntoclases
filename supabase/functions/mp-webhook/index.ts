@@ -1,14 +1,21 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-// Motivos que el webhook puede recibir de confirmar_reserva_pago
-// y que deben registrarse en pagos_huerfanos + reembolsarse.
+// Motivos terminales de confirmar_reserva_pago que disparan reembolso.
+// Deben coincidir exactamente con los RETURN strings de la función PG.
 const ORPHAN_MOTIVOS = new Set(["ttl_expirado", "cupo_excedido", "cancelada"]);
 
 /**
- * Intenta reembolso total en MP y registra siempre en pagos_huerfanos.
- * Idempotente: no actúa si payment_id ya existe en pagos_huerfanos.
- * Si el refund falla, registra con motivo "refund_pendiente" para reintento manual.
- * Nunca lanza excepción — el caller siempre devuelve 200.
+ * Reembolsa un pago huérfano de forma atómica e idempotente.
+ *
+ * PROTOCOLO INSERT-FIRST:
+ *   1. INSERT con ON CONFLICT (payment_id) DO NOTHING
+ *   2. Si no insertó (conflict) → otro webhook ya lo procesó → return
+ *   3. Si insertó → somos el único handler → hacer refund en MP
+ *   4. UPDATE motivo con resultado real (motivo original | 'refund_pendiente')
+ *
+ * PREREQUISITO: pagos_huerfanos.payment_id debe tener índice UNIQUE
+ * (migración 005). Sin él, upsert ignoreDuplicates no tiene constraint
+ * sobre qué columna conflictuar y no funciona como barrera.
  */
 async function handleOrphan(
   supabase: ReturnType<typeof createClient>,
@@ -17,19 +24,32 @@ async function handleOrphan(
   montoArs: number,
   motivo: string,
 ): Promise<void> {
-  // Idempotencia: ¿ya procesamos este pago?
-  const { data: existing } = await supabase
+  // INSERT-first: atómico bajo el UNIQUE index
+  const { data: inserted, error: insertErr } = await supabase
     .from("pagos_huerfanos")
-    .select("id")
-    .eq("payment_id", paymentId)
-    .limit(1);
+    .upsert(
+      {
+        payment_id: paymentId,
+        reserva_id: reservaId,
+        monto_ars:  Math.round(montoArs),
+        motivo:     "pendiente",  // se actualiza al final con el resultado real
+      },
+      { onConflict: "payment_id", ignoreDuplicates: true },
+    )
+    .select("id");
 
-  if (existing && existing.length > 0) {
-    console.log("Pago huérfano ya registrado, skipping:", paymentId);
+  if (insertErr) {
+    console.error("Error al insert en pagos_huerfanos:", insertErr, { paymentId });
     return;
   }
 
-  // Reembolso total en MP (vacío = total)
+  if (!inserted || inserted.length === 0) {
+    // Conflict: otro webhook ya ganó el INSERT — no reembolsar
+    console.log("Pago huérfano ya registrado (conflict), skipping:", paymentId);
+    return;
+  }
+
+  // Ganamos el INSERT → somos el único que hace el refund
   let refundOk = false;
   try {
     const refundRes = await fetch(
@@ -54,21 +74,14 @@ async function handleOrphan(
     console.error("Error de red al reembolsar en MP:", err, "paymentId:", paymentId);
   }
 
-  // Registrar en pagos_huerfanos SIEMPRE (éxito o fallo del refund)
+  // Actualizar motivo final (reemplaza "pendiente" con el resultado real)
   const finalMotivo = refundOk ? motivo : "refund_pendiente";
-  const { error: insertErr } = await supabase.from("pagos_huerfanos").insert({
-    payment_id: paymentId,
-    reserva_id: reservaId,
-    monto_ars:  Math.round(montoArs),
-    motivo:     finalMotivo,
-  });
-  if (insertErr) {
-    // Loggear y seguir — no podemos hacer más desde acá
-    console.error(
-      "ERROR CRÍTICO: fallo insert pagos_huerfanos:",
-      insertErr,
-      { paymentId, reservaId, montoArs: Math.round(montoArs), finalMotivo },
-    );
+  const { error: updateErr } = await supabase
+    .from("pagos_huerfanos")
+    .update({ motivo: finalMotivo })
+    .eq("payment_id", paymentId);
+  if (updateErr) {
+    console.error("Error al UPDATE motivo en pagos_huerfanos:", updateErr, { paymentId, finalMotivo });
   }
 }
 
@@ -138,7 +151,7 @@ Deno.serve(async (req) => {
     const reservaId = parseInt(extRef.slice(2), 10);
     if (isNaN(reservaId)) {
       console.error("external_reference r_ con id no numérico:", extRef);
-      return new Response("error", { status: 500 }); // MP reintenta hasta que fije el bug
+      return new Response("error", { status: 500 });
     }
 
     const { data: confirmarResult, error: confirmarErr } = await supabase.rpc(
@@ -146,7 +159,7 @@ Deno.serve(async (req) => {
       { p_reserva_id: reservaId, p_payment_id: String(paymentId) },
     );
     if (confirmarErr) {
-      // Error transitorio (DB caída, red) → 500 para que MP reintente
+      // Error transitorio (DB, red) → 500 para que MP reintente
       console.error("Error en confirmar_reserva_pago:", confirmarErr);
       return new Response("error", { status: 500 });
     }
@@ -158,7 +171,7 @@ Deno.serve(async (req) => {
     }
 
     if (ORPHAN_MOTIVOS.has(resultado)) {
-      // Terminal: reembolsar + registrar, no reintentar
+      // Terminal: reembolsar + registrar atómicamente, no reintentar
       await handleOrphan(
         supabase,
         String(paymentId),
@@ -169,7 +182,7 @@ Deno.serve(async (req) => {
       return new Response("ok", { status: 200 });
     }
 
-    // Respuesta inesperada del RPC — loggear y 500 para diagnóstico
+    // Respuesta inesperada del RPC → 500 para diagnóstico
     console.error("confirmar_reserva_pago resultado inesperado:", resultado, { reservaId, paymentId });
     return new Response("error", { status: 500 });
   }
