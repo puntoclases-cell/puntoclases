@@ -45,58 +45,13 @@ Arrancá del estado de abajo; **no re-diagnostiques lo ✅**.
 - `registrar_compra_pendiente(alumno_id, horas, precio, pack_id)` → inserta fila con `estado_pago='pendiente'`, devuelve `id BIGINT`.
 - `aprobar_compra(compra_id, payment_id)` → idempotente: si ya está `'aprobado'` devuelve saldo sin tocar nada; si no, actualiza `compras` y `alumnos` en un solo tx.
 
-## ESTADO ACTUAL — al 2026-07-04
+## ESTADO ACTUAL — al 2026-07-05
 
 ✅ Pagos prod — fix definitivo (2026-07-02): causa raíz real era que MP Checkout Pro **no propaga `metadata` de la preferencia al payment**. El webhook leía `payment.metadata` → vacío → devolvía 200 silencioso → nunca acreditaba. Fix: patrón "compra pendiente en DB" (Opción B): `crear-preferencia` llama a `registrar_compra_pendiente` antes de ir a MP y usa el id numérico de DB como `external_reference`; `mp-webhook` usa `external_reference` para llamar a `aprobar_compra` (idempotente). 500 en lugar de 200 silencioso cuando algo falla (MP reintenta).
 
 ✅ Regresiones cerradas: `getCompras` filtra `estado_pago='aprobado'` (filas pendientes no aparecen en UI ni afectan `esNuevoAlumno`). `crearCompra` eliminada (tenía columna incorrecta `precio` en lugar de `monto`).
 
 ✅ `MP_WEBHOOK_SECRET` rotado (2026-06-24): valor anterior pasó por chat; nuevo valor cargado en Supabase.
-
-### ⚠️ PENDIENTE: correr SQL en producción (vos)
-El código ya está deployado pero las RPCs aún no existen en la DB. **Hasta que corras esto, `crear-preferencia` devuelve 500 y los pagos no funcionan.**
-
-```sql
-CREATE OR REPLACE FUNCTION public.registrar_compra_pendiente(
-  p_alumno_id uuid, p_horas numeric, p_precio numeric, p_pack_id text DEFAULT NULL
-) RETURNS bigint LANGUAGE plpgsql SECURITY DEFINER AS $$
-DECLARE v_id BIGINT;
-BEGIN
-  INSERT INTO compras (alumno_id, horas, monto, pack_id, estado_pago, metodo)
-  VALUES (p_alumno_id, p_horas, p_precio::integer, p_pack_id, 'pendiente', 'mercadopago')
-  RETURNING id INTO v_id;
-  RETURN v_id;
-END; $$;
-GRANT EXECUTE ON FUNCTION public.registrar_compra_pendiente TO service_role;
-
-CREATE OR REPLACE FUNCTION public.aprobar_compra(p_compra_id bigint, p_payment_id text)
-RETURNS numeric LANGUAGE plpgsql SECURITY DEFINER AS $$
-DECLARE v_compra RECORD; v_saldo NUMERIC;
-BEGIN
-  SELECT * INTO v_compra FROM compras WHERE id = p_compra_id FOR UPDATE;
-  IF NOT FOUND THEN RAISE EXCEPTION 'Compra % no encontrada', p_compra_id; END IF;
-  IF v_compra.estado_pago = 'aprobado' THEN
-    SELECT saldo INTO v_saldo FROM alumnos WHERE id = v_compra.alumno_id;
-    RETURN v_saldo;
-  END IF;
-  UPDATE compras SET payment_id = p_payment_id, estado_pago = 'aprobado' WHERE id = p_compra_id;
-  UPDATE alumnos
-     SET saldo = CASE WHEN vencimiento IS NOT NULL AND CURRENT_DATE > vencimiento AND saldo >= 0.8
-                      THEN v_compra.horas ELSE saldo + v_compra.horas END,
-         vencimiento = CURRENT_DATE + (SELECT vencimiento_dias FROM config WHERE id = 1) * INTERVAL '1 day'
-   WHERE id = v_compra.alumno_id RETURNING saldo INTO v_saldo;
-  RETURN v_saldo;
-END; $$;
-GRANT EXECUTE ON FUNCTION public.aprobar_compra TO service_role;
-```
-
-Después de correrlo, verificar con la próxima compra real:
-```sql
--- Debe mostrar una fila con estado_pago='aprobado' y payment_id no nulo
-SELECT id, payment_id, horas, monto, estado_pago, creado_en FROM compras ORDER BY creado_en DESC LIMIT 3;
--- Debe mostrar saldo aumentado
-SELECT p.nombre, a.saldo, a.vencimiento FROM alumnos a JOIN profiles p ON p.id = a.id WHERE a.saldo > 0;
-```
 
 ## INVARIANTES DE INTEGRIDAD (obligatorias en todas las fases)
 1. Dinero y saldo solo se mueven server-side en RPCs atómicas e idempotentes (clave: payment_id / reserva_id). El front jamás confirma pagos ni descuenta saldo.
@@ -115,11 +70,9 @@ Toda fase nueva se diseña para que violar estas reglas sea imposible, y agrega 
 - **F3 ✅ 2026-07-04**: wizard reserva 8 pasos — fix slotsCons (DB es horaria, no 30 min), tipo/modalidad en pasos separados, lenguaje humano en tipo, "Elegir otro día" en P6 sin horarios. Commit `42dffcb`. En prod.
   - **F3.1 ✅ 2026-07-04**: mini-calendario híbrido en P5 · días con nombre completo ("Miércoles 8 de julio") · singular/plural hora/horas. Commit `01bcb6d`.
 - **F4 ✅ 2026-07-04**: agenda del alumno — `Historial` reescrito: card destacada próxima clase, mini-calendario híbrido (días con clase marcados, filtro por día), lista de cards grandes (≥16px, ≥48px targets), fechas en palabra completa (`fmtLarga`), botones Reprogramar/Cancelar separados, `fmtLarga` promovida a global. Commit `9f44049`. En prod.
-- **F5 🔜 2026-07-04**: migración + front listos, build limpio, esperando que David corra la migración.
-  - Migración: `supabase/migrations/20260704000001_f5_grupal_real.sql`. BACKUP obligatorio antes de correr (`reservas`, `config`). Additive primero; DROP INDEX al final.
-  - Front: `unirseGrupo` / `getGrupoInfo` en db.js · P6 muestra cupo real · P8 llama `unirseGrupo` si grupal.
-  - **PENDIENTE (RADAR F6)**: cancelar grupo → devolver saldo a todos los inscriptos · cupo_max se copia de config.cupo_grupal al crear grupo (ya implementado) · reconciliar tipo 'ambas' de disponibilidad con F6 (¿migración pendiente a individual/grupal?).
-  - **LÍMITE CONOCIDO (no bloqueante)**: `unirse_grupo` NO valida solapamiento entre dos grupos del mismo profe que arranquen a horas distintas (ej: grupo A 10:00-12:00 y grupo B 11:00-12:00 coexistirían sin error). El advisory lock usa `p_hora` exacto → no serializa esos casos. El chequeo individual-vs-grupal SÍ usa rango completo. Resolver en F6 si se necesita: agregar overlap check contra `grupos` con lógica de rango, análoga a la de `crear_reserva`.
+- **F5 ✅ 2026-07-05**: grupal real — tabla `grupos`, advisory lock por slot, cupo en vivo (sin columna desnormalizada), `unirse_grupo` RPC (join-or-create atómico), `get_grupo_info` RPC. Migración `20260704000001_f5_grupal_real.sql` aplicada a prod. Commits `af489ab`..`6eb8d0d`. En prod.
+  - **RADAR F6**: cancelar grupo → devolver saldo a todos los inscriptos · reconciliar tipo 'ambas' de disponibilidad con F6.
+  - **LÍMITE CONOCIDO (no bloqueante)**: `unirse_grupo` NO valida solapamiento entre dos grupos del mismo profe a horas distintas (ej: grupo A 10:00-12:00 y grupo B 11:00-12:00 coexistirían). El chequeo individual-vs-grupal SÍ usa rango completo. Resolver en F6 si se necesita.
 - **F6**: modelo tren + saldo simple — pago por clase (reserva pendiente_pago + MP + TTL); absorbe F2 (packs solo individual, sacar factor 0.8 del saldo).
 - **F7** (opcional): carrito progresivo "Agregar otra clase".
 
