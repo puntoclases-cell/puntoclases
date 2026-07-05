@@ -60,6 +60,13 @@ Arrancá del estado de abajo; **no re-diagnostiques lo ✅**.
 - `20260705000003_f6_reserva_pago.sql`: columnas `expira_en`+`payment_id` en `reservas`; tabla `pagos_huerfanos` (RLS on, GRANT INSERT/SELECT a service_role); índices únicos reconstruidos con `pendiente_pago`; funciones nuevas `crear_reserva_pendiente_pago` (GRANT PUBLIC) y `confirmar_reserva_pago` (GRANT service_role only, REVOKE PUBLIC); `crear_reserva`+`get_grupo_info`+`devolver_horas` actualizadas (grants preservados). Rama `f6-review`, commit `7423780`. NO mergeado a main.
 - Backup pre-migración: definiciones de `crear_reserva`, `get_grupo_info`, `devolver_horas` + definiciones de los 2 índices DROPeados → guardado en scratchpad de sesión.
 
+✅ F6 Etapa 2a — backend pago por clase deployado a prod (2026-07-05):
+- `20260705000004_f6_confirmar_motivos.sql`: `confirmar_reserva_pago` ahora retorna `'ttl_expirado'`/`'cupo_excedido'`/`'cancelada'` (antes: `'expirada_pago_tardio'` genérico). Grants: service_role only, PUBLIC revocado.
+- `20260705000005_pagos_huerfanos_payment_unique.sql`: `payment_id` UNIQUE en `pagos_huerfanos`. Prerequisito del handleOrphan atómico.
+- `crear-preferencia` deployada: rama A (`reservaParams`) llama `crear_reserva_pendiente_pago` via JWT alumno; precio server-side; `external_reference = "r_<reservaId>"`; `back_url?reserva_id=<id>`. Rama B (packs) intacta.
+- `mp-webhook` deployada: rama A (`r_<id>`) llama `confirmar_reserva_pago`; si huérfano → `handleOrphan` (INSERT-first atómico con upsert `ignoreDuplicates`, refund MP, UPDATE motivo final). Ramas B (packs) y C (legado) intactas. HMAC sin cambios.
+- NO activo en el front (el botón de pago por clase está en Etapa 2b). Rama `f6-review`, commit `9704a70`. NO mergeado a main.
+
 ## INVARIANTES DE INTEGRIDAD (obligatorias en todas las fases)
 1. Dinero y saldo solo se mueven server-side en RPCs atómicas e idempotentes (clave: payment_id / reserva_id). El front jamás confirma pagos ni descuenta saldo.
 2. Toda reserva paga nace `'pendiente_pago'` con TTL de 30 min que retiene cupo; el webhook la confirma vía external_reference; vencida, libera cupo. Revalidar cupo al aprobar.
