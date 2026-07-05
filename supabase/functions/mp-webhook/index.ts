@@ -1,23 +1,95 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+// Motivos que el webhook puede recibir de confirmar_reserva_pago
+// y que deben registrarse en pagos_huerfanos + reembolsarse.
+const ORPHAN_MOTIVOS = new Set(["ttl_expirado", "cupo_excedido", "cancelada"]);
+
+/**
+ * Intenta reembolso total en MP y registra siempre en pagos_huerfanos.
+ * Idempotente: no actúa si payment_id ya existe en pagos_huerfanos.
+ * Si el refund falla, registra con motivo "refund_pendiente" para reintento manual.
+ * Nunca lanza excepción — el caller siempre devuelve 200.
+ */
+async function handleOrphan(
+  supabase: ReturnType<typeof createClient>,
+  paymentId: string,
+  reservaId: number,
+  montoArs: number,
+  motivo: string,
+): Promise<void> {
+  // Idempotencia: ¿ya procesamos este pago?
+  const { data: existing } = await supabase
+    .from("pagos_huerfanos")
+    .select("id")
+    .eq("payment_id", paymentId)
+    .limit(1);
+
+  if (existing && existing.length > 0) {
+    console.log("Pago huérfano ya registrado, skipping:", paymentId);
+    return;
+  }
+
+  // Reembolso total en MP (vacío = total)
+  let refundOk = false;
+  try {
+    const refundRes = await fetch(
+      `https://api.mercadopago.com/v1/payments/${paymentId}/refunds`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${Deno.env.get("MP_ACCESS_TOKEN")}`,
+        },
+        body: JSON.stringify({}),
+      },
+    );
+    if (refundRes.ok) {
+      refundOk = true;
+      console.log("Reembolso MP exitoso:", paymentId, "monto:", montoArs);
+    } else {
+      const errBody = await refundRes.text();
+      console.error("Reembolso MP fallido:", refundRes.status, errBody, "paymentId:", paymentId);
+    }
+  } catch (err) {
+    console.error("Error de red al reembolsar en MP:", err, "paymentId:", paymentId);
+  }
+
+  // Registrar en pagos_huerfanos SIEMPRE (éxito o fallo del refund)
+  const finalMotivo = refundOk ? motivo : "refund_pendiente";
+  const { error: insertErr } = await supabase.from("pagos_huerfanos").insert({
+    payment_id: paymentId,
+    reserva_id: reservaId,
+    monto_ars:  Math.round(montoArs),
+    motivo:     finalMotivo,
+  });
+  if (insertErr) {
+    // Loggear y seguir — no podemos hacer más desde acá
+    console.error(
+      "ERROR CRÍTICO: fallo insert pagos_huerfanos:",
+      insertErr,
+      { paymentId, reservaId, montoArs: Math.round(montoArs), finalMotivo },
+    );
+  }
+}
+
 Deno.serve(async (req) => {
-  const url = new URL(req.url);
+  const url  = new URL(req.url);
   const body = await req.text();
 
-  // Soporte para AMBOS formatos de MP:
-  //   Nuevo: POST ?type=payment&data.id=XXXXX  (body puede ser vacío o JSON distinto)
+  // Soporte para AMBOS formatos de notificación de MP:
+  //   Nuevo: POST ?type=payment&data.id=XXXXX
   //   Viejo: POST body={"type":"payment","data":{"id":"XXXXX"}}
   const qType   = url.searchParams.get("type");
   const qDataId = url.searchParams.get("data.id");
 
   let bodyJson: { type?: string; data?: { id?: string | number } } = {};
-  try { if (body) bodyJson = JSON.parse(body); } catch { /* body no-JSON, ignoramos */ }
+  try { if (body) bodyJson = JSON.parse(body); } catch { /* body no-JSON, ignorar */ }
 
-  const notifType   = qType   ?? bodyJson.type;
-  const rawId       = qDataId ?? bodyJson.data?.id;
-  const paymentId   = rawId != null ? String(rawId) : "";
+  const notifType = qType   ?? bodyJson.type;
+  const rawId     = qDataId ?? bodyJson.data?.id;
+  const paymentId = rawId != null ? String(rawId) : "";
 
-  // 1. Validar firma HMAC-SHA256 de MP
+  // 1. Validar firma HMAC-SHA256 de MP (sin cambios respecto al original)
   const xSignature    = req.headers.get("x-signature") ?? "";
   const xRequestId    = req.headers.get("x-request-id") ?? "";
   const webhookSecret = Deno.env.get("MP_WEBHOOK_SECRET");
@@ -26,7 +98,6 @@ Deno.serve(async (req) => {
     const ts  = xSignature.match(/ts=([^,&]+)/)?.[1] ?? "";
     const v1  = xSignature.match(/v1=([^,&]+)/)?.[1] ?? "";
     const manifest = `id:${paymentId};request-id:${xRequestId};ts:${ts};`;
-
     const key = await crypto.subtle.importKey(
       "raw",
       new TextEncoder().encode(webhookSecret),
@@ -37,18 +108,17 @@ Deno.serve(async (req) => {
     const sigBytes = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(manifest));
     const expected = Array.from(new Uint8Array(sigBytes))
       .map(b => b.toString(16).padStart(2, "0")).join("");
-
     if (expected !== v1) {
       console.error("Firma MP inválida", { expected, v1, manifest });
       return new Response("Unauthorized", { status: 401 });
     }
   }
 
-  // 2. Filtrar: solo procesamos notificaciones de pago con id
+  // 2. Filtrar: solo pagos con id
   if (notifType !== "payment") return new Response("ok", { status: 200 });
   if (!paymentId)              return new Response("ok", { status: 200 });
 
-  // 3. Consultar el pago real en MP — no confiamos en la notificación sola
+  // 3. Consultar pago real en MP — no confiar en la notificación sola
   const mpRes = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
     headers: { Authorization: `Bearer ${Deno.env.get("MP_ACCESS_TOKEN")}` },
   });
@@ -63,7 +133,49 @@ Deno.serve(async (req) => {
 
   const extRef = String(payment.external_reference ?? "");
 
-  // 4a. Nuevo patrón: external_reference = id numérico de la fila en compras
+  // ── RAMA A: reserva de clase (external_reference = "r_<bigint>") ──────────
+  if (extRef.startsWith("r_")) {
+    const reservaId = parseInt(extRef.slice(2), 10);
+    if (isNaN(reservaId)) {
+      console.error("external_reference r_ con id no numérico:", extRef);
+      return new Response("error", { status: 500 }); // MP reintenta hasta que fije el bug
+    }
+
+    const { data: confirmarResult, error: confirmarErr } = await supabase.rpc(
+      "confirmar_reserva_pago",
+      { p_reserva_id: reservaId, p_payment_id: String(paymentId) },
+    );
+    if (confirmarErr) {
+      // Error transitorio (DB caída, red) → 500 para que MP reintente
+      console.error("Error en confirmar_reserva_pago:", confirmarErr);
+      return new Response("error", { status: 500 });
+    }
+
+    const resultado = String(confirmarResult ?? "");
+
+    if (resultado === "confirmada" || resultado === "ya_confirmada") {
+      return new Response("ok", { status: 200 });
+    }
+
+    if (ORPHAN_MOTIVOS.has(resultado)) {
+      // Terminal: reembolsar + registrar, no reintentar
+      await handleOrphan(
+        supabase,
+        String(paymentId),
+        reservaId,
+        payment.transaction_amount ?? 0,
+        resultado,
+      );
+      return new Response("ok", { status: 200 });
+    }
+
+    // Respuesta inesperada del RPC — loggear y 500 para diagnóstico
+    console.error("confirmar_reserva_pago resultado inesperado:", resultado, { reservaId, paymentId });
+    return new Response("error", { status: 500 });
+  }
+
+  // ── RAMA B: compra de pack (external_reference = dígitos puros) ───────────
+  // Intacto respecto al original.
   if (/^\d+$/.test(extRef)) {
     const compraId = parseInt(extRef, 10);
     const { error } = await supabase.rpc("aprobar_compra", {
@@ -72,17 +184,18 @@ Deno.serve(async (req) => {
     });
     if (error) {
       console.error("Error en aprobar_compra:", error);
-      return new Response("error", { status: 500 }); // MP reintenta en 500
+      return new Response("error", { status: 500 });
     }
     return new Response("ok", { status: 200 });
   }
 
-  // 4b. Patrón legado: external_reference = alumno_id (UUID), datos en metadata
+  // ── RAMA C: patrón legado (external_reference = UUID) ────────────────────
+  // Intacto respecto al original.
   const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   const { alumno_id, horas, precio, pack_id } = payment.metadata ?? {};
   if (!alumno_id || !horas || !precio) {
     console.error("Metadata incompleta (patrón legado), external_reference:", extRef, "payment:", paymentId);
-    return new Response("error", { status: 500 }); // MP reintenta — requiere fix manual
+    return new Response("error", { status: 500 });
   }
   const safePackId = pack_id && UUID_RE.test(String(pack_id)) ? pack_id : null;
   const { error } = await supabase.rpc("acreditar_compra", {

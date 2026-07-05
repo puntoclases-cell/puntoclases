@@ -20,10 +20,82 @@ Deno.serve(async (req) => {
   const { data: { user }, error: authErr } = await anonClient.auth.getUser();
   if (authErr || !user) return new Response("Unauthorized", { status: 401, headers: corsHeaders });
 
-  // 2. El cliente manda { horas?, packId? } — NUNCA el precio
-  const { horas, packId } = await req.json();
+  const body = await req.json();
 
-  // 3. Calcular precio server-side desde la config real de la DB
+  // ── RAMA A: pago por clase ────────────────────────────────────────────────
+  // Body: { reservaParams: { profeId, materia, fecha, hora, horas, modalidad, tipo, necesidad? } }
+  // El precio es 100% server-side (RPC crear_reserva_pendiente_pago lo calcula).
+  if (body.reservaParams) {
+    const { profeId, materia, fecha, hora, horas: rHoras, modalidad, tipo, necesidad } =
+      body.reservaParams as {
+        profeId: string; materia: string; fecha: string; hora: string;
+        horas: number; modalidad: string; tipo: string; necesidad?: string;
+      };
+
+    const { data: rpcRows, error: rpcErr } = await anonClient.rpc(
+      "crear_reserva_pendiente_pago",
+      {
+        p_profe_id:  profeId,
+        p_materia:   materia,
+        p_fecha:     fecha,
+        p_hora:      hora,
+        p_horas:     rHoras,
+        p_modalidad: modalidad,
+        p_tipo:      tipo,
+        p_necesidad: necesidad ?? null,
+      },
+    );
+    if (rpcErr || !rpcRows?.[0]) {
+      console.error("Error en crear_reserva_pendiente_pago:", rpcErr);
+      return new Response(
+        JSON.stringify({ error: rpcErr?.message ?? "Error al crear reserva" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+    const { reserva_id: reservaId, monto_ars: montoArs } = rpcRows[0] as {
+      reserva_id: number; monto_ars: number;
+    };
+
+    const mpRes = await fetch("https://api.mercadopago.com/checkout/preferences", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${Deno.env.get("MP_ACCESS_TOKEN")}`,
+      },
+      body: JSON.stringify({
+        items: [{
+          title:       `Clase de ${materia} - PuntoClases`,
+          quantity:    1,
+          unit_price:  montoArs,
+          currency_id: "ARS",
+        }],
+        external_reference: `r_${reservaId}`,
+        notification_url: `${Deno.env.get("SUPABASE_URL")}/functions/v1/mp-webhook`,
+        back_urls: {
+          success: `https://puntoclases.vercel.app?reserva_id=${reservaId}`,
+          failure: `https://puntoclases.vercel.app?reserva_id=${reservaId}`,
+          pending: `https://puntoclases.vercel.app?reserva_id=${reservaId}`,
+        },
+      }),
+    });
+    const pref = await mpRes.json();
+    if (!mpRes.ok) {
+      console.error("Error MP al crear preferencia de clase:", JSON.stringify(pref));
+      return new Response(
+        JSON.stringify({ error: pref }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+    return new Response(
+      JSON.stringify({ init_point: pref.init_point, reserva_id: reservaId }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
+  }
+
+  // ── RAMA B: pago de packs (flujo existente, sin cambios) ─────────────────
+  // Body: { horas?, packId? }
+  const { horas, packId } = body as { horas?: number; packId?: string };
+
   const admin = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
@@ -43,16 +115,15 @@ Deno.serve(async (req) => {
       .eq("id", packId)
       .single();
     if (packErr || !pack) return new Response("Pack no encontrado", { status: 400, headers: corsHeaders });
-    actualHoras = pack.horas;
+    actualHoras  = pack.horas;
     actualPrecio = Math.round(precioInd * pack.horas * (1 - pack.descuento / 100));
     resolvedPackId = packId;
   } else {
     if (!horas || horas < 1) return new Response("Parámetro horas inválido", { status: 400, headers: corsHeaders });
-    actualHoras = horas;
+    actualHoras  = horas;
     actualPrecio = actualHoras * precioInd;
   }
 
-  // 4. Registrar compra pendiente en DB — el id sirve de external_reference para el webhook
   const { data: compraId, error: pendErr } = await admin.rpc("registrar_compra_pendiente", {
     p_alumno_id: user.id,
     p_horas:     actualHoras,
@@ -64,8 +135,7 @@ Deno.serve(async (req) => {
     return new Response("Error al registrar compra", { status: 500, headers: corsHeaders });
   }
 
-  // 5. Crear preferencia en MP — external_reference = id de DB para que el webhook la encuentre
-  const mpRes = await fetch("https://api.mercadopago.com/checkout/preferences", {
+  const mpPackRes = await fetch("https://api.mercadopago.com/checkout/preferences", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -82,11 +152,10 @@ Deno.serve(async (req) => {
       },
     }),
   });
-
-  const pref = await mpRes.json();
-  if (!mpRes.ok) {
+  const pref = await mpPackRes.json();
+  if (!mpPackRes.ok) {
     console.error("Error MP al crear preferencia:", JSON.stringify(pref));
-    return new Response(JSON.stringify({ error: pref }), { status: 500, headers: corsHeaders });
+    return new Response(JSON.stringify({ error: pref }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 
   return new Response(
