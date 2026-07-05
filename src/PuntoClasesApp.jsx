@@ -100,6 +100,9 @@ const diasEnMes = (y,m) => new Date(y,m+1,0).getDate();
 const primerDia = (y,m) => new Date(y,m,1).getDay();
 const toISO = (y,m,d) => `${y}-${String(m+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
 const fmt = iso => { const [y,m,d]=iso.split("-"); return `${d}/${m}/${y}`; };
+const _MESES_L = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
+const _DIAS_L  = ["Domingo","Lunes","Martes","Miércoles","Jueves","Viernes","Sábado"];
+const fmtLarga = iso => { const [y,m,d]=iso.split('-').map(Number); const dt=new Date(y,m-1,d); return `${_DIAS_L[dt.getDay()]} ${d} de ${_MESES_L[m-1]}`; };
 const diasVenc = iso => { if (!iso) return 0; const [y,m,d]=iso.split("-"); const hoy=new Date(); hoy.setHours(0,0,0,0); return Math.ceil((new Date(+y,+m-1,+d)-hoy)/(1000*60*60*24)); };
 // Saldo real disponible aplicando la regla de umbral 0.8: si venció y era ≥0.8 hs → 0; si <0.8 → se conserva.
 const saldoVivo = (sal, vencimiento) => { if (!vencimiento) return sal; return (diasVenc(vencimiento) < 0 && sal >= 0.8) ? 0 : sal; };
@@ -293,14 +296,6 @@ function Reservar({ saldo, onReservar, profes, alumnoId, onNav, cfg }) {
   const materiasUnicas = [...new Set((profes || []).flatMap(p => p.materias || []))].sort();
   const profesParaMateria = (profes || []).filter(p => (p.materias || []).includes(materia));
   const TOTAL_PASOS = 8;
-
-  const MESES_ES = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
-  const DIAS_ES = ["Domingo","Lunes","Martes","Miércoles","Jueves","Viernes","Sábado"];
-  const fmtLarga = fechaStr => {
-    const [y, m, d] = fechaStr.split('-').map(Number);
-    const date = new Date(y, m - 1, d);
-    return `${DIAS_ES[date.getDay()]} ${d} de ${MESES_ES[m - 1]}`;
-  };
 
   if (paso === 9) return (
     <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",minHeight:300,gap:16,textAlign:"center",padding:20}}>
@@ -632,124 +627,226 @@ function Reservar({ saldo, onReservar, profes, alumnoId, onNav, cfg }) {
 
 // ── PANTALLA HISTORIAL ───────────────────────────────────────────────────────
 function Historial({ reservas, onReprogramar, onCancelar, alumnoId, cfg }) {
-  const [tab,setTab] = useState("proximas");
-  const [abierto,setAbierto] = useState(null);
-  const [modalResenia,setModalResenia] = useState(null);
-  const [modalReprog,setModalReprog] = useState(null);
-  const [resenias,setResenias] = useState({});
+  const [tab, setTab] = useState("proximas");
+  const [abierto, setAbierto] = useState(null);
+  const [modalResenia, setModalResenia] = useState(null);
+  const [modalReprog, setModalReprog] = useState(null);
+  const [resenias, setResenias] = useState({});
+  const now = new Date();
+  const [calMes, setCalMes] = useState(now.getMonth());
+  const [calYear, setCalYear] = useState(now.getFullYear());
+  const [diaFiltro, setDiaFiltro] = useState(null);
 
-  const hoy = new Date().toISOString().slice(0,10);
-  const proximas = (reservas||[])
-    .filter(r => r.fecha >= hoy)
-    .sort((a,b) => a.fecha.localeCompare(b.fecha));
-  const pasadas = (reservas||[])
+  const hoy = now.toISOString().slice(0, 10);
+  const proximas = (reservas || [])
+    .filter(r => r.fecha >= hoy && r.estado !== "cancelada")
+    .sort((a, b) => a.fecha.localeCompare(b.fecha) || a.hora.localeCompare(b.hora));
+  const pasadas = (reservas || [])
     .filter(r => r.fecha < hoy)
-    .sort((a,b) => b.fecha.localeCompare(a.fecha));
+    .sort((a, b) => b.fecha.localeCompare(a.fecha));
+
+  const proximaClase = proximas[0] || null;
+  const fechasConClase = new Set(proximas.map(r => r.fecha));
+  const proximasFiltradas = diaFiltro ? proximas.filter(r => r.fecha === diaFiltro) : proximas;
+
+  const diffDias = fecha => {
+    const [y,m,d] = fecha.split('-').map(Number);
+    const [hy,hm,hd] = hoy.split('-').map(Number);
+    return Math.round((new Date(y,m-1,d) - new Date(hy,hm-1,hd)) / (1000*60*60*24));
+  };
+  const etiquetaDias = fecha => {
+    const n = diffDias(fecha);
+    if (n === 0) return "¡Hoy!";
+    if (n === 1) return "Mañana";
+    return `En ${n} días`;
+  };
+  const endHoraStr = (hora, horas) => {
+    const [hh, mm] = (hora || "00:00").split(':').map(Number);
+    const t = hh * 60 + mm + (horas || 1) * 60;
+    return `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
+  };
 
   const estadoBadge = {
     confirmada: { bg:"#dcfce7", col:"#15803d", label:"Confirmada ✓" },
     pendiente:  { bg:"#fefce8", col:"#92400e", label:"Pendiente" },
     cancelada:  { bg:"#fff5f5", col:"#dc2626", label:"Cancelada" },
   };
-  const getBadge = (estado) => estadoBadge[estado] || { bg:"#f1f5f9", col:"#64748b", label: estado||"Reservada" };
-
-  const inicialesProfe = (nombre) =>
-    (nombre||"").split(" ").map(n=>n[0]).join("").slice(0,2).toUpperCase() || "P";
+  const getBadge = estado => estadoBadge[estado] || { bg:"#f1f5f9", col:"#64748b", label: estado || "Reservada" };
+  const inicialesProfe = nombre => (nombre || "").split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase() || "P";
 
   if (!reservas) return <p style={{color:"#64748b",textAlign:"center",padding:20}}>Cargando clases…</p>;
 
   return (
     <div style={{display:"flex",flexDirection:"column",gap:14}}>
       <h3 style={{margin:0,color:DK}}>Mis clases</h3>
+
+      {/* Tabs */}
       <div style={{display:"flex",background:"#f1f5f9",borderRadius:12,padding:4,gap:4}}>
-        {[{v:"proximas",l:"Próximas"},{v:"historial",l:"Historial"}].map(t=>(
-          <button key={t.v} onClick={()=>setTab(t.v)}
-            style={{flex:1,background:tab===t.v?"#fff":"transparent",border:"none",borderRadius:10,padding:"10px",fontSize:14,fontWeight:700,color:tab===t.v?P:"#64748b",cursor:"pointer",boxShadow:tab===t.v?"0 1px 4px rgba(0,0,0,0.08)":"none"}}>
+        {[{v:"proximas",l:"Próximas"},{v:"historial",l:"Historial"}].map(t => (
+          <button key={t.v} onClick={() => setTab(t.v)}
+            style={{flex:1,background:tab===t.v?"#fff":"transparent",border:"none",borderRadius:10,padding:"10px",fontSize:16,fontWeight:700,color:tab===t.v?P:"#64748b",cursor:"pointer",boxShadow:tab===t.v?"0 1px 4px rgba(0,0,0,0.08)":"none"}}>
             {t.l}
           </button>
         ))}
       </div>
 
-      {tab==="proximas" && proximas.length === 0 && (
-        <p style={{color:"#94a3b8",textAlign:"center",padding:16,fontSize:14}}>No tenés clases próximas agendadas.</p>
-      )}
-      {tab==="proximas" && proximas.map(c=>{
-        const nombreProfe = c.profes?.profiles?.nombre || "";
-        const badge = getBadge(c.estado);
-        return (
-          <Card key={c.id}>
-            <div style={{display:"flex",alignItems:"center",gap:12}}>
-              <Av i={inicialesProfe(nombreProfe)} color={P}/>
-              <div style={{flex:1}}>
-                <p style={{margin:0,fontWeight:700,fontSize:15,color:DK}}>{c.materia}</p>
-                <p style={{margin:"2px 0 0",fontSize:13,color:"#64748b"}}>con {nombreProfe}</p>
-              </div>
-              <div style={{textAlign:"right"}}>
-                <p style={{margin:0,fontWeight:700,color:P}}>{c.hora}</p>
-                <p style={{margin:"2px 0 0",fontSize:12,color:"#64748b"}}>{fmt(c.fecha)}</p>
-              </div>
-            </div>
-            <div style={{marginTop:10,display:"flex",gap:8}}>
-              <Badge bg="#f0f6fa" col={BL}>{c.modalidad}</Badge>
-              <Badge bg={badge.bg} col={badge.col}>{badge.label}</Badge>
-            </div>
-            {(c.estado === "confirmada" || c.estado === "pendiente") && (
-              <div style={{marginTop:10}}>
-                <Btn variant="danger" onClick={()=>setModalReprog(c)}>Reprogramar / Cancelar</Btn>
-              </div>
-            )}
-          </Card>
-        );
-      })}
+      {/* ─── PRÓXIMAS ─── */}
+      {tab === "proximas" && (
+        <div style={{display:"flex",flexDirection:"column",gap:14}}>
 
-      {tab==="historial" && pasadas.length === 0 && (
-        <p style={{color:"#94a3b8",textAlign:"center",padding:16,fontSize:14}}>Todavía no tenés clases realizadas.</p>
-      )}
-      {tab==="historial" && pasadas.map(c=>{
-        const nombreProfe = c.profes?.profiles?.nombre || "";
-        const nombreCorto = nombreProfe.split(" ")[0] || "el profe";
-        return (
-          <Card key={c.id} style={{cursor:"pointer"}}>
-            <div onClick={()=>setAbierto(abierto===c.id?null:c.id)} style={{display:"flex",alignItems:"center",gap:12}}>
-              <Av i={inicialesProfe(nombreProfe)} color="#94a3b8" size={36}/>
-              <div style={{flex:1}}>
-                <p style={{margin:0,fontWeight:700,fontSize:14,color:DK}}>{c.materia}</p>
-                <p style={{margin:"2px 0 0",fontSize:12,color:"#94a3b8"}}>{fmt(c.fecha)} · {c.hora} · {c.modalidad}</p>
-              </div>
-              <span style={{color:"#94a3b8",fontSize:16}}>{abierto===c.id?"▲":"▼"}</span>
-            </div>
-            {abierto===c.id && (
-              <div style={{marginTop:14,display:"flex",flexDirection:"column",gap:10}}>
-                <div style={{background:"#f8fafc",borderRadius:10,padding:12}}>
-                  <p style={{margin:"0 0 4px",fontSize:11,fontWeight:700,color:"#64748b",textTransform:"uppercase"}}>Lo que pediste trabajar</p>
-                  <p style={{margin:0,fontSize:13,color:"#374151"}}>{c.necesidad||"—"}</p>
+          {/* Card destacada — próxima clase */}
+          {proximaClase && (
+            <div style={{background:`linear-gradient(135deg,${PRIMARY} 0%,#1a7ab0 100%)`,borderRadius:18,padding:"20px 18px",color:"#fff"}}>
+              <p style={{margin:"0 0 4px",fontSize:12,fontWeight:700,opacity:0.8,textTransform:"uppercase",letterSpacing:"0.5px"}}>Próxima clase</p>
+              <p style={{margin:"0 0 6px",fontSize:20,fontWeight:800}}>{proximaClase.materia}</p>
+              <p style={{margin:"0 0 14px",fontSize:16,opacity:0.9}}>con {proximaClase.profes?.profiles?.nombre || "el profe"}</p>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end"}}>
+                <div>
+                  <p style={{margin:0,fontSize:16,fontWeight:700}}>{fmtLarga(proximaClase.fecha)}</p>
+                  <p style={{margin:"3px 0 0",fontSize:15}}>{proximaClase.hora} → {endHoraStr(proximaClase.hora, proximaClase.horas)} hs</p>
                 </div>
-                {c.devolucion ? (
-                  <div style={{background:"#f0fdf4",borderRadius:10,padding:12,border:"1px solid #bbf7d0"}}>
-                    <p style={{margin:"0 0 4px",fontSize:11,fontWeight:700,color:"#166534",textTransform:"uppercase"}}>Devolución de {nombreCorto}</p>
-                    <p style={{margin:0,fontSize:13,color:"#374151"}}>{c.devolucion}</p>
-                  </div>
-                ) : (
-                  <div style={{background:"#fefce8",borderRadius:10,padding:12,border:"1px solid #fde68a"}}>
-                    <p style={{margin:0,fontSize:13,color:"#92400e"}}>⏳ {nombreCorto} todavía no cargó la devolución.</p>
-                  </div>
-                )}
-                {c.estado==="realizada" && !resenias[c.id] && (
-                  <button onClick={()=>setModalResenia(c)}
-                    style={{background:"#fefce8",border:"1.5px solid #fde68a",borderRadius:10,padding:"8px 14px",cursor:"pointer",fontSize:13,fontWeight:700,color:"#92400e",textAlign:"left"}}>
-                    ⭐ Calificar clase
+                <div style={{background:"rgba(255,255,255,0.22)",borderRadius:12,padding:"8px 14px",textAlign:"center",minWidth:72}}>
+                  <p style={{margin:0,fontSize:17,fontWeight:800}}>{etiquetaDias(proximaClase.fecha)}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {proximas.length === 0 ? (
+            <p style={{color:"#94a3b8",textAlign:"center",padding:16,fontSize:16}}>No tenés clases próximas agendadas.</p>
+          ) : (
+            <>
+              {/* Mini-calendario */}
+              <div style={{background:"#fff",border:"1.5px solid #e2e8f0",borderRadius:14,padding:14}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                  <button onClick={() => { const d=new Date(calYear,calMes-1,1); setCalYear(d.getFullYear()); setCalMes(d.getMonth()); }}
+                    style={{background:"none",border:"none",cursor:"pointer",padding:"4px 10px",fontSize:20,color:INK_SOFT,minWidth:40,minHeight:40}}>‹</button>
+                  <span style={{fontWeight:700,fontSize:15,color:DK}}>{MESES[calMes]} {calYear}</span>
+                  <button onClick={() => { const d=new Date(calYear,calMes+1,1); setCalYear(d.getFullYear()); setCalMes(d.getMonth()); }}
+                    style={{background:"none",border:"none",cursor:"pointer",padding:"4px 10px",fontSize:20,color:INK_SOFT,minWidth:40,minHeight:40}}>›</button>
+                </div>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:2,textAlign:"center"}}>
+                  {DIAS.map(d => <div key={d} style={{fontSize:11,fontWeight:600,color:INK_SOFT,paddingBottom:4}}>{d}</div>)}
+                  {Array(primerDia(calYear, calMes)).fill(null).map((_,i) => <div key={`e${i}`}/>)}
+                  {Array(diasEnMes(calYear, calMes)).fill(null).map((_,i) => {
+                    const d = i + 1, iso = toISO(calYear, calMes, d);
+                    const tieneClase = fechasConClase.has(iso), sel = diaFiltro === iso;
+                    return (
+                      <button key={d} onClick={() => setDiaFiltro(sel ? null : iso)}
+                        disabled={!tieneClase}
+                        style={{aspectRatio:"1",borderRadius:8,border:sel?`2px solid ${PRIMARY}`:"none",
+                          background:sel?PRIMARY:tieneClase?PL:"transparent",
+                          color:sel?"#fff":tieneClase?P:"#cbd5e1",
+                          fontSize:13,fontWeight:tieneClase?700:400,cursor:tieneClase?"pointer":"default",padding:0}}>
+                        {d}
+                      </button>
+                    );
+                  })}
+                </div>
+                {diaFiltro && (
+                  <button onClick={() => setDiaFiltro(null)}
+                    style={{marginTop:10,width:"100%",background:"none",border:"none",cursor:"pointer",fontSize:14,color:INK_SOFT,textAlign:"center",minHeight:40}}>
+                    {fmtLarga(diaFiltro)} — tocar para ver todas
                   </button>
                 )}
-                {resenias[c.id] && (
-                  <div style={{background:"#f8fafc",borderRadius:10,padding:"8px 14px",fontSize:13,color:"#64748b"}}>
-                    {"★".repeat(resenias[c.id].estrellas)} · {resenias[c.id].comentario||"Reseña enviada"}
+              </div>
+
+              {/* Lista de cards */}
+              {proximasFiltradas.length === 0 && diaFiltro && (
+                <p style={{color:"#94a3b8",textAlign:"center",fontSize:15}}>No hay clases ese día.</p>
+              )}
+              {proximasFiltradas.map(c => {
+                const nombreProfe = c.profes?.profiles?.nombre || "";
+                const badge = getBadge(c.estado);
+                return (
+                  <Card key={c.id} style={{gap:12}}>
+                    <div style={{display:"flex",alignItems:"flex-start",gap:12}}>
+                      <Av i={inicialesProfe(nombreProfe)} color={P}/>
+                      <div style={{flex:1,minWidth:0}}>
+                        <p style={{margin:0,fontWeight:700,fontSize:18,color:DK}}>{c.materia}</p>
+                        <p style={{margin:"2px 0 0",fontSize:16,color:INK_SOFT}}>con {nombreProfe}</p>
+                        <p style={{margin:"8px 0 0",fontSize:16,fontWeight:700,color:DK}}>{fmtLarga(c.fecha)}</p>
+                        <p style={{margin:"2px 0 0",fontSize:16,color:INK_SOFT}}>{c.hora} → {endHoraStr(c.hora, c.horas)} · {c.horas} hora{c.horas===1?"":"s"}</p>
+                      </div>
+                    </div>
+                    <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                      <Badge bg="#f0f6fa" col={BL}>{c.modalidad}</Badge>
+                      <Badge bg="#f0f6fa" col={BL}>{c.tipo==="grupal"?"Grupal":"Individual"}</Badge>
+                      <Badge bg={badge.bg} col={badge.col}>{badge.label}</Badge>
+                    </div>
+                    {(c.estado === "confirmada" || c.estado === "pendiente") && (
+                      <div style={{display:"flex",gap:8}}>
+                        <button onClick={() => setModalReprog(c)}
+                          style={{flex:1,minHeight:48,background:"#f0f6fa",border:`1.5px solid ${BL}`,borderRadius:12,cursor:"pointer",fontSize:16,fontWeight:700,color:PRIMARY}}>
+                          Reprogramar
+                        </button>
+                        <button onClick={() => setModalReprog(c)}
+                          style={{flex:1,minHeight:48,background:"#fff5f5",border:"1.5px solid var(--pc-alert,#D94F3D)",borderRadius:12,cursor:"pointer",fontSize:16,fontWeight:700,color:"var(--pc-alert-text,#C0392B)"}}>
+                          Cancelar
+                        </button>
+                      </div>
+                    )}
+                  </Card>
+                );
+              })}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* ─── HISTORIAL ─── */}
+      {tab === "historial" && (
+        <div style={{display:"flex",flexDirection:"column",gap:12}}>
+          {pasadas.length === 0 && (
+            <p style={{color:"#94a3b8",textAlign:"center",padding:16,fontSize:16}}>Todavía no tenés clases realizadas.</p>
+          )}
+          {pasadas.map(c => {
+            const nombreProfe = c.profes?.profiles?.nombre || "";
+            const nombreCorto = nombreProfe.split(" ")[0] || "el profe";
+            return (
+              <Card key={c.id} style={{cursor:"pointer"}}>
+                <div onClick={() => setAbierto(abierto===c.id ? null : c.id)} style={{display:"flex",alignItems:"center",gap:12}}>
+                  <Av i={inicialesProfe(nombreProfe)} color="#94a3b8" size={36}/>
+                  <div style={{flex:1,minWidth:0}}>
+                    <p style={{margin:0,fontWeight:700,fontSize:16,color:DK}}>{c.materia}</p>
+                    <p style={{margin:"2px 0 0",fontSize:15,color:"#94a3b8"}}>{fmtLarga(c.fecha)} · {c.hora} · {c.modalidad}</p>
+                  </div>
+                  <span style={{color:"#94a3b8",fontSize:16}}>{abierto===c.id ? "▲" : "▼"}</span>
+                </div>
+                {abierto === c.id && (
+                  <div style={{marginTop:14,display:"flex",flexDirection:"column",gap:10}}>
+                    <div style={{background:"#f8fafc",borderRadius:10,padding:12}}>
+                      <p style={{margin:"0 0 4px",fontSize:12,fontWeight:700,color:"#64748b",textTransform:"uppercase"}}>Lo que pediste trabajar</p>
+                      <p style={{margin:0,fontSize:15,color:"#374151"}}>{c.necesidad||"—"}</p>
+                    </div>
+                    {c.devolucion ? (
+                      <div style={{background:"#f0fdf4",borderRadius:10,padding:12,border:"1px solid #bbf7d0"}}>
+                        <p style={{margin:"0 0 4px",fontSize:12,fontWeight:700,color:"#166534",textTransform:"uppercase"}}>Devolución de {nombreCorto}</p>
+                        <p style={{margin:0,fontSize:15,color:"#374151"}}>{c.devolucion}</p>
+                      </div>
+                    ) : (
+                      <div style={{background:"#fefce8",borderRadius:10,padding:12,border:"1px solid #fde68a"}}>
+                        <p style={{margin:0,fontSize:15,color:"#92400e"}}>⏳ {nombreCorto} todavía no cargó la devolución.</p>
+                      </div>
+                    )}
+                    {c.estado === "realizada" && !resenias[c.id] && (
+                      <button onClick={() => setModalResenia(c)}
+                        style={{background:"#fefce8",border:"1.5px solid #fde68a",borderRadius:10,padding:"10px 14px",cursor:"pointer",fontSize:16,fontWeight:700,color:"#92400e",textAlign:"left",minHeight:48}}>
+                        Calificar clase
+                      </button>
+                    )}
+                    {resenias[c.id] && (
+                      <div style={{background:"#f8fafc",borderRadius:10,padding:"8px 14px",fontSize:15,color:"#64748b"}}>
+                        {"★".repeat(resenias[c.id].estrellas)} · {resenias[c.id].comentario||"Reseña enviada"}
+                      </div>
+                    )}
                   </div>
                 )}
-              </div>
-            )}
-          </Card>
-        );
-      })}
+              </Card>
+            );
+          })}
+        </div>
+      )}
 
       {modalResenia && (
         <ModalResenia
@@ -757,20 +854,20 @@ function Historial({ reservas, onReprogramar, onCancelar, alumnoId, cfg }) {
           onGuardar={async (estrellas, comentario) => {
             try {
               await crearResenia(modalResenia.id, alumnoId, modalResenia.profe_id, estrellas, comentario);
-              setResenias(prev=>({...prev,[modalResenia.id]:{estrellas,comentario}}));
+              setResenias(prev => ({...prev, [modalResenia.id]: {estrellas, comentario}}));
             } catch(err) { console.error("Error al guardar reseña:", err); }
             setModalResenia(null);
           }}
-          onOmitir={()=>setModalResenia(null)}
+          onOmitir={() => setModalResenia(null)}
         />
       )}
       {modalReprog && (
         <ModalReprogramar
           reserva={modalReprog}
           cfg={cfg}
-          onCerrar={()=>setModalReprog(null)}
+          onCerrar={() => setModalReprog(null)}
           onConfirmar={(nuevaFecha, nuevaHora) => onReprogramar(modalReprog.id, nuevaFecha, nuevaHora)}
-          onCancelar={(saldoNuevo) => onCancelar(modalReprog.id, saldoNuevo)}
+          onCancelar={saldoNuevo => onCancelar(modalReprog.id, saldoNuevo)}
         />
       )}
     </div>
