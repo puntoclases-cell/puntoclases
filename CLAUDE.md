@@ -91,7 +91,10 @@ Toda fase nueva se diseña para que violar estas reglas sea imposible, y agrega 
 - **F6 Etapa 1 ✅ 2026-07-05**: migraciones DB en prod (ver ESTADO ACTUAL). Front + Edge Functions: Etapa 2 pendiente.
   - **RADAR (a) — BLOQUEANTE antes de activar pago en el front**: cuando `confirmar_reserva_pago` retorna `'expirada_pago_tardio'` (TTL vencido, cupo lleno, o alumno canceló), el webhook necesita insertar en `pagos_huerfanos` Y llamar a MP para reembolsar al alumno. El webhook actual (`mp-webhook`) no hace ni lo uno ni lo otro todavía. Resolver en Etapa 2 junto con la edge function, ANTES de conectar el botón de pago en el front.
   - **RADAR (b) — Etapa 2**: `crear_reserva` actualmente acepta `p_tipo = 'grupal'` y descuenta saldo. En F6 el path grupal usa `crear_reserva_pendiente_pago`. Agregar guardia en `crear_reserva` para rechazar `'grupal'` con RAISE EXCEPTION (o simplemente el front deja de llamarla con grupal).
-- **F6 Etapa 2** (próxima): front wizard pago (P8 nuevo flujo), Edge Function `crear-preferencia` acepta `reservaId`, `mp-webhook` llama `confirmar_reserva_pago` + inserta `pagos_huerfanos` + reembolso MP.
+- **F6 Etapa 2b** (próxima): front wizard pago por clase (P8 nuevo flujo). Notas UI:
+  - Grupal pagada con plata → mostrar **"Reprogramar"** como opción principal; si el alumno igual cancela, advertir explícito: *"Esta clase no se reembolsa"*.
+  - **VERIFICAR en 2b (bloqueante)**: que reprogramar una grupal pagada funcione de extremo a extremo — cupo disponible en el nuevo horario, re-agrupación correcta. Si no funciona, el alumno queda atrapado con una clase que no puede usar ni recuperar.
+- **F6 Etapa 2c** (en rama f6-review, NO en prod): `devolver_horas` — 4 casos por tipo/origen. Migración `20260705000006`. Pendiente de aprobación.
 - **F7** (opcional): carrito progresivo "Agregar otra clase".
 
 ## Regla de negocio — Vencimiento de horas (fija)

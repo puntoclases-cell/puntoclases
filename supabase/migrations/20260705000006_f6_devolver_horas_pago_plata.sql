@@ -1,13 +1,14 @@
 -- ============================================================
--- F6 ETAPA 2c: devolver_horas — 3 casos según origen del pago
+-- F6 ETAPA 2c: devolver_horas — 4 casos según origen y tipo del pago
 --
 -- Antes (migración 003): v_horas_orig := v_reserva.costo_saldo siempre.
 -- Ahora:
---   a) costo_saldo > 0  → pagada con SALDO: devuelve costo_saldo × política. Sin cambio.
---   b) costo_saldo = 0 AND payment_id IS NOT NULL → pagada con PLATA:
---      devuelve v_reserva.horas como saldo individual (sin refund MP).
---   c) costo_saldo = 0 AND payment_id IS NULL → pendiente_pago sin pagar: devuelve 0.
+--   a)  costo_saldo > 0                              → pagada con SALDO: devuelve costo_saldo × política.
+--   b1) costo_saldo = 0, payment_id NOT NULL, individual → devuelve horas reales como saldo.
+--   b2) costo_saldo = 0, payment_id NOT NULL, grupal → NO reembolsa (el alumno reprograma).
+--   c)  costo_saldo = 0, payment_id IS NULL          → pendiente_pago sin pagar: devuelve 0.
 --
+-- Decisión de negocio: grupal pagada con plata no se reembolsa → se reprograma.
 -- Resto intacto: lock FOR UPDATE, autorización, idempotencia, regla 24hs.
 -- CREATE OR REPLACE misma firma → grants se re-aplican al final.
 -- ============================================================
@@ -40,17 +41,17 @@ BEGIN
     RAISE EXCEPTION 'La reserva ya está en estado "%": no se puede cancelar.', v_reserva.estado;
   END IF;
 
-  -- Base de devolución según origen del pago:
+  -- Base de devolución según origen y tipo del pago:
   IF v_reserva.costo_saldo > 0 THEN
-    -- (a) Pagada con saldo: devolvé exactamente lo que se descontó.
-    v_horas_orig := v_reserva.costo_saldo;
+    v_horas_orig := v_reserva.costo_saldo;            -- (a) pagada con saldo
   ELSIF v_reserva.payment_id IS NOT NULL THEN
-    -- (b) Pagada con plata (confirmada vía webhook): devolución en saldo individual
-    --     = horas reales de la clase. NUNCA refund a tarjeta (ese camino es solo para huérfanos).
-    v_horas_orig := v_reserva.horas;
+    IF v_reserva.tipo = 'grupal' THEN
+      v_horas_orig := 0;                              -- (b2) grupal pagada: no reembolsa, se reprograma
+    ELSE
+      v_horas_orig := v_reserva.horas;                -- (b1) individual pagada con plata: saldo individual
+    END IF;
   ELSE
-    -- (c) pendiente_pago sin pagar todavía: nada que devolver al saldo.
-    v_horas_orig := 0;
+    v_horas_orig := 0;                                -- (c) pendiente_pago sin pagar
   END IF;
 
   -- Regla 24hs: clase en menos de 24hs → aplica penalización
