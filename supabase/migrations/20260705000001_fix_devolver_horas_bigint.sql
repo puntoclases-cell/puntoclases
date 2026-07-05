@@ -1,9 +1,19 @@
--- Fix: p_reserva_id era uuid pero reservas.id es bigint.
--- CREATE OR REPLACE preserva GRANTs existentes.
+-- Fix: p_reserva_id era uuid pero reservas.id es BIGINT.
+-- En Postgres la firma incluye los tipos de args → CREATE OR REPLACE con tipo distinto
+-- crea una SEGUNDA función, deja la uuid colgando y NO hereda GRANTs.
+-- Solución: DROP explícito de la uuid primero, luego CREATE + GRANT.
+--
+-- Grants originales de devolver_horas(uuid,...): PUBLIC, authenticated.
+-- Verificado: SELECT grantee FROM information_schema.routine_privileges
+--             WHERE specific_schema='public' AND routine_name='devolver_horas';
 
+-- 1. Eliminar la firma vieja (uuid)
+DROP FUNCTION IF EXISTS public.devolver_horas(uuid, numeric, numeric);
+
+-- 2. Crear con firma correcta (bigint)
 CREATE OR REPLACE FUNCTION public.devolver_horas(
-  p_reserva_id      bigint,
-  p_factor_grupal   numeric DEFAULT 0.8,
+  p_reserva_id       bigint,
+  p_factor_grupal    numeric DEFAULT 0.8,
   p_penalizacion_pct numeric DEFAULT 50
 )
 RETURNS TABLE(saldo_nuevo numeric, horas_devueltas numeric)
@@ -61,3 +71,7 @@ BEGIN
   RETURN QUERY SELECT v_saldo, v_devolver;
 END;
 $function$;
+
+-- 3. Restaurar grants (idénticos a los que tenía la versión uuid)
+GRANT EXECUTE ON FUNCTION public.devolver_horas(bigint, numeric, numeric) TO PUBLIC;
+GRANT EXECUTE ON FUNCTION public.devolver_horas(bigint, numeric, numeric) TO authenticated;
