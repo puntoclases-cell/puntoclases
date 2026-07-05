@@ -1,5 +1,5 @@
 ﻿import { useState, useEffect, useRef } from "react";
-import { login, getUsuarioActual, onAuthChange, logout, getAlumno, getCompras, getReservasAlumno, getProfes, getProfesAdmin, getDisponibilidad, getReservasProfe, marcarReserva, cargarDevolucion, reprogramarReserva, setBloque, borrarBloque, getAlumnos, getTodasLasReservas, actualizarAlumno, actualizarProfe, actualizarPerfil, crearReserva, verificarBloqueOcupado, getReservasDelDia, getMensajes, enviarMensaje, suscribirMensajes, registrarAlumno, registrarProfe, enviarRecuperacion, actualizarPassword, onPasswordRecovery, crearResenia, getConfig, updateConfig, getPacks, devolverHoras, addHorasAdmin, crearPreferencia, contarMensajesNuevosProfe, subirAvatar } from "./db";
+import { login, getUsuarioActual, onAuthChange, logout, getAlumno, getCompras, getReservasAlumno, getProfes, getProfesAdmin, getDisponibilidad, getReservasProfe, marcarReserva, cargarDevolucion, reprogramarReserva, setBloque, borrarBloque, getAlumnos, getTodasLasReservas, actualizarAlumno, actualizarProfe, actualizarPerfil, crearReserva, unirseGrupo, getGrupoInfo, verificarBloqueOcupado, getReservasDelDia, getMensajes, enviarMensaje, suscribirMensajes, registrarAlumno, registrarProfe, enviarRecuperacion, actualizarPassword, onPasswordRecovery, crearResenia, getConfig, updateConfig, getPacks, devolverHoras, addHorasAdmin, crearPreferencia, contarMensajesNuevosProfe, subirAvatar } from "./db";
 
 // ════════════════════════════════════════════════════════════════════════════
 // PUNTOCLASES — APP UNIFICADA
@@ -224,6 +224,7 @@ function Reservar({ saldo, onReservar, profes, alumnoId, onNav, cfg }) {
   const [disponRaw, setDisponRaw] = useState([]);
   const [reservasOcupadas, setReservasOcupadas] = useState([]);
   const [aceptaCancelacion, setAceptaCancelacion] = useState(false);
+  const [cupoPorHora, setCupoPorHora] = useState({});
 
   useEffect(() => {
     if (!profeId) return;
@@ -245,6 +246,22 @@ function Reservar({ saldo, onReservar, profes, alumnoId, onNav, cfg }) {
   }, [profeId, fecha]);
 
   useEffect(() => { setHoraInicio(null); setDuracionHoras(1); }, [fecha, tipo]);
+
+  useEffect(() => {
+    if (paso !== 6 || tipo !== "grupal" || !profeId || !fecha || disponRaw.length === 0) {
+      if (tipo !== "grupal") setCupoPorHora({});
+      return;
+    }
+    let cancelled = false;
+    Promise.all(
+      horariosDisponibles.map(h =>
+        getGrupoInfo(profeId, fecha, h)
+          .then(info => [h, info || { inscriptos_en_vivo: 0, cupo_max: 4 }])
+          .catch(() => [h, { inscriptos_en_vivo: 0, cupo_max: 4 }])
+      )
+    ).then(entries => { if (!cancelled) setCupoPorHora(Object.fromEntries(entries)); });
+    return () => { cancelled = true; };
+  }, [paso, tipo, profeId, fecha, disponRaw, reservasOcupadas]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const profe = (profes || []).find(p => p.id === profeId);
   const dispon = disponRaw.reduce((acc, bloque) => {
@@ -513,14 +530,24 @@ function Reservar({ saldo, onReservar, profes, alumnoId, onNav, cfg }) {
               {horariosDisponibles.map(h => {
                 const maxH = slotsCons(h);
                 const sel = horaInicio === h;
+                const cupoInfo = tipo === "grupal" ? (cupoPorHora[h] || null) : null;
+                const grupoLleno = cupoInfo !== null && cupoInfo.inscriptos_en_vivo >= cupoInfo.cupo_max;
+                const lugaresLibres = cupoInfo ? cupoInfo.cupo_max - cupoInfo.inscriptos_en_vivo : null;
                 return (
                   <div key={h}>
-                    <button onClick={() => { setHoraInicio(sel ? null : h); setDuracionHoras(1); }}
-                      style={{width:"100%",background:sel?PRIMARY:"#fff",color:sel?"#fff":DK,border:`2px solid ${sel?PRIMARY:"#e2e8f0"}`,borderRadius:12,padding:"14px 18px",fontSize:14,fontWeight:600,cursor:"pointer",textAlign:"left",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                    <button onClick={() => { if (!grupoLleno) { setHoraInicio(sel ? null : h); setDuracionHoras(1); } }}
+                      disabled={grupoLleno}
+                      style={{width:"100%",background:sel?PRIMARY:grupoLleno?"#f8fafc":"#fff",color:sel?"#fff":grupoLleno?"#94a3b8":DK,border:`2px solid ${sel?PRIMARY:"#e2e8f0"}`,borderRadius:12,padding:"14px 18px",fontSize:14,fontWeight:600,cursor:grupoLleno?"not-allowed":"pointer",textAlign:"left",display:"flex",justifyContent:"space-between",alignItems:"center",opacity:grupoLleno?0.65:1}}>
                       <span>{h} hs</span>
-                      <span style={{fontSize:12,opacity:0.7}}>{sel ? "▼" : "›"}</span>
+                      <span style={{fontSize:12,opacity:0.8}}>
+                        {tipo === "grupal" && cupoInfo
+                          ? (grupoLleno
+                              ? "Grupo lleno"
+                              : `${cupoInfo.inscriptos_en_vivo} de ${cupoInfo.cupo_max} lugares`)
+                          : (sel ? "▼" : "›")}
+                      </span>
                     </button>
-                    {sel && (
+                    {sel && !grupoLleno && (
                       <Card style={{background:"#f8fafc",border:`1.5px solid ${PB}`,padding:14,marginTop:4}}>
                         <p style={{margin:"0 0 10px",fontWeight:700,fontSize:13,color:DK}}>¿Cuánto tiempo?</p>
                         <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
@@ -609,7 +636,11 @@ function Reservar({ saldo, onReservar, profes, alumnoId, onNav, cfg }) {
               try {
                 const hoy = toISO(new Date().getFullYear(), new Date().getMonth(), new Date().getDate());
                 if (fecha < hoy) { setErrorReserva("No podés reservar en una fecha pasada."); return; }
-                await crearReserva({ profeId, materia, fecha, hora: horaInicio, horas: duracion, modalidad, tipo, alumnosGrupo: null, necesidad });
+                if (tipo === "grupal") {
+                  await unirseGrupo({ profeId, materia, fecha, hora: horaInicio, horas: duracion, modalidad, necesidad });
+                } else {
+                  await crearReserva({ profeId, materia, fecha, hora: horaInicio, horas: duracion, modalidad, tipo, alumnosGrupo: null, necesidad });
+                }
                 onReservar(costo);
                 setPaso(9);
               } catch (err) {

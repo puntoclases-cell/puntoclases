@@ -148,6 +148,24 @@ export async function crearReserva({ profeId, materia, fecha, hora, horas, modal
   return data;
 }
 
+// F5 — Grupal real
+export async function unirseGrupo({ profeId, materia, fecha, hora, horas, modalidad, necesidad }) {
+  const { data, error } = await supabase.rpc("unirse_grupo", {
+    p_profe_id: profeId, p_materia: materia, p_fecha: fecha, p_hora: hora,
+    p_horas: horas, p_modalidad: modalidad, p_necesidad: necesidad ?? null,
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function getGrupoInfo(profeId, fecha, hora) {
+  const { data, error } = await supabase.rpc("get_grupo_info", {
+    p_profe_id: profeId, p_fecha: fecha, p_hora: hora,
+  });
+  if (error) throw error;
+  return data?.[0] || null; // { inscriptos_en_vivo, cupo_max } | null si no existe grupo aún
+}
+
 export async function actualizarPerfil(userId, cambios) {
   const { data, error } = await supabase.from("profiles").update(cambios).eq("id", userId).select().single();
   if (error) throw error;

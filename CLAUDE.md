@@ -115,7 +115,10 @@ Toda fase nueva se diseña para que violar estas reglas sea imposible, y agrega 
 - **F3 ✅ 2026-07-04**: wizard reserva 8 pasos — fix slotsCons (DB es horaria, no 30 min), tipo/modalidad en pasos separados, lenguaje humano en tipo, "Elegir otro día" en P6 sin horarios. Commit `42dffcb`. En prod.
   - **F3.1 ✅ 2026-07-04**: mini-calendario híbrido en P5 · días con nombre completo ("Miércoles 8 de julio") · singular/plural hora/horas. Commit `01bcb6d`.
 - **F4 ✅ 2026-07-04**: agenda del alumno — `Historial` reescrito: card destacada próxima clase, mini-calendario híbrido (días con clase marcados, filtro por día), lista de cards grandes (≥16px, ≥48px targets), fechas en palabra completa (`fmtLarga`), botones Reprogramar/Cancelar separados, `fmtLarga` promovida a global. Commit `9f44049`. En prod.
-- **F5**: grupal real — tabla grupos, cupo con lock, "cuántos anotados", capturar alumnos_grupo.
+- **F5 🔜 2026-07-04**: migración + front listos, build limpio, esperando que David corra la migración.
+  - Migración: `supabase/migrations/20260704000001_f5_grupal_real.sql`. BACKUP obligatorio antes de correr (`reservas`, `config`). Additive primero; DROP INDEX al final.
+  - Front: `unirseGrupo` / `getGrupoInfo` en db.js · P6 muestra cupo real · P8 llama `unirseGrupo` si grupal.
+  - **PENDIENTE (RADAR F6)**: cancelar grupo → devolver saldo a todos los inscriptos · cupo_max se copia de config.cupo_grupal al crear grupo (ya implementado) · reconciliar tipo 'ambas' de disponibilidad con F6 (¿migración pendiente a individual/grupal?).
 - **F6**: modelo tren + saldo simple — pago por clase (reserva pendiente_pago + MP + TTL); absorbe F2 (packs solo individual, sacar factor 0.8 del saldo).
 - **F7** (opcional): carrito progresivo "Agregar otra clase".
 
