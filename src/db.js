@@ -117,7 +117,19 @@ export async function getReservasAlumno(alumnoId) {
 // Reservas existentes de un profe en una fecha (para marcar slots ocupados en la grilla).
 export async function getReservasDelDia(profeId, fecha) {
   const { data, error } = await supabase.from("reservas")
-    .select("hora, horas")
+    .select("hora, horas, tipo")
+    .eq("profe_id", profeId)
+    .eq("fecha", fecha)
+    .in("estado", ["confirmada", "pendiente"]);
+  if (error) throw error;
+  return data || [];
+}
+
+// Reservas del alumno actual con un profe en una fecha (para detectar "Ya estás anotado").
+export async function getMisReservasDelDia(alumnoId, profeId, fecha) {
+  const { data, error } = await supabase.from("reservas")
+    .select("hora, tipo, grupo_id")
+    .eq("alumno_id", alumnoId)
     .eq("profe_id", profeId)
     .eq("fecha", fecha)
     .in("estado", ["confirmada", "pendiente"]);

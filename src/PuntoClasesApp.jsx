@@ -1,5 +1,5 @@
 ﻿import { useState, useEffect, useRef } from "react";
-import { login, getUsuarioActual, onAuthChange, logout, getAlumno, getCompras, getReservasAlumno, getProfes, getProfesAdmin, getDisponibilidad, getReservasProfe, marcarReserva, cargarDevolucion, reprogramarReserva, setBloque, borrarBloque, getAlumnos, getTodasLasReservas, actualizarAlumno, actualizarProfe, actualizarPerfil, crearReserva, unirseGrupo, getGrupoInfo, verificarBloqueOcupado, getReservasDelDia, getMensajes, enviarMensaje, suscribirMensajes, registrarAlumno, registrarProfe, enviarRecuperacion, actualizarPassword, onPasswordRecovery, crearResenia, getConfig, updateConfig, getPacks, devolverHoras, addHorasAdmin, crearPreferencia, contarMensajesNuevosProfe, subirAvatar } from "./db";
+import { login, getUsuarioActual, onAuthChange, logout, getAlumno, getCompras, getReservasAlumno, getProfes, getProfesAdmin, getDisponibilidad, getReservasProfe, marcarReserva, cargarDevolucion, reprogramarReserva, setBloque, borrarBloque, getAlumnos, getTodasLasReservas, actualizarAlumno, actualizarProfe, actualizarPerfil, crearReserva, unirseGrupo, getGrupoInfo, verificarBloqueOcupado, getReservasDelDia, getMisReservasDelDia, getMensajes, enviarMensaje, suscribirMensajes, registrarAlumno, registrarProfe, enviarRecuperacion, actualizarPassword, onPasswordRecovery, crearResenia, getConfig, updateConfig, getPacks, devolverHoras, addHorasAdmin, crearPreferencia, contarMensajesNuevosProfe, subirAvatar } from "./db";
 
 // ════════════════════════════════════════════════════════════════════════════
 // PUNTOCLASES — APP UNIFICADA
@@ -223,6 +223,7 @@ function Reservar({ saldo, onReservar, profes, alumnoId, onNav, cfg }) {
   const [calYear, setCalYear] = useState(new Date().getFullYear());
   const [disponRaw, setDisponRaw] = useState([]);
   const [reservasOcupadas, setReservasOcupadas] = useState([]);
+  const [misReservasDelDia, setMisReservasDelDia] = useState([]);
   const [aceptaCancelacion, setAceptaCancelacion] = useState(false);
   const [cupoPorHora, setCupoPorHora] = useState({});
 
@@ -244,6 +245,15 @@ function Reservar({ saldo, onReservar, profes, alumnoId, onNav, cfg }) {
       .catch(() => {});
     return () => { cancelled = true; };
   }, [profeId, fecha]);
+
+  useEffect(() => {
+    if (!alumnoId || !profeId || !fecha) { setMisReservasDelDia([]); return; }
+    let cancelled = false;
+    getMisReservasDelDia(alumnoId, profeId, fecha)
+      .then(d => { if (!cancelled) setMisReservasDelDia(d || []); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [alumnoId, profeId, fecha]);
 
   useEffect(() => { setHoraInicio(null); setDuracionHoras(1); }, [fecha, tipo]);
 
@@ -281,6 +291,9 @@ function Reservar({ saldo, onReservar, profes, alumnoId, onNav, cfg }) {
     : [];
 
   const slotOcupado = h => reservasOcupadas.some(r => {
+    // Para búsqueda grupal, solo bloquea una individual (el profe está comprometido solo-con-uno).
+    // Una reserva grupal existente en el mismo slot NO bloquea — se muestra con cupo.
+    if (tipo === "grupal" && r.tipo !== "individual") return false;
     const rS = tmins(r.hora), rE = rS + r.horas * 60, s = tmins(h);
     return s >= rS && s < rE;
   });
@@ -532,22 +545,25 @@ function Reservar({ saldo, onReservar, profes, alumnoId, onNav, cfg }) {
                 const sel = horaInicio === h;
                 const cupoInfo = tipo === "grupal" ? (cupoPorHora[h] || null) : null;
                 const grupoLleno = cupoInfo !== null && cupoInfo.inscriptos_en_vivo >= cupoInfo.cupo_max;
-                const lugaresLibres = cupoInfo ? cupoInfo.cupo_max - cupoInfo.inscriptos_en_vivo : null;
+                const yaAnotado = tipo === "grupal" && misReservasDelDia.some(r => r.tipo === "grupal" && r.hora === h);
+                const bloqueado = grupoLleno || yaAnotado;
                 return (
                   <div key={h}>
-                    <button onClick={() => { if (!grupoLleno) { setHoraInicio(sel ? null : h); setDuracionHoras(1); } }}
-                      disabled={grupoLleno}
-                      style={{width:"100%",background:sel?PRIMARY:grupoLleno?"#f8fafc":"#fff",color:sel?"#fff":grupoLleno?"#94a3b8":DK,border:`2px solid ${sel?PRIMARY:"#e2e8f0"}`,borderRadius:12,padding:"14px 18px",fontSize:14,fontWeight:600,cursor:grupoLleno?"not-allowed":"pointer",textAlign:"left",display:"flex",justifyContent:"space-between",alignItems:"center",opacity:grupoLleno?0.65:1}}>
+                    <button onClick={() => { if (!bloqueado) { setHoraInicio(sel ? null : h); setDuracionHoras(1); } }}
+                      disabled={bloqueado}
+                      style={{width:"100%",background:sel?PRIMARY:bloqueado?"#f8fafc":"#fff",color:sel?"#fff":bloqueado?"#94a3b8":DK,border:`2px solid ${sel?PRIMARY:"#e2e8f0"}`,borderRadius:12,padding:"14px 18px",fontSize:14,fontWeight:600,cursor:bloqueado?"not-allowed":"pointer",textAlign:"left",display:"flex",justifyContent:"space-between",alignItems:"center",opacity:bloqueado?0.65:1}}>
                       <span>{h} hs</span>
                       <span style={{fontSize:12,opacity:0.8}}>
                         {tipo === "grupal" && cupoInfo
-                          ? (grupoLleno
-                              ? "Grupo lleno"
-                              : `${cupoInfo.inscriptos_en_vivo} de ${cupoInfo.cupo_max} lugares`)
+                          ? (yaAnotado
+                              ? "Ya estás anotado"
+                              : grupoLleno
+                                ? "Grupo lleno"
+                                : `${cupoInfo.inscriptos_en_vivo} de ${cupoInfo.cupo_max} lugares`)
                           : (sel ? "▼" : "›")}
                       </span>
                     </button>
-                    {sel && !grupoLleno && (
+                    {sel && !bloqueado && (
                       <Card style={{background:"#f8fafc",border:`1.5px solid ${PB}`,padding:14,marginTop:4}}>
                         <p style={{margin:"0 0 10px",fontWeight:700,fontSize:13,color:DK}}>¿Cuánto tiempo?</p>
                         <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
