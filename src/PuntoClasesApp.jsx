@@ -691,6 +691,7 @@ function Reservar({ saldo, onReservar, profes, alumnoId, onNav, cfg }) {
                 const { init_point, reserva_ids } = await crearPreferenciaMulti(carritoMapped);
                 localStorage.setItem("pc_multi_reserva_pendiente", JSON.stringify({
                   reserva_ids, materia, profe: nombreProfeElegido, itemCount: carrito.length,
+                  items: carritoMapped,
                 }));
                 window.location.href = init_point;
               } catch (err) {
@@ -2108,7 +2109,7 @@ function AppAlumno({ user, onLogout }) {
   }, [user, datosAlumno]);
 
   // ── Retorno de MP: pago por reserva (F6 Etapa 2b) ─────────────────────────
-  const [reservaPagoEstado, setReservaPagoEstado] = useState(null); // null | {status:"confirmando"|"aprobado"|"fallido", ...}
+  const [reservaPagoEstado, setReservaPagoEstado] = useState(null); // null | {status:"confirmando"|"aprobado"|"fallido", ..., multi?:boolean}
   useEffect(() => {
     if (!user) return;
     const params = new URLSearchParams(window.location.search);
@@ -2123,11 +2124,11 @@ function AppAlumno({ user, onLogout }) {
       localStorage.removeItem("pc_multi_reserva_pendiente");
       window.history.replaceState({}, "", window.location.pathname);
       const ids = multiIds.split(",").map(Number).filter(n => !isNaN(n));
-      const totalHoras = pendientes.reduce((s, p) => s + (p.horas || 0), 0);
-      const materias = [...new Set(pendientes.map(p => p.materia))].join(", ");
+      const totalHoras = (pendientes.items || []).reduce((s, p) => s + (p.horas || 0), 0);
+      const materias = pendientes.materia || "";
 
       if (collectionStatus === "approved") {
-        setReservaPagoEstado({ status: "confirmando", materia: materias, profe: "", fecha: "", hora: "", horas: totalHoras });
+        setReservaPagoEstado({ status: "confirmando", materia: materias, profe: "", fecha: "", hora: "", horas: totalHoras, multi: true });
         let intentos = 0;
         const poll = setInterval(async () => {
           intentos++;
@@ -2150,19 +2151,19 @@ function AppAlumno({ user, onLogout }) {
               const reservas = await getReservasAlumno(user.id);
               const allFound = ids.every(id => (reservas || []).some(r => String(r.id) === String(id) && r.estado === "confirmada"));
               if (allFound) {
-                setReservaPagoEstado({ status: "aprobado", materia: materias, profe: "", fecha: "", hora: "", horas: totalHoras });
+                setReservaPagoEstado({ status: "aprobado", materia: materias, profe: "", fecha: "", hora: "", horas: totalHoras, multi: true });
                 setReservasAlumno(reservas);
                 getAlumno(user.id).then(d => { if (d?.saldo !== undefined) setSaldo(d.saldo); }).catch(() => {});
                 return;
               }
             } catch (err) { console.error("Error verificando pago multi:", err); }
             ids.forEach(id => devolverHoras(id).catch(err => console.error("Error devolviendo horas:", err)));
-            setReservaPagoEstado({ status: "fallido", materia: materias, profe: "", fecha: "", hora: "", horas: totalHoras });
+            setReservaPagoEstado({ status: "fallido", materia: materias, profe: "", fecha: "", hora: "", horas: totalHoras, multi: true });
           };
           checkAndReturn();
         } else {
           ids.forEach(id => devolverHoras(id).catch(err => console.error("Error devolviendo horas:", err)));
-          setReservaPagoEstado({ status: "fallido", materia: materias, profe: "", fecha: "", hora: "", horas: totalHoras });
+          setReservaPagoEstado({ status: "fallido", materia: materias, profe: "", fecha: "", hora: "", horas: totalHoras, multi: true });
         }
       }
       return;
@@ -2330,16 +2331,17 @@ function AppAlumno({ user, onLogout }) {
               <div style={{width:64,height:64,borderRadius:"50%",background:"#eff6ff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:34}}>⏳</div>
               <h3 style={{margin:0,color:DK,fontSize:19}}>Estamos confirmando tu pago…</h3>
               <p style={{margin:0,fontSize:14,color:"#64748b"}}>
-                {reservaPagoEstado.materia} — {reservaPagoEstado.fecha ? fmtLarga(reservaPagoEstado.fecha) : ""} {reservaPagoEstado.hora}
+                {reservaPagoEstado.multi ? `${reservaPagoEstado.materia} · ${reservaPagoEstado.horas}h` : `${reservaPagoEstado.materia} — ${reservaPagoEstado.fecha ? fmtLarga(reservaPagoEstado.fecha) : ""} ${reservaPagoEstado.hora}`}
               </p>
               <p style={{margin:0,fontSize:13,color:"#94a3b8"}}>Esto puede tardar unos segundos. No cierres esta pantalla.</p>
             </>)}
             {reservaPagoEstado.status === "aprobado" && (<>
               <div style={{width:64,height:64,borderRadius:"50%",background:"#dcfce7",display:"flex",alignItems:"center",justifyContent:"center",fontSize:34}}>✓</div>
-              <h3 style={{margin:0,color:DK,fontSize:19}}>¡Clase reservada!</h3>
+              <h3 style={{margin:0,color:DK,fontSize:19}}>{reservaPagoEstado.multi ? "¡Clases reservadas!" : "¡Clase reservada!"}</h3>
               <p style={{margin:0,fontSize:14,color:"#64748b"}}>
-                {reservaPagoEstado.materia} con {reservaPagoEstado.profe}<br/>
-                {reservaPagoEstado.fecha ? fmtLarga(reservaPagoEstado.fecha) : ""} — {reservaPagoEstado.hora} ({reservaPagoEstado.horas}h)
+                {reservaPagoEstado.multi
+                  ? `${reservaPagoEstado.materia} con ${reservaPagoEstado.profe || "tu profe"} · ${reservaPagoEstado.horas}h`
+                  : <>{reservaPagoEstado.materia} con {reservaPagoEstado.profe}<br/>{reservaPagoEstado.fecha ? fmtLarga(reservaPagoEstado.fecha) : ""} — {reservaPagoEstado.hora} ({reservaPagoEstado.horas}h)</>}
               </p>
               <Badge bg="#dcfce7" col="#15803d">Pago confirmado por Mercado Pago</Badge>
               <Btn onClick={() => { setReservaPagoEstado(null); setScreen("reservar"); }}>Listo</Btn>
