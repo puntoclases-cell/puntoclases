@@ -7,7 +7,7 @@ export default function UpdatePrompt() {
   } = useRegisterSW({
     onRegistered(r) {
       // Polling cada hora: detecta deploys nuevos aunque la app quede abierta mucho tiempo
-      if (r) setInterval(() => r.update(), 60 * 60 * 1000)
+      if (r) setInterval(() => r.update(), 15 * 60 * 1000)
     },
   })
 

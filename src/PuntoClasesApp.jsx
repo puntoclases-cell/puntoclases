@@ -2095,7 +2095,6 @@ function AppAlumno({ user, onLogout }) {
     if (!user) return;
     const params = new URLSearchParams(window.location.search);
     const collectionStatus = params.get("collection_status");
-    if (!collectionStatus) return;
     const raw = localStorage.getItem("pc_reserva_pendiente");
     if (!raw) return;
     const pendiente = JSON.parse(raw);
@@ -2123,8 +2122,26 @@ function AppAlumno({ user, onLogout }) {
       }, 3000);
       return () => clearInterval(poll);
     } else {
-      devolverHoras(pendiente.reserva_id).catch(() => {});
-      setReservaPagoEstado({ status: "fallido", ...pendiente });
+      if (!collectionStatus) {
+        const checkAndReturn = async () => {
+          try {
+            const reservas = await getReservasAlumno(user.id);
+            const encontrada = (reservas || []).find(r => String(r.id) === String(pendiente.reserva_id));
+            if (encontrada && encontrada.estado === "confirmada") {
+              setReservaPagoEstado({ status: "aprobado", ...pendiente });
+              setReservasAlumno(reservas);
+              getAlumno(user.id).then(d => { if (d?.saldo !== undefined) setSaldo(d.saldo); }).catch(() => {});
+              return;
+            }
+          } catch (err) { console.error("Error verificando pago:", err); }
+          devolverHoras(pendiente.reserva_id).catch(err => console.error("Error devolviendo horas:", err));
+          setReservaPagoEstado({ status: "fallido", ...pendiente });
+        };
+        checkAndReturn();
+      } else {
+        devolverHoras(pendiente.reserva_id).catch(err => console.error("Error devolviendo horas:", err));
+        setReservaPagoEstado({ status: "fallido", ...pendiente });
+      }
     }
   }, [user]);
 

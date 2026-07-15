@@ -12,6 +12,7 @@ export default defineConfig({
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,webp}'],
         cleanupOutdatedCaches: true,
+        skipWaiting: true,
         runtimeCaching: [
           {
             // Auth: nunca cachear — las respuestas son por-sesión
