@@ -637,47 +637,14 @@ function Reservar({ saldo, onReservar, profes, alumnoId, onNav, cfg }) {
               style={{marginTop:2,width:16,height:16,cursor:"pointer",accentColor:PRIMARY}}/>
             Entendí la política de cancelación
           </label>
-          {saldoInsuficiente && (
-            <div style={{background:"#eff6ff",border:"1.5px solid #bfdbfe",borderRadius:12,padding:"10px 14px",fontSize:13,color:"#1e40af"}}>
-              💳 Saldo insuficiente: esta reserva cuesta {costo} hora{costo===1?"":"s"} y tenés {saldo} hora{saldo===1?"":"s"}. Podés pagar con Mercado Pago.
-            </div>
-          )}
-          {errorReserva && (
-            <div style={{background:"#fff5f5",border:"1.5px solid #fecaca",borderRadius:12,padding:"10px 14px",fontSize:13,color:"#dc2626"}}>
-              ⚠️ {errorReserva}
-            </div>
-          )}
           {errorPagoReserva && (
             <div style={{background:"#fff5f5",border:"1.5px solid #fecaca",borderRadius:12,padding:"10px 14px",fontSize:13,color:"#dc2626"}}>
               ⚠️ {errorPagoReserva}
             </div>
           )}
-          {saldoInsuficiente ? (
-            <div style={{display:"flex",gap:8}}>
-              <Btn onClick={() => setPaso(7)} variant="secondary" style={{flex:1}}>← Volver</Btn>
-              <Btn onClick={async () => {
-                setErrorPagoReserva("");
-                setPagoReserva("procesando");
-                try {
-                  const hoy = toISO(new Date().getFullYear(), new Date().getMonth(), new Date().getDate());
-                  if (fecha < hoy) { setErrorPagoReserva("No podés reservar en una fecha pasada."); setPagoReserva("idle"); return; }
-                  const { init_point, reserva_id } = await crearPreferenciaReserva({
-                    profeId, materia, fecha, hora: horaInicio, horas: duracion, modalidad, tipo, necesidad,
-                  });
-                  localStorage.setItem("pc_reserva_pendiente", JSON.stringify({ reserva_id, materia, profe: nombreProfeElegido, fecha, hora: horaInicio, horas: duracion }));
-                  window.location.href = init_point;
-                } catch (err) {
-                  console.error("Error al crear preferencia reserva:", err);
-                  setPagoReserva("idle");
-                  setErrorPagoReserva("No se pudo iniciar el pago. Revisá tu conexión y volvé a intentarlo.");
-                }
-              }} disabled={pagoReserva === "procesando" || !aceptaCancelacion} style={{flex:2}}>
-                {pagoReserva === "procesando" ? "Procesando…" : "Pagar con Mercado Pago →"}
-              </Btn>
-            </div>
-          ) : (
-            <div style={{display:"flex",gap:8}}>
-              <Btn onClick={() => setPaso(7)} variant="secondary" style={{flex:1}}>← Volver</Btn>
+          <div style={{display:"flex",gap:8}}>
+            <Btn onClick={() => setPaso(7)} variant="secondary" style={{flex:1}}>← Volver</Btn>
+            {!saldoInsuficiente && (
               <Btn onClick={async () => {
                 setErrorReserva("");
                 try {
@@ -693,11 +660,30 @@ function Reservar({ saldo, onReservar, profes, alumnoId, onNav, cfg }) {
                 } catch (err) {
                   setErrorReserva(err.message || "No se pudo confirmar la reserva. Intentá de nuevo.");
                 }
-              }} disabled={!aceptaCancelacion} style={{flex:2}}>
-                Confirmar reserva ✓
+              }} disabled={!aceptaCancelacion} style={{flex:1}}>
+                Usar saldo ({costo}h)
               </Btn>
-            </div>
-          )}
+            )}
+            <Btn onClick={async () => {
+              setErrorPagoReserva("");
+              setPagoReserva("procesando");
+              try {
+                const hoy = toISO(new Date().getFullYear(), new Date().getMonth(), new Date().getDate());
+                if (fecha < hoy) { setErrorPagoReserva("No podés reservar en una fecha pasada."); setPagoReserva("idle"); return; }
+                const { init_point, reserva_id } = await crearPreferenciaReserva({
+                  profeId, materia, fecha, hora: horaInicio, horas: duracion, modalidad, tipo, necesidad,
+                });
+                localStorage.setItem("pc_reserva_pendiente", JSON.stringify({ reserva_id, materia, profe: nombreProfeElegido, fecha, hora: horaInicio, horas: duracion }));
+                window.location.href = init_point;
+              } catch (err) {
+                console.error("Error al crear preferencia reserva:", err);
+                setPagoReserva("idle");
+                setErrorPagoReserva("No se pudo iniciar el pago. Revisá tu conexión y volvé a intentarlo.");
+              }
+            }} disabled={pagoReserva === "procesando" || !aceptaCancelacion} style={{flex: saldoInsuficiente ? 2 : 1}}>
+              {pagoReserva === "procesando" ? "Procesando…" : "Pagar con MP →"}
+            </Btn>
+          </div>
         </div>
       )}
     </div>
