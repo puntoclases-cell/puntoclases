@@ -644,7 +644,7 @@ function Reservar({ saldo, onReservar, profes, alumnoId, onNav, cfg }) {
           )}
           <div style={{display:"flex",gap:8}}>
             <Btn onClick={() => setPaso(7)} variant="secondary" style={{flex:1}}>← Volver</Btn>
-            {!saldoInsuficiente && (
+            {!saldoInsuficiente && tipo !== "grupal" && (
               <Btn onClick={async () => {
                 setErrorReserva("");
                 try {
@@ -680,7 +680,7 @@ function Reservar({ saldo, onReservar, profes, alumnoId, onNav, cfg }) {
                 setPagoReserva("idle");
                 setErrorPagoReserva("No se pudo iniciar el pago. Revisá tu conexión y volvé a intentarlo.");
               }
-            }} disabled={pagoReserva === "procesando" || !aceptaCancelacion} style={{flex: saldoInsuficiente ? 2 : 1}}>
+            }} disabled={pagoReserva === "procesando" || !aceptaCancelacion} style={{flex: (saldoInsuficiente || tipo === "grupal") ? 2 : 1}}>
               {pagoReserva === "procesando" ? "Procesando…" : "Pagar con MP →"}
             </Btn>
           </div>
@@ -839,7 +839,7 @@ function Historial({ reservas, onReprogramar, onCancelar, alumnoId, cfg }) {
                       <Badge bg="#f0f6fa" col={BL}>{c.tipo==="grupal"?"Grupal":"Individual"}</Badge>
                       <Badge bg={badge.bg} col={badge.col}>{badge.label}</Badge>
                     </div>
-                    {(c.estado === "confirmada" || c.estado === "pendiente") && (
+                    {c.estado === "confirmada" && (
                       <div style={{display:"flex",gap:8}}>
                         <button onClick={() => setModalReprog(c)}
                           style={{flex:1,minHeight:48,background:"#f0f6fa",border:`1.5px solid ${BL}`,borderRadius:12,cursor:"pointer",fontSize:16,fontWeight:700,color:PRIMARY}}>
@@ -2123,6 +2123,7 @@ function AppAlumno({ user, onLogout }) {
       }, 3000);
       return () => clearInterval(poll);
     } else {
+      devolverHoras(pendiente.reserva_id).catch(() => {});
       setReservaPagoEstado({ status: "fallido", ...pendiente });
     }
   }, [user]);
@@ -6188,29 +6189,34 @@ function ModalReprogramar({ reserva, onCerrar, onConfirmar, onCancelar, cfg }) {
 
         {/* PASO 1: Elegir acción */}
         {paso===1 && (<>
-          <p style={{margin:0,fontWeight:700,fontSize:15,color:DK}}>¿Qué querés hacer?</p>
-          <div style={{display:"flex",flexDirection:"column",gap:10}}>
-            <button onClick={()=>{setAccion("reprogramar");setPaso(2);}}
-              style={{background:"#f0fdf4",border:"1.5px solid #bbf7d0",borderRadius:14,padding:"16px",cursor:"pointer",textAlign:"left",display:"flex",alignItems:"center",gap:12}}>
-              <span style={{fontSize:28}}>🔄</span>
-              <div>
-                <p style={{margin:0,fontWeight:700,fontSize:14,color:"#15803d"}}>Reprogramar clase</p>
-                <p style={{margin:"3px 0 0",fontSize:12,color:"#64748b"}}>
-                  {conCosto ? `Costo: ${saldoPerdido}hs de saldo` : "Sin costo con +24hs de anticipación"}
-                </p>
-              </div>
-            </button>
-            <button onClick={()=>{setAccion("cancelar");setPaso(2);}}
-              style={{background:"#fff5f5",border:"1.5px solid #fecaca",borderRadius:14,padding:"16px",cursor:"pointer",textAlign:"left",display:"flex",alignItems:"center",gap:12}}>
-              <span style={{fontSize:28}}>❌</span>
-              <div>
-                <p style={{margin:0,fontWeight:700,fontSize:14,color:"#dc2626"}}>Cancelar clase</p>
-                <p style={{margin:"3px 0 0",fontSize:12,color:"#64748b"}}>
-                  {conCosto ? `Perdés ${saldoPerdido}hs de saldo ($${costoSeña.toLocaleString("es-AR")})` : "La hora vuelve a tu saldo"}
-                </p>
-              </div>
-            </button>
-          </div>
+          {conCosto ? (
+            <div style={{background:"#fff5f5",border:"1.5px solid #fecaca",borderRadius:12,padding:"14px 16px",textAlign:"center"}}>
+              <p style={{margin:0,fontWeight:700,fontSize:14,color:"#dc2626"}}>No podés cancelar ni reprogramar</p>
+              <p style={{margin:"6px 0 0",fontSize:13,color:"#374151"}}>Con menos de 24hs de anticipación no se permiten cambios.</p>
+            </div>
+          ) : (<>
+            <p style={{margin:0,fontWeight:700,fontSize:15,color:DK}}>¿Qué querés hacer?</p>
+            <div style={{display:"flex",flexDirection:"column",gap:10}}>
+              <button onClick={()=>{setAccion("reprogramar");setPaso(2);}}
+                style={{background:"#f0fdf4",border:"1.5px solid #bbf7d0",borderRadius:14,padding:"16px",cursor:"pointer",textAlign:"left",display:"flex",alignItems:"center",gap:12}}>
+                <span style={{fontSize:28}}>🔄</span>
+                <div>
+                  <p style={{margin:0,fontWeight:700,fontSize:14,color:"#15803d"}}>Reprogramar clase</p>
+                  <p style={{margin:"3px 0 0",fontSize:12,color:"#64748b"}}>Sin costo con +24hs de anticipación</p>
+                </div>
+              </button>
+              {reserva.tipo !== "grupal" && (
+                <button onClick={()=>{setAccion("cancelar");setPaso(2);}}
+                  style={{background:"#fff5f5",border:"1.5px solid #fecaca",borderRadius:14,padding:"16px",cursor:"pointer",textAlign:"left",display:"flex",alignItems:"center",gap:12}}>
+                  <span style={{fontSize:28}}>❌</span>
+                  <div>
+                    <p style={{margin:0,fontWeight:700,fontSize:14,color:"#dc2626"}}>Cancelar clase</p>
+                    <p style={{margin:"3px 0 0",fontSize:12,color:"#64748b"}}>La hora vuelve a tu saldo</p>
+                  </div>
+                </button>
+              )}
+            </div>
+          </>)}
         </>)}
 
         {/* PASO 2A: Reprogramar — elegir nuevo horario */}
