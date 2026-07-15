@@ -400,6 +400,14 @@ export async function crearPreferenciaReserva(reservaParams) {
   return data; // { init_point, reserva_id }
 }
 
+export async function crearPreferenciaMulti(carrito) {
+  const { data, error } = await supabase.functions.invoke("crear-preferencia", {
+    body: { carrito },
+  });
+  if (error) throw error;
+  return data; // { init_point, reserva_ids: number[] }
+}
+
 // ── STORAGE: AVATARES ────────────────────────────────────────────────────────
 
 // Recibe un dataUrl (ya leído por FileReader en el front) — sin createObjectURL,

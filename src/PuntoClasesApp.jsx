@@ -1,5 +1,5 @@
 ﻿import { useState, useEffect, useRef } from "react";
-import { login, getUsuarioActual, onAuthChange, logout, getAlumno, getCompras, getReservasAlumno, getProfes, getProfesAdmin, getDisponibilidad, getReservasProfe, marcarReserva, cargarDevolucion, reprogramarReserva, setBloque, borrarBloque, getAlumnos, getTodasLasReservas, actualizarAlumno, actualizarProfe, actualizarPerfil, crearReserva, unirseGrupo, getGrupoInfo, verificarBloqueOcupado, getReservasDelDia, getMisReservasDelDia, getMensajes, enviarMensaje, suscribirMensajes, registrarAlumno, registrarProfe, enviarRecuperacion, actualizarPassword, onPasswordRecovery, crearResenia, getConfig, updateConfig, getPacks, devolverHoras, addHorasAdmin, crearPreferencia, crearPreferenciaReserva, contarMensajesNuevosProfe, subirAvatar } from "./db";
+import { login, getUsuarioActual, onAuthChange, logout, getAlumno, getCompras, getReservasAlumno, getProfes, getProfesAdmin, getDisponibilidad, getReservasProfe, marcarReserva, cargarDevolucion, reprogramarReserva, setBloque, borrarBloque, getAlumnos, getTodasLasReservas, actualizarAlumno, actualizarProfe, actualizarPerfil, crearReserva, unirseGrupo, getGrupoInfo, verificarBloqueOcupado, getReservasDelDia, getMisReservasDelDia, getMensajes, enviarMensaje, suscribirMensajes, registrarAlumno, registrarProfe, enviarRecuperacion, actualizarPassword, onPasswordRecovery, crearResenia, getConfig, updateConfig, getPacks, devolverHoras, addHorasAdmin, crearPreferencia, crearPreferenciaReserva, crearPreferenciaMulti, contarMensajesNuevosProfe, subirAvatar } from "./db";
 
 // ════════════════════════════════════════════════════════════════════════════
 // PUNTOCLASES — APP UNIFICADA
@@ -212,12 +212,7 @@ function Reservar({ saldo, onReservar, profes, alumnoId, onNav, cfg }) {
   const [profeId, setProfeId] = useState(null);
   const [nombreProfeElegido, setNombreProfeElegido] = useState("");
   const [materia, setMateria] = useState("");
-  const [tipo, setTipo] = useState("individual");
-  const [modalidad, setModalidad] = useState("Presencial");
-  const [fecha, setFecha] = useState(null);
-  const [horaInicio, setHoraInicio] = useState(null);
-  const [duracionHoras, setDuracionHoras] = useState(1);
-  const [necesidad, setNecesidad] = useState("");
+  const [carrito, setCarrito] = useState([]);
   const [errorReserva, setErrorReserva] = useState("");
   const [mes, setMes] = useState(new Date().getMonth());
   const [calYear, setCalYear] = useState(new Date().getFullYear());
@@ -226,8 +221,14 @@ function Reservar({ saldo, onReservar, profes, alumnoId, onNav, cfg }) {
   const [misReservasDelDia, setMisReservasDelDia] = useState([]);
   const [aceptaCancelacion, setAceptaCancelacion] = useState(false);
   const [cupoPorHora, setCupoPorHora] = useState({});
-  const [pagoReserva, setPagoReserva] = useState("idle"); // idle | procesando
+  const [pagoReserva, setPagoReserva] = useState("idle");
   const [errorPagoReserva, setErrorPagoReserva] = useState("");
+  const [addingFecha, setAddingFecha] = useState(null);
+  const [addingHora, setAddingHora] = useState(null);
+  const [addingTipo, setAddingTipo] = useState("individual");
+  const [addingModalidad, setAddingModalidad] = useState("Presencial");
+  const [addingDuracion, setAddingDuracion] = useState(1);
+  const [addingNecesidad, setAddingNecesidad] = useState("");
 
   useEffect(() => {
     if (!profeId) return;
@@ -240,40 +241,40 @@ function Reservar({ saldo, onReservar, profes, alumnoId, onNav, cfg }) {
   }, [profeId]);
 
   useEffect(() => {
-    if (!profeId || !fecha) { setReservasOcupadas([]); return; }
+    if (!profeId || !addingFecha) { setReservasOcupadas([]); return; }
     let cancelled = false;
-    getReservasDelDia(profeId, fecha)
+    getReservasDelDia(profeId, addingFecha)
       .then(d => { if (!cancelled) setReservasOcupadas(d || []); })
       .catch(() => {});
     return () => { cancelled = true; };
-  }, [profeId, fecha]);
+  }, [profeId, addingFecha]);
 
   useEffect(() => {
-    if (!alumnoId || !profeId || !fecha) { setMisReservasDelDia([]); return; }
+    if (!alumnoId || !profeId || !addingFecha) { setMisReservasDelDia([]); return; }
     let cancelled = false;
-    getMisReservasDelDia(alumnoId, profeId, fecha)
+    getMisReservasDelDia(alumnoId, profeId, addingFecha)
       .then(d => { if (!cancelled) setMisReservasDelDia(d || []); })
       .catch(() => {});
     return () => { cancelled = true; };
-  }, [alumnoId, profeId, fecha]);
+  }, [alumnoId, profeId, addingFecha]);
 
-  useEffect(() => { setHoraInicio(null); setDuracionHoras(1); }, [fecha, tipo]);
+  useEffect(() => { setAddingHora(null); setAddingDuracion(1); }, [addingFecha, addingTipo]);
 
   useEffect(() => {
-    if (paso !== 6 || tipo !== "grupal" || !profeId || !fecha || disponRaw.length === 0) {
-      if (tipo !== "grupal") setCupoPorHora({});
+    if (addingTipo !== "grupal" || !profeId || !addingFecha || disponRaw.length === 0) {
+      setCupoPorHora({});
       return;
     }
     let cancelled = false;
     Promise.all(
       horariosDisponibles.map(h =>
-        getGrupoInfo(profeId, fecha, h)
+        getGrupoInfo(profeId, addingFecha, h)
           .then(info => [h, info || { inscriptos_en_vivo: 0, cupo_max: 4 }])
           .catch(() => [h, { inscriptos_en_vivo: 0, cupo_max: 4 }])
       )
     ).then(entries => { if (!cancelled) setCupoPorHora(Object.fromEntries(entries)); });
     return () => { cancelled = true; };
-  }, [paso, tipo, profeId, fecha, disponRaw, reservasOcupadas]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [addingTipo, profeId, addingFecha, disponRaw, reservasOcupadas]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const profe = (profes || []).find(p => p.id === profeId);
   const dispon = disponRaw.reduce((acc, bloque) => {
@@ -285,27 +286,31 @@ function Reservar({ saldo, onReservar, profes, alumnoId, onNav, cfg }) {
   const tmins = h => { const [hh, mm] = h.split(':').map(Number); return hh * 60 + mm; };
   const t2str = m => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
 
-  const bloquesDelDia = fecha
-    ? Object.entries(dispon[fecha] || {})
-        .filter(([h, t]) => t === "ambas" || t === tipo)
+  const bloquesDelDia = addingFecha
+    ? Object.entries(dispon[addingFecha] || {})
+        .filter(([h, t]) => t === "ambas" || t === addingTipo)
         .map(([h]) => h)
         .sort()
     : [];
 
-  const slotOcupado = h => reservasOcupadas.some(r => {
-    // Para búsqueda grupal, solo bloquea una individual (el profe está comprometido solo-con-uno).
-    // Una reserva grupal existente en el mismo slot NO bloquea — se muestra con cupo.
-    if (tipo === "grupal" && r.tipo !== "individual") return false;
+  const slotOcupadoEnDB = h => reservasOcupadas.some(r => {
+    if (addingTipo === "grupal" && r.tipo !== "individual") return false;
     const rS = tmins(r.hora), rE = rS + r.horas * 60, s = tmins(h);
     return s >= rS && s < rE;
   });
 
-  // slotsCons: pasos de 60 min (DB tiene slots horarios, no de 30 min)
+  const slotOcupadoEnCarrito = h => carrito.some(item => {
+    if (item.fecha !== addingFecha) return false;
+    if (addingTipo === "grupal" && item.tipo !== "individual") return false;
+    const iS = tmins(item.horaInicio), iE = iS + item.duracionHoras * 60, s = tmins(h);
+    return s >= iS && s < iE;
+  });
+
   const slotsCons = startH => {
     let count = 0, m = tmins(startH);
     while (m < 24 * 60) {
       const h = t2str(m);
-      if (!bloquesDelDia.includes(h) || slotOcupado(h)) break;
+      if (!bloquesDelDia.includes(h) || slotOcupadoEnDB(h) || slotOcupadoEnCarrito(h)) break;
       count++; m += 60;
     }
     return count;
@@ -314,41 +319,73 @@ function Reservar({ saldo, onReservar, profes, alumnoId, onNav, cfg }) {
   const hoyISO = toISO(new Date().getFullYear(), new Date().getMonth(), new Date().getDate());
   const fechasDisponibles = [...new Set(
     disponRaw
-      .filter(b => b.tipo === "ambas" || b.tipo === tipo)
+      .filter(b => b.tipo === "ambas" || b.tipo === addingTipo)
       .map(b => b.fecha)
   )].sort().filter(f => f >= hoyISO);
 
-  const horariosDisponibles = bloquesDelDia.filter(h => !slotOcupado(h) && slotsCons(h) >= 1);
+  const horariosDisponibles = addingFecha
+    ? bloquesDelDia.filter(h => !slotOcupadoEnDB(h) && !slotOcupadoEnCarrito(h) && slotsCons(h) >= 1)
+    : [];
 
-  const duracion = duracionHoras;
-  const costoBase = tipo === "grupal" ? CFG.factorGrupal : 1;
-  const costo = +(costoBase * duracion).toFixed(1);
-  const saldoInsuficiente = costo > saldo;
+  const addingCosto = addingTipo === "grupal"
+    ? +(addingDuracion * CFG.factorGrupal).toFixed(1)
+    : addingDuracion;
+
+  const totalCarrito = carrito.reduce((sum, item) => {
+    return sum + (item.tipo === "grupal" ? item.duracionHoras * CFG.factorGrupal : item.duracionHoras);
+  }, 0);
+  const totalHoras = +totalCarrito.toFixed(1);
+
+  const todasIndividual = carrito.every(item => item.tipo === "individual");
+  const puedeUsarSaldo = carrito.length > 0 && todasIndividual && totalHoras <= saldo;
 
   const materiasUnicas = [...new Set((profes || []).flatMap(p => p.materias || []))].sort();
   const profesParaMateria = (profes || []).filter(p => (p.materias || []).includes(materia));
-  const TOTAL_PASOS = 8;
+  const TOTAL_PASOS = 5;
 
-  if (paso === 9) return (
+  const agregarAlCarrito = () => {
+    setCarrito(prev => [...prev, {
+      fecha: addingFecha, horaInicio: addingHora, duracionHoras: addingDuracion,
+      tipo: addingTipo, modalidad: addingModalidad, necesidad: addingNecesidad,
+    }]);
+    setAddingHora(null);
+    setAddingDuracion(1);
+    setAddingModalidad("Presencial");
+    setAddingNecesidad("");
+  };
+
+  const quitarDelCarrito = idx => setCarrito(prev => prev.filter((_, i) => i !== idx));
+
+  const resetAll = () => {
+    setPaso(1); setProfeId(null); setMateria(""); setCarrito([]);
+    setNombreProfeElegido(""); setAceptaCancelacion(false);
+    setAddingFecha(null); setAddingHora(null);
+    setAddingTipo("individual"); setAddingModalidad("Presencial");
+    setAddingDuracion(1); setAddingNecesidad("");
+    setErrorReserva(""); setErrorPagoReserva("");
+  };
+
+  if (paso === 5) return (
     <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",minHeight:300,gap:16,textAlign:"center",padding:20}}>
       <div style={{width:80,height:80,background:PL,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:40}}>🎉</div>
-      <h2 style={{margin:0,color:DK,fontSize:22}}>¡Clase reservada!</h2>
+      <h2 style={{margin:0,color:DK,fontSize:22}}>¡{carrito.length === 1 ? "Clase reservada" : `${carrito.length} clases reservadas`}!</h2>
       <p style={{margin:0,color:"#64748b",fontSize:15,lineHeight:1.6}}>
-        {materia} con {nombreProfeElegido}<br/>
-        {fecha ? fmtLarga(fecha) : ""} — {horaInicio} → {horaInicio ? t2str(tmins(horaInicio) + duracionHoras * 60) : ""} ({duracionHoras} hora{duracionHoras===1?"":"s"})
+        {materia} con {nombreProfeElegido}
       </p>
-      <Badge bg="#dcfce7" col="#15803d">-{costo} hora{costo===1?"":"s"} descontada{costo===1?"":"s"} de tu saldo</Badge>
-      <Btn onClick={() => {
-        setPaso(1); setProfeId(null); setMateria(""); setTipo("individual"); setModalidad("Presencial");
-        setFecha(null); setHoraInicio(null); setDuracionHoras(1); setNecesidad(""); setNombreProfeElegido("");
-        setAceptaCancelacion(false);
-      }}>Reservar otra clase</Btn>
+      <ul style={{margin:0,padding:0,listStyle:"none",fontSize:14,color:"#374151",textAlign:"left"}}>
+        {carrito.map((item, i) => (
+          <li key={i} style={{padding:"6px 0",borderBottom: i < carrito.length - 1 ? "1px solid #e2e8f0" : "none"}}>
+            {fmtLarga(item.fecha)} — {item.horaInicio} → {t2str(tmins(item.horaInicio) + item.duracionHoras * 60)}
+          </li>
+        ))}
+      </ul>
+      <Badge bg="#dcfce7" col="#15803d">-{totalHoras} hora{totalHoras === 1 ? "" : "s"} descontada{totalHoras === 1 ? "" : "s"} de tu saldo</Badge>
+      <Btn onClick={resetAll}>Reservar otra clase</Btn>
     </div>
   );
 
   return (
     <div style={{display:"flex",flexDirection:"column",gap:16}}>
-      {/* Barra de progreso */}
       <div style={{display:"flex",alignItems:"center",gap:10}}>
         <div style={{display:"flex",gap:4,flex:1}}>
           {Array.from({length: TOTAL_PASOS}, (_, i) => (
@@ -378,62 +415,8 @@ function Reservar({ saldo, onReservar, profes, alumnoId, onNav, cfg }) {
         </div>
       )}
 
-      {/* P2: Tipo de clase */}
+      {/* P2: Profe */}
       {paso === 2 && (
-        <div style={{display:"flex",flexDirection:"column",gap:14}}>
-          <h3 style={{margin:0,color:DK}}>¿Cómo querés la clase?</h3>
-          <button onClick={() => { setTipo("individual"); setPaso(3); }}
-            style={{background:"#fff",border:`2px solid ${tipo==="individual"?PRIMARY:"#e2e8f0"}`,borderRadius:14,padding:18,cursor:"pointer",textAlign:"left",display:"flex",gap:14,alignItems:"flex-start"}}>
-            <span style={{fontSize:28}}>👤</span>
-            <div>
-              <p style={{margin:0,fontWeight:700,fontSize:15,color:DK}}>Individual</p>
-              <p style={{margin:"4px 0 0",fontSize:13,color:INK_SOFT}}>La clase es solo para vos. Usás 1 hora de tu saldo por hora de clase.</p>
-            </div>
-          </button>
-          <button onClick={() => { setTipo("grupal"); setPaso(3); }}
-            style={{background:"#fff",border:`2px solid ${tipo==="grupal"?"#15803d":"#e2e8f0"}`,borderRadius:14,padding:18,cursor:"pointer",textAlign:"left",display:"flex",gap:14,alignItems:"flex-start",position:"relative"}}>
-            <span style={{position:"absolute",top:-8,right:12,background:"#15803d",color:"#fff",fontSize:10,fontWeight:700,borderRadius:99,padding:"2px 8px"}}>{CFG.packs?.[CFG.packs.length-1]?.descuento ?? 20}% OFF</span>
-            <span style={{fontSize:28}}>👥</span>
-            <div>
-              <p style={{margin:0,fontWeight:700,fontSize:15,color:DK}}>Grupal</p>
-              <p style={{margin:"4px 0 0",fontSize:13,color:INK_SOFT}}>Compartís la clase con otros alumnos. 20% más barata en saldo.</p>
-            </div>
-          </button>
-          <Btn onClick={() => setPaso(1)} variant="secondary">← Volver</Btn>
-        </div>
-      )}
-
-      {/* P3: Modalidad */}
-      {paso === 3 && (
-        <div style={{display:"flex",flexDirection:"column",gap:14}}>
-          <h3 style={{margin:0,color:DK}}>¿Presencial o virtual?</h3>
-          <button onClick={() => { setModalidad("Presencial"); setPaso(4); }}
-            style={{background:"#fff",border:`2px solid ${modalidad==="Presencial"?PRIMARY:"#e2e8f0"}`,borderRadius:14,padding:18,cursor:"pointer",textAlign:"left",display:"flex",gap:14,alignItems:"flex-start"}}>
-            <span style={{fontSize:28}}>🏫</span>
-            <div>
-              <p style={{margin:0,fontWeight:700,fontSize:15,color:DK}}>Presencial</p>
-              <p style={{margin:"4px 0 0",fontSize:13,color:INK_SOFT}}>En el domicilio del profe. Individual o grupal.</p>
-            </div>
-          </button>
-          {tipo !== "grupal" && (
-            <button onClick={() => { setModalidad("Virtual"); setPaso(4); }}
-              style={{background:"#fff",border:`2px solid ${modalidad==="Virtual"?PRIMARY:"#e2e8f0"}`,borderRadius:14,padding:18,cursor:"pointer",textAlign:"left",display:"flex",gap:14,alignItems:"flex-start"}}>
-              <span style={{fontSize:28}}>💻</span>
-              <div>
-                <p style={{margin:0,fontWeight:700,fontSize:15,color:DK}}>Virtual</p>
-                <p style={{margin:"4px 0 0",fontSize:13,color:INK_SOFT}}>Por videollamada. Solo para clases individuales.</p>
-              </div>
-            </button>
-          )}
-          {tipo === "grupal" && (
-            <p style={{margin:0,fontSize:12,color:INK_SOFT}}>ℹ️ Las clases grupales son siempre presenciales.</p>
-          )}
-          <Btn onClick={() => setPaso(2)} variant="secondary">← Volver</Btn>
-        </div>
-      )}
-
-      {/* P4: Profe */}
-      {paso === 4 && (
         <div style={{display:"flex",flexDirection:"column",gap:14}}>
           <h3 style={{margin:0,color:DK}}>¿Con qué profe?</h3>
           {profesParaMateria.length === 0 && (
@@ -445,8 +428,8 @@ function Reservar({ saldo, onReservar, profes, alumnoId, onNav, cfg }) {
               <button key={p.id} onClick={() => {
                 setProfeId(p.id);
                 setNombreProfeElegido(p.nombre || p.titulo || "");
-                setFecha(null); setHoraInicio(null); setDuracionHoras(1);
-                setPaso(5);
+                setAddingFecha(null); setAddingHora(null); setCarrito([]);
+                setPaso(3);
               }}
                 style={{background:"#fff",border:`2px solid ${profeId===p.id?PRIMARY:"#e2e8f0"}`,borderRadius:14,padding:16,cursor:"pointer",textAlign:"left",display:"flex",gap:12,alignItems:"center"}}>
                 {p.avatar_url
@@ -461,171 +444,193 @@ function Reservar({ saldo, onReservar, profes, alumnoId, onNav, cfg }) {
               </button>
             );
           })}
-          <Btn onClick={() => setPaso(3)} variant="secondary">← Volver</Btn>
+          <Btn onClick={() => setPaso(1)} variant="secondary">← Volver</Btn>
         </div>
       )}
 
-      {/* P5: Día */}
-      {paso === 5 && (
+      {/* P3: Agregar clases al carrito */}
+      {paso === 3 && (
         <div style={{display:"flex",flexDirection:"column",gap:14}}>
           <div style={{background:PL,border:`1.5px solid ${PB}`,borderRadius:12,padding:"10px 14px"}}>
             <p style={{margin:0,fontSize:13,color:P,fontWeight:600}}>
-              {materia} · {tipo} · {modalidad} · con {nombreProfeElegido.split(" ")[0]}
+              {materia} · con {nombreProfeElegido}
             </p>
           </div>
+
+          {/* Resumen del carrito */}
+          {carrito.length > 0 && (
+            <Card style={{background:"#f0fdf4",border:"1.5px solid #bbf7d0",padding:14}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                <p style={{margin:0,fontWeight:700,fontSize:13,color:"#166534"}}>Tu carrito ({carrito.length} clase{carrito.length===1?"":"s"} · {totalHoras}h)</p>
+              </div>
+              <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                {carrito.map((item, i) => (
+                  <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:13,color:"#374151",padding:"6px 0",borderBottom: i < carrito.length - 1 ? "1px solid #e2e8f0" : "none"}}>
+                    <div style={{flex:1}}>
+                      <span style={{fontWeight:600}}>{fmtLarga(item.fecha)}</span><br/>
+                      <span style={{fontSize:12,color:INK_SOFT}}>
+                        {item.horaInicio} → {t2str(tmins(item.horaInicio) + item.duracionHoras * 60)} · {item.tipo} · {item.modalidad} · {item.tipo === "grupal" ? +(item.duracionHoras * CFG.factorGrupal).toFixed(1) : item.duracionHoras}h
+                      </span>
+                    </div>
+                    <button onClick={() => quitarDelCarrito(i)}
+                      style={{background:"none",border:"none",color:"#dc2626",cursor:"pointer",fontSize:16,padding:4}}>✕</button>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
+
+          <h3 style={{margin:0,color:DK}}>Agregar clase</h3>
+
+          {/* Selector de tipo */}
+          <div style={{display:"flex",gap:8}}>
+            <button onClick={() => { setAddingTipo("individual"); setAddingModalidad("Presencial"); }}
+              style={{flex:1,background:"#fff",border:`2px solid ${addingTipo==="individual"?PRIMARY:"#e2e8f0"}`,borderRadius:12,padding:"12px 10px",cursor:"pointer",textAlign:"center"}}>
+              <span style={{fontSize:22}}>👤</span>
+              <p style={{margin:"4px 0 0",fontWeight:700,fontSize:13,color:addingTipo==="individual"?PRIMARY:DK}}>Individual</p>
+            </button>
+            <button onClick={() => { setAddingTipo("grupal"); setAddingModalidad("Presencial"); }}
+              style={{flex:1,background:"#fff",border:`2px solid ${addingTipo==="grupal"?"#15803d":"#e2e8f0"}`,borderRadius:12,padding:"12px 10px",cursor:"pointer",textAlign:"center",position:"relative"}}>
+              <span style={{position:"absolute",top:-8,right:8,background:"#15803d",color:"#fff",fontSize:10,fontWeight:700,borderRadius:99,padding:"2px 8px"}}>{CFG.packs?.[CFG.packs.length-1]?.descuento ?? 20}% OFF</span>
+              <span style={{fontSize:22}}>👥</span>
+              <p style={{margin:"4px 0 0",fontWeight:700,fontSize:13,color:addingTipo==="grupal"?"#15803d":DK}}>Grupal</p>
+            </button>
+          </div>
+
+          {/* Calendario */}
           <h3 style={{margin:0,color:DK}}>¿Qué día?</h3>
           {disponRaw.length === 0 ? (
             <p style={{color:"#94a3b8",fontSize:13}}>Cargando disponibilidad...</p>
           ) : fechasDisponibles.length === 0 ? (
-            <p style={{color:"#94a3b8",fontSize:13}}>No hay días disponibles por el momento.</p>
+            <p style={{color:"#94a3b8",fontSize:13}}>No hay días disponibles para {addingTipo === "grupal" ? "clases grupales" : "clases individuales"} con este profe.</p>
           ) : (
-            <div style={{display:"flex",flexDirection:"column",gap:12}}>
-              {/* Mini-calendario */}
-              <div style={{background:"#fff",border:"1.5px solid #e2e8f0",borderRadius:14,padding:14}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-                  <button onClick={() => { const d=new Date(calYear,mes-1,1); setCalYear(d.getFullYear()); setMes(d.getMonth()); }}
-                    style={{background:"none",border:"none",cursor:"pointer",padding:"4px 10px",fontSize:20,color:INK_SOFT}}>‹</button>
-                  <span style={{fontWeight:700,fontSize:14,color:DK}}>{MESES[mes]} {calYear}</span>
-                  <button onClick={() => { const d=new Date(calYear,mes+1,1); setCalYear(d.getFullYear()); setMes(d.getMonth()); }}
-                    style={{background:"none",border:"none",cursor:"pointer",padding:"4px 10px",fontSize:20,color:INK_SOFT}}>›</button>
-                </div>
-                <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:2,textAlign:"center"}}>
-                  {DIAS.map(d => <div key={d} style={{fontSize:11,fontWeight:600,color:INK_SOFT,paddingBottom:4}}>{d}</div>)}
-                  {Array(primerDia(calYear,mes)).fill(null).map((_,i)=><div key={`e${i}`}/>)}
-                  {Array(diasEnMes(calYear,mes)).fill(null).map((_,i)=>{
-                    const d=i+1, iso=toISO(calYear,mes,d);
-                    const disponible=fechasDisponibles.includes(iso), sel=fecha===iso;
+            <div style={{background:"#fff",border:"1.5px solid #e2e8f0",borderRadius:14,padding:14}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                <button onClick={() => { const d=new Date(calYear,mes-1,1); setCalYear(d.getFullYear()); setMes(d.getMonth()); }}
+                  style={{background:"none",border:"none",cursor:"pointer",padding:"4px 10px",fontSize:20,color:INK_SOFT}}>‹</button>
+                <span style={{fontWeight:700,fontSize:14,color:DK}}>{MESES[mes]} {calYear}</span>
+                <button onClick={() => { const d=new Date(calYear,mes+1,1); setCalYear(d.getFullYear()); setMes(d.getMonth()); }}
+                  style={{background:"none",border:"none",cursor:"pointer",padding:"4px 10px",fontSize:20,color:INK_SOFT}}>›</button>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:2,textAlign:"center"}}>
+                {DIAS.map(d => <div key={d} style={{fontSize:11,fontWeight:600,color:INK_SOFT,paddingBottom:4}}>{d}</div>)}
+                {Array(primerDia(calYear,mes)).fill(null).map((_,i)=><div key={`e${i}`}/>)}
+                {Array(diasEnMes(calYear,mes)).fill(null).map((_,i)=>{
+                  const d=i+1, iso=toISO(calYear,mes,d);
+                  const disponible=fechasDisponibles.includes(iso), sel=addingFecha===iso;
+                  return (
+                    <button key={d} onClick={()=>{ if(disponible){ setAddingFecha(iso); setAddingHora(null); } }}
+                      disabled={!disponible}
+                      style={{aspectRatio:"1",borderRadius:8,border:"none",
+                        background:sel?PRIMARY:disponible?PL:"transparent",
+                        color:sel?"#fff":disponible?P:"#cbd5e1",
+                        fontSize:13,fontWeight:disponible?700:400,cursor:disponible?"pointer":"default"}}>
+                      {d}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Horarios del día seleccionado */}
+          {addingFecha && (
+            <>
+              <h3 style={{margin:0,color:DK}}>Horarios — {fmtLarga(addingFecha)}</h3>
+              {horariosDisponibles.length === 0 ? (
+                <p style={{color:"#94a3b8",fontSize:13}}>No hay horarios disponibles para este día.</p>
+              ) : (
+                <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                  {horariosDisponibles.map(h => {
+                    const maxH = slotsCons(h);
+                    const sel = addingHora === h;
+                    const cupoInfo = addingTipo === "grupal" ? (cupoPorHora[h] || null) : null;
+                    const grupoLleno = cupoInfo !== null && cupoInfo.inscriptos_en_vivo >= cupoInfo.cupo_max;
+                    const yaAnotado = addingTipo === "grupal" && misReservasDelDia.some(r => r.tipo === "grupal" && r.hora === h);
+                    const bloqueado = grupoLleno || yaAnotado;
                     return (
-                      <button key={d} onClick={()=>{ if(disponible){ setFecha(iso); setPaso(6); } }}
-                        disabled={!disponible}
-                        style={{aspectRatio:"1",borderRadius:8,border:"none",
-                          background:sel?PRIMARY:disponible?PL:"transparent",
-                          color:sel?"#fff":disponible?P:"#cbd5e1",
-                          fontSize:13,fontWeight:disponible?700:400,cursor:disponible?"pointer":"default"}}>
-                        {d}
-                      </button>
+                      <div key={h}>
+                        <button onClick={() => { if (!bloqueado) { setAddingHora(sel ? null : h); setAddingDuracion(1); } }}
+                          disabled={bloqueado}
+                          style={{width:"100%",background:sel?PRIMARY:bloqueado?"#f8fafc":"#fff",color:sel?"#fff":bloqueado?"#94a3b8":DK,border:`2px solid ${sel?PRIMARY:"#e2e8f0"}`,borderRadius:12,padding:"14px 18px",fontSize:14,fontWeight:600,cursor:bloqueado?"not-allowed":"pointer",textAlign:"left",display:"flex",justifyContent:"space-between",alignItems:"center",opacity:bloqueado?0.65:1}}>
+                          <span>{h} hs</span>
+                          <span style={{fontSize:12,opacity:0.8}}>
+                            {addingTipo === "grupal" && cupoInfo
+                              ? (yaAnotado ? "Ya estás anotado" : grupoLleno ? "Grupo lleno" : `${cupoInfo.inscriptos_en_vivo} de ${cupoInfo.cupo_max} lugares`)
+                              : (sel ? "▼" : "›")}
+                          </span>
+                        </button>
+                        {sel && !bloqueado && (
+                          <Card style={{background:"#f8fafc",border:`1.5px solid ${PB}`,padding:14,marginTop:4}}>
+                            {/* Modalidad */}
+                            <p style={{margin:"0 0 6px",fontWeight:700,fontSize:12,color:INK_SOFT}}>Modalidad</p>
+                            <div style={{display:"flex",gap:8,marginBottom:12}}>
+                              <button onClick={() => setAddingModalidad("Presencial")}
+                                style={{padding:"8px 14px",borderRadius:10,fontWeight:600,fontSize:13,cursor:"pointer",border:addingModalidad==="Presencial"?`2px solid ${PRIMARY}`:`2px solid #e2e8f0`,background:addingModalidad==="Presencial"?PRIMARY:"#fff",color:addingModalidad==="Presencial"?"#fff":DK}}>
+                                🏫 Presencial
+                              </button>
+                              {addingTipo !== "grupal" && (
+                                <button onClick={() => setAddingModalidad("Virtual")}
+                                  style={{padding:"8px 14px",borderRadius:10,fontWeight:600,fontSize:13,cursor:"pointer",border:addingModalidad==="Virtual"?`2px solid ${PRIMARY}`:`2px solid #e2e8f0`,background:addingModalidad==="Virtual"?PRIMARY:"#fff",color:addingModalidad==="Virtual"?"#fff":DK}}>
+                                  💻 Virtual
+                                </button>
+                              )}
+                            </div>
+                            {/* Duración */}
+                            <p style={{margin:"0 0 6px",fontWeight:700,fontSize:12,color:INK_SOFT}}>¿Cuánto tiempo?</p>
+                            <div style={{display:"flex",gap:8,marginBottom:12}}>
+                              {Array.from({length: Math.min(maxH, 4)}, (_, i) => i + 1).map(n => (
+                                <button key={n} onClick={() => setAddingDuracion(n)}
+                                  style={{padding:"10px 18px",borderRadius:10,fontWeight:700,fontSize:14,cursor:"pointer",
+                                    border:addingDuracion===n?`2px solid ${PRIMARY}`:`2px solid #e2e8f0`,
+                                    background:addingDuracion===n?PRIMARY:"#fff",
+                                    color:addingDuracion===n?"#fff":DK}}>
+                                  {n}h
+                                </button>
+                              ))}
+                            </div>
+                            {/* Necesidad */}
+                            <textarea value={addingNecesidad} onChange={e => setAddingNecesidad(e.target.value)}
+                              placeholder="¿Qué temas necesitás trabajar? (opcional)"
+                              style={{width:"100%",minHeight:70,borderRadius:10,border:`2px solid ${addingNecesidad?PRIMARY:"#e2e8f0"}`,padding:10,fontSize:13,fontFamily:"inherit",resize:"vertical",boxSizing:"border-box",outline:"none"}}/>
+                            <p style={{margin:"10px 0 0",fontSize:13,color:INK_SOFT}}>
+                              {h} → {t2str(tmins(h) + addingDuracion * 60)} · <strong>{addingCosto} hora{addingCosto !== 1 ? "s" : ""}</strong> de saldo
+                            </p>
+                            <Btn onClick={agregarAlCarrito} style={{marginTop:10}}>+ Agregar al carrito</Btn>
+                          </Card>
+                        )}
+                      </div>
                     );
                   })}
                 </div>
-              </div>
-              {/* Lista */}
-              <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                {fechasDisponibles.map(f => (
-                  <button key={f} onClick={() => { setFecha(f); setPaso(6); }}
-                    style={{background:fecha===f?PRIMARY:"#fff",color:fecha===f?"#fff":DK,border:`2px solid ${fecha===f?PRIMARY:"#e2e8f0"}`,borderRadius:12,padding:"14px 18px",fontSize:14,fontWeight:600,cursor:"pointer",textAlign:"left",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                    <span>{fmtLarga(f)}</span>
-                    <span style={{fontSize:12,opacity:0.7}}>›</span>
-                  </button>
-                ))}
-              </div>
-            </div>
+              )}
+            </>
           )}
-          <Btn onClick={() => setPaso(4)} variant="secondary">← Volver</Btn>
+
+          {carrito.length > 0 && (
+            <Btn onClick={() => setPaso(4)}>Continuar ({carrito.length} clase{carrito.length===1?"":"s"} · {totalHoras}h) →</Btn>
+          )}
+          <Btn onClick={() => setPaso(2)} variant="secondary">← Volver</Btn>
         </div>
       )}
 
-      {/* P6: Hora */}
-      {paso === 6 && (
-        <div style={{display:"flex",flexDirection:"column",gap:14}}>
-          <div style={{background:PL,border:`1.5px solid ${PB}`,borderRadius:12,padding:"10px 14px"}}>
-            <p style={{margin:0,fontSize:13,color:P,fontWeight:600}}>
-              {fecha ? fmtLarga(fecha) : ""} · {nombreProfeElegido.split(" ")[0]}
-            </p>
-          </div>
-          <h3 style={{margin:0,color:DK}}>¿A qué hora?</h3>
-          {horariosDisponibles.length === 0 ? (
-            <div style={{display:"flex",flexDirection:"column",gap:12,padding:"16px 0"}}>
-              <p style={{margin:0,color:"#94a3b8",fontSize:14,textAlign:"center"}}>No hay horarios disponibles para este día.</p>
-              <div style={{display:"flex",gap:8}}>
-                <Btn onClick={() => { setFecha(null); setPaso(5); }} variant="secondary" style={{flex:1}}>← Elegir otro día</Btn>
-              </div>
-            </div>
-          ) : (
-            <div style={{display:"flex",flexDirection:"column",gap:8}}>
-              {horariosDisponibles.map(h => {
-                const maxH = slotsCons(h);
-                const sel = horaInicio === h;
-                const cupoInfo = tipo === "grupal" ? (cupoPorHora[h] || null) : null;
-                const grupoLleno = cupoInfo !== null && cupoInfo.inscriptos_en_vivo >= cupoInfo.cupo_max;
-                const yaAnotado = tipo === "grupal" && misReservasDelDia.some(r => r.tipo === "grupal" && r.hora === h);
-                const bloqueado = grupoLleno || yaAnotado;
-                return (
-                  <div key={h}>
-                    <button onClick={() => { if (!bloqueado) { setHoraInicio(sel ? null : h); setDuracionHoras(1); } }}
-                      disabled={bloqueado}
-                      style={{width:"100%",background:sel?PRIMARY:bloqueado?"#f8fafc":"#fff",color:sel?"#fff":bloqueado?"#94a3b8":DK,border:`2px solid ${sel?PRIMARY:"#e2e8f0"}`,borderRadius:12,padding:"14px 18px",fontSize:14,fontWeight:600,cursor:bloqueado?"not-allowed":"pointer",textAlign:"left",display:"flex",justifyContent:"space-between",alignItems:"center",opacity:bloqueado?0.65:1}}>
-                      <span>{h} hs</span>
-                      <span style={{fontSize:12,opacity:0.8}}>
-                        {tipo === "grupal" && cupoInfo
-                          ? (yaAnotado
-                              ? "Ya estás anotado"
-                              : grupoLleno
-                                ? "Grupo lleno"
-                                : `${cupoInfo.inscriptos_en_vivo} de ${cupoInfo.cupo_max} lugares`)
-                          : (sel ? "▼" : "›")}
-                      </span>
-                    </button>
-                    {sel && !bloqueado && (
-                      <Card style={{background:"#f8fafc",border:`1.5px solid ${PB}`,padding:14,marginTop:4}}>
-                        <p style={{margin:"0 0 10px",fontWeight:700,fontSize:13,color:DK}}>¿Cuánto tiempo?</p>
-                        <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-                          {Array.from({length: Math.min(maxH, 4)}, (_, i) => i + 1).map(n => (
-                            <button key={n} onClick={() => setDuracionHoras(n)}
-                              style={{padding:"10px 18px",borderRadius:10,fontWeight:700,fontSize:14,cursor:"pointer",
-                                border:duracionHoras===n?`2px solid ${PRIMARY}`:`2px solid #e2e8f0`,
-                                background:duracionHoras===n?PRIMARY:"#fff",
-                                color:duracionHoras===n?"#fff":DK}}>
-                              {n}h
-                            </button>
-                          ))}
-                        </div>
-                        <p style={{margin:"10px 0 0",fontSize:13,color:INK_SOFT}}>
-                          {h} → {t2str(tmins(h) + duracionHoras * 60)} · <strong>{costo} hora{costo!==1?"s":""}</strong> de saldo
-                        </p>
-                      </Card>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-          {horaInicio && (
-            <Btn onClick={() => setPaso(7)} disabled={!horaInicio}>Continuar →</Btn>
-          )}
-          <Btn onClick={() => setPaso(5)} variant="secondary">← Volver</Btn>
-        </div>
-      )}
-
-      {/* P7: Notas */}
-      {paso === 7 && (
-        <div style={{display:"flex",flexDirection:"column",gap:14}}>
-          <h3 style={{margin:0,color:DK}}>¿Qué necesitás trabajar?</h3>
-          <p style={{margin:0,fontSize:13,color:INK_SOFT}}>
-            Contale a {nombreProfeElegido.split(" ")[0]} qué temas preparar. Cuanto más detalle, mejor la clase.
-          </p>
-          <textarea value={necesidad} onChange={e => setNecesidad(e.target.value)}
-            placeholder="Ej: Tengo parcial de funciones cuadráticas la semana que viene y no entiendo factorización..."
-            style={{width:"100%",minHeight:100,borderRadius:12,border:`2px solid ${necesidad?PRIMARY:"#e2e8f0"}`,padding:14,fontSize:14,fontFamily:"inherit",resize:"vertical",boxSizing:"border-box",outline:"none",transition:"border 0.2s"}}/>
-          <p style={{margin:0,fontSize:12,color:INK_SOFT}}>Podés saltear este paso si no sabés qué poner.</p>
-          <div style={{display:"flex",gap:8}}>
-            <Btn onClick={() => setPaso(6)} variant="secondary" style={{flex:1}}>← Volver</Btn>
-            <Btn onClick={() => setPaso(8)} style={{flex:2}}>Continuar →</Btn>
-          </div>
-        </div>
-      )}
-
-      {/* P8: Confirmar */}
-      {paso === 8 && (
+      {/* P4: Confirmar y pagar */}
+      {paso === 4 && (
         <div style={{display:"flex",flexDirection:"column",gap:14}}>
           <h3 style={{margin:0,color:DK}}>Confirmá tu reserva</h3>
           <Card style={{background:"#f0fdf4",border:"1.5px solid #bbf7d0",padding:14}}>
             <p style={{margin:"0 0 10px",fontWeight:700,fontSize:13,color:"#166534"}}>Resumen</p>
             <div style={{display:"flex",flexDirection:"column",gap:6,fontSize:14,color:"#374151"}}>
               <span>👨‍🏫 {nombreProfeElegido} — {materia}</span>
-              <span>📅 {fecha ? fmtLarga(fecha) : ""}</span>
-              <span>🕐 {horaInicio} → {horaInicio ? t2str(tmins(horaInicio) + duracionHoras * 60) : ""} ({duracionHoras} hora{duracionHoras===1?"":"s"})</span>
-              <span>📍 {modalidad} · Clase {tipo}</span>
-              <span style={{fontWeight:700,color:P}}>⏱ {costo===1?"Se descuenta":"Se descuentan"} {costo} hora{costo===1?"":"s"} de tu saldo</span>
+              {carrito.map((item, i) => (
+                <div key={i} style={{paddingLeft:10,borderLeft:`3px solid ${PRIMARY}`,marginTop:4}}>
+                  <span style={{fontWeight:600}}>{fmtLarga(item.fecha)}</span><br/>
+                  <span style={{fontSize:13}}>
+                    🕐 {item.horaInicio} → {t2str(tmins(item.horaInicio) + item.duracionHoras * 60)} ({item.duracionHoras}h) · {item.tipo} · {item.modalidad}
+                  </span>
+                </div>
+              ))}
+              <span style={{fontWeight:700,color:P,marginTop:4}}>⏱ {todasIndividual ? `Se descuentan ${totalHoras} horas` : `Se descuenta ${totalHoras} hora(s) equivalente(s)`} de tu saldo / pago</span>
             </div>
           </Card>
           <Card style={{background:"#fefce8",border:"1.5px solid #fde68a",padding:12}}>
@@ -637,31 +642,38 @@ function Reservar({ saldo, onReservar, profes, alumnoId, onNav, cfg }) {
               style={{marginTop:2,width:16,height:16,cursor:"pointer",accentColor:PRIMARY}}/>
             Entendí la política de cancelación
           </label>
+          {errorReserva && (
+            <div style={{background:"#fff5f5",border:"1.5px solid #fecaca",borderRadius:12,padding:"10px 14px",fontSize:13,color:"#dc2626"}}>
+              ⚠️ {errorReserva}
+            </div>
+          )}
           {errorPagoReserva && (
             <div style={{background:"#fff5f5",border:"1.5px solid #fecaca",borderRadius:12,padding:"10px 14px",fontSize:13,color:"#dc2626"}}>
               ⚠️ {errorPagoReserva}
             </div>
           )}
           <div style={{display:"flex",gap:8}}>
-            <Btn onClick={() => setPaso(7)} variant="secondary" style={{flex:1}}>← Volver</Btn>
-            {!saldoInsuficiente && tipo !== "grupal" && (
+            <Btn onClick={() => setPaso(3)} variant="secondary" style={{flex:1}}>← Volver</Btn>
+            {puedeUsarSaldo && (
               <Btn onClick={async () => {
                 setErrorReserva("");
                 try {
                   const hoy = toISO(new Date().getFullYear(), new Date().getMonth(), new Date().getDate());
-                  if (fecha < hoy) { setErrorReserva("No podés reservar en una fecha pasada."); return; }
-                  if (tipo === "grupal") {
-                    await unirseGrupo({ profeId, materia, fecha, hora: horaInicio, horas: duracion, modalidad, necesidad });
-                  } else {
-                    await crearReserva({ profeId, materia, fecha, hora: horaInicio, horas: duracion, modalidad, tipo, alumnosGrupo: null, necesidad });
+                  for (const item of carrito) {
+                    if (item.fecha < hoy) { setErrorReserva("No podés reservar en una fecha pasada."); return; }
+                    if (item.tipo === "grupal") {
+                      await unirseGrupo({ profeId, materia, fecha: item.fecha, hora: item.horaInicio, horas: item.duracionHoras, modalidad: item.modalidad, necesidad: item.necesidad });
+                    } else {
+                      await crearReserva({ profeId, materia, fecha: item.fecha, hora: item.horaInicio, horas: item.duracionHoras, modalidad: item.modalidad, tipo: item.tipo, alumnosGrupo: null, necesidad: item.necesidad });
+                    }
                   }
-                  onReservar(costo);
-                  setPaso(9);
+                  onReservar(totalHoras);
+                  setPaso(5);
                 } catch (err) {
                   setErrorReserva(err.message || "No se pudo confirmar la reserva. Intentá de nuevo.");
                 }
               }} disabled={!aceptaCancelacion} style={{flex:1}}>
-                Usar saldo ({costo}h)
+                Usar saldo ({totalHoras}h)
               </Btn>
             )}
             <Btn onClick={async () => {
@@ -669,18 +681,24 @@ function Reservar({ saldo, onReservar, profes, alumnoId, onNav, cfg }) {
               setPagoReserva("procesando");
               try {
                 const hoy = toISO(new Date().getFullYear(), new Date().getMonth(), new Date().getDate());
-                if (fecha < hoy) { setErrorPagoReserva("No podés reservar en una fecha pasada."); setPagoReserva("idle"); return; }
-                const { init_point, reserva_id } = await crearPreferenciaReserva({
-                  profeId, materia, fecha, hora: horaInicio, horas: duracion, modalidad, tipo, necesidad,
-                });
-                localStorage.setItem("pc_reserva_pendiente", JSON.stringify({ reserva_id, materia, profe: nombreProfeElegido, fecha, hora: horaInicio, horas: duracion }));
+                for (const item of carrito) {
+                  if (item.fecha < hoy) { setErrorPagoReserva("No podés reservar en una fecha pasada."); setPagoReserva("idle"); return; }
+                }
+                const carritoMapped = carrito.map(item => ({
+                  profeId, materia, fecha: item.fecha, hora: item.horaInicio, horas: item.duracionHoras,
+                  modalidad: item.modalidad, tipo: item.tipo, necesidad: item.necesidad,
+                }));
+                const { init_point, reserva_ids } = await crearPreferenciaMulti(carritoMapped);
+                localStorage.setItem("pc_multi_reserva_pendiente", JSON.stringify({
+                  reserva_ids, materia, profe: nombreProfeElegido, itemCount: carrito.length,
+                }));
                 window.location.href = init_point;
               } catch (err) {
-                console.error("Error al crear preferencia reserva:", err);
+                console.error("Error al crear preferencia multi:", err);
                 setPagoReserva("idle");
                 setErrorPagoReserva("No se pudo iniciar el pago. Revisá tu conexión y volvé a intentarlo.");
               }
-            }} disabled={pagoReserva === "procesando" || !aceptaCancelacion} style={{flex: (saldoInsuficiente || tipo === "grupal") ? 2 : 1}}>
+            }} disabled={pagoReserva === "procesando" || !aceptaCancelacion} style={{flex:puedeUsarSaldo ? 1 : 2}}>
               {pagoReserva === "procesando" ? "Procesando…" : "Pagar con MP →"}
             </Btn>
           </div>
@@ -2095,6 +2113,62 @@ function AppAlumno({ user, onLogout }) {
     if (!user) return;
     const params = new URLSearchParams(window.location.search);
     const collectionStatus = params.get("collection_status");
+    const multiIds = params.get("multi_reserva_ids");
+
+    // ── Multi-reserva return ───────────────────────────────────────────────
+    if (multiIds) {
+      const rawM = localStorage.getItem("pc_multi_reserva_pendiente");
+      if (!rawM) return;
+      const pendientes = JSON.parse(rawM);
+      localStorage.removeItem("pc_multi_reserva_pendiente");
+      window.history.replaceState({}, "", window.location.pathname);
+      const ids = multiIds.split(",").map(Number).filter(n => !isNaN(n));
+      const totalHoras = pendientes.reduce((s, p) => s + (p.horas || 0), 0);
+      const materias = [...new Set(pendientes.map(p => p.materia))].join(", ");
+
+      if (collectionStatus === "approved") {
+        setReservaPagoEstado({ status: "confirmando", materia: materias, profe: "", fecha: "", hora: "", horas: totalHoras });
+        let intentos = 0;
+        const poll = setInterval(async () => {
+          intentos++;
+          try {
+            const reservas = await getReservasAlumno(user.id);
+            const allFound = ids.every(id => (reservas || []).some(r => String(r.id) === String(id)));
+            if (allFound || intentos >= 20) {
+              clearInterval(poll);
+              setReservaPagoEstado(s => s ? { ...s, status: "aprobado" } : s);
+              setReservasAlumno(reservas);
+              getAlumno(user.id).then(d => { if (d?.saldo !== undefined) setSaldo(d.saldo); }).catch(() => {});
+            }
+          } catch { /* retry */ }
+        }, 3000);
+        return () => clearInterval(poll);
+      } else {
+        if (!collectionStatus) {
+          const checkAndReturn = async () => {
+            try {
+              const reservas = await getReservasAlumno(user.id);
+              const allFound = ids.every(id => (reservas || []).some(r => String(r.id) === String(id) && r.estado === "confirmada"));
+              if (allFound) {
+                setReservaPagoEstado({ status: "aprobado", materia: materias, profe: "", fecha: "", hora: "", horas: totalHoras });
+                setReservasAlumno(reservas);
+                getAlumno(user.id).then(d => { if (d?.saldo !== undefined) setSaldo(d.saldo); }).catch(() => {});
+                return;
+              }
+            } catch (err) { console.error("Error verificando pago multi:", err); }
+            ids.forEach(id => devolverHoras(id).catch(err => console.error("Error devolviendo horas:", err)));
+            setReservaPagoEstado({ status: "fallido", materia: materias, profe: "", fecha: "", hora: "", horas: totalHoras });
+          };
+          checkAndReturn();
+        } else {
+          ids.forEach(id => devolverHoras(id).catch(err => console.error("Error devolviendo horas:", err)));
+          setReservaPagoEstado({ status: "fallido", materia: materias, profe: "", fecha: "", hora: "", horas: totalHoras });
+        }
+      }
+      return;
+    }
+
+    // ── Single reserva return (flujo existente) ────────────────────────────
     const raw = localStorage.getItem("pc_reserva_pendiente");
     if (!raw) return;
     const pendiente = JSON.parse(raw);

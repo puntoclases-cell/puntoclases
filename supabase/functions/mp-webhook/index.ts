@@ -187,6 +187,40 @@ Deno.serve(async (req) => {
     return new Response("error", { status: 500 });
   }
 
+  // ── RAMA A2: multi-reserva (external_reference = "mr_<id1>,<id2>,...") ────
+  if (extRef.startsWith("mr_")) {
+    const idsStr = extRef.slice(3);
+    const reservaIds = idsStr.split(",").map(s => parseInt(s, 10)).filter(n => !isNaN(n));
+
+    if (reservaIds.length === 0) {
+      console.error("external_reference mr_ sin IDs válidos:", extRef);
+      return new Response("error", { status: 500 });
+    }
+
+    const failedIds: number[] = [];
+    for (const reservaId of reservaIds) {
+      const { data: resultado, error: confirmarErr } = await supabase.rpc(
+        "confirmar_reserva_pago",
+        { p_reserva_id: reservaId, p_payment_id: String(paymentId) },
+      );
+      if (confirmarErr) {
+        console.error("Error en confirmar_reserva_pago (multi):", confirmarErr, { reservaId });
+        failedIds.push(reservaId);
+        continue;
+      }
+      const result = String(resultado ?? "");
+      if (result !== "confirmada" && result !== "ya_confirmada") {
+        console.error("confirmar_reserva_pago resultado inesperado (multi):", result, { reservaId, paymentId });
+        failedIds.push(reservaId);
+      }
+    }
+
+    if (failedIds.length > 0) {
+      console.error("Multi-reserva: fallaron confirmaciones:", failedIds, "paymentId:", paymentId);
+    }
+    return new Response("ok", { status: 200 });
+  }
+
   // ── RAMA B: compra de pack (external_reference = dígitos puros) ───────────
   // Intacto respecto al original.
   if (/^\d+$/.test(extRef)) {

@@ -92,6 +92,80 @@ Deno.serve(async (req) => {
     );
   }
 
+  // ── RAMA C: multi-reserva (pago por clases múltiples) ─────────────────────
+  // Body: { carrito: [{ materia, profeId, fecha, hora, horas, modalidad, tipo, necesidad? }, ...] }
+  if (Array.isArray(body.carrito) && body.carrito.length > 0) {
+    const items = body.carrito as Array<{
+      materia: string; profeId: string; fecha: string; hora: string;
+      horas: number; modalidad: string; tipo: string; necesidad?: string;
+    }>;
+
+    const reservaIds: number[] = [];
+    const mpItems: Array<{ title: string; quantity: number; unit_price: number; currency_id: string }> = [];
+
+    for (const item of items) {
+      const { data: rpcRows, error: rpcErr } = await anonClient.rpc(
+        "crear_reserva_pendiente_pago",
+        {
+          p_profe_id: item.profeId,
+          p_materia: item.materia,
+          p_fecha: item.fecha,
+          p_hora: item.hora,
+          p_horas: item.horas,
+          p_modalidad: item.modalidad,
+          p_tipo: item.tipo,
+          p_necesidad: item.necesidad ?? null,
+        },
+      );
+      if (rpcErr || !rpcRows?.[0]) {
+        console.error("Error en crear_reserva_pendiente_pago (multi):", rpcErr, item);
+        return new Response(
+          JSON.stringify({ error: rpcErr?.message ?? "Error al crear reserva" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+      const { reserva_id: rid, monto_ars: monto } = rpcRows[0] as { reserva_id: number; monto_ars: number };
+      reservaIds.push(rid);
+      mpItems.push({
+        title: `Clase de ${item.materia} - PuntoClases`,
+        quantity: 1,
+        unit_price: monto,
+        currency_id: "ARS",
+      });
+    }
+
+    const multiIds = reservaIds.join(",");
+    const mpRes = await fetch("https://api.mercadopago.com/checkout/preferences", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${Deno.env.get("MP_ACCESS_TOKEN")}`,
+      },
+      body: JSON.stringify({
+        items: mpItems,
+        external_reference: `mr_${multiIds}`,
+        notification_url: `${Deno.env.get("SUPABASE_URL")}/functions/v1/mp-webhook`,
+        back_urls: {
+          success: `https://puntoclases.vercel.app?multi_reserva_ids=${multiIds}`,
+          failure: `https://puntoclases.vercel.app?multi_reserva_ids=${multiIds}`,
+          pending: `https://puntoclases.vercel.app?multi_reserva_ids=${multiIds}`,
+        },
+      }),
+    });
+    const pref = await mpRes.json();
+    if (!mpRes.ok) {
+      console.error("Error MP al crear preferencia multi:", JSON.stringify(pref));
+      return new Response(
+        JSON.stringify({ error: pref }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+    return new Response(
+      JSON.stringify({ init_point: pref.init_point, reserva_ids: reservaIds }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
+  }
+
   // ── RAMA B: pago de packs (flujo existente, sin cambios) ─────────────────
   // Body: { horas?, packId? }
   const { horas, packId } = body as { horas?: number; packId?: string };
