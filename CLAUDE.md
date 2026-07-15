@@ -45,7 +45,7 @@ Arrancá del estado de abajo; **no re-diagnostiques lo ✅**.
 - `registrar_compra_pendiente(alumno_id, horas, precio, pack_id)` → inserta fila con `estado_pago='pendiente'`, devuelve `id BIGINT`.
 - `aprobar_compra(compra_id, payment_id)` → idempotente: si ya está `'aprobado'` devuelve saldo sin tocar nada; si no, actualiza `compras` y `alumnos` en un solo tx.
 
-## ESTADO ACTUAL — al 2026-07-05
+## ESTADO ACTUAL — al 2026-07-15
 
 ✅ Pagos prod — fix definitivo (2026-07-02): causa raíz real era que MP Checkout Pro **no propaga `metadata` de la preferencia al payment**. El webhook leía `payment.metadata` → vacío → devolvía 200 silencioso → nunca acreditaba. Fix: patrón "compra pendiente en DB" (Opción B): `crear-preferencia` llama a `registrar_compra_pendiente` antes de ir a MP y usa el id numérico de DB como `external_reference`; `mp-webhook` usa `external_reference` para llamar a `aprobar_compra` (idempotente). 500 en lugar de 200 silencioso cuando algo falla (MP reintenta).
 
@@ -95,6 +95,8 @@ Toda fase nueva se diseña para que violar estas reglas sea imposible, y agrega 
   - Grupal pagada con plata → mostrar **"Reprogramar"** como opción principal; si el alumno igual cancela, advertir explícito: *"Esta clase no se reembolsa"*.
   - **VERIFICAR en 2b (bloqueante)**: que reprogramar una grupal pagada funcione de extremo a extremo — cupo disponible en el nuevo horario, re-agrupación correcta. Si no funciona, el alumno queda atrapado con una clase que no puede usar ni recuperar.
 - **F6 Etapa 2c** (en rama f6-review, NO en prod): `devolver_horas` — 4 casos por tipo/origen. Migración `20260705000006`. Pendiente de aprobación.
+- **F6 Etapa 2b ✅ 2026-07-15**: front wizard pago por clase — P8 muestra "Pagar con MP" cuando saldo insuficiente, llama `crearPreferenciaReserva` (Rama A), polling de retorno. Commit `502a09a`. En rama `f6-review`.
+- **F6 Etapa 2c ✅ 2026-07-15**: `devolver_horas` 4 casos (saldo, MP individual, MP grupal no reembolsa, pendiente). Migración `20260705000006` aplicada a prod. Commits `9b30aa4`, `30ad2f5`. En rama `f6-review`.
 - **F7** (opcional): carrito progresivo "Agregar otra clase".
 
 ## Regla de negocio — Vencimiento de horas (fija)
