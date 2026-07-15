@@ -1,5 +1,5 @@
 ﻿import { useState, useEffect, useRef } from "react";
-import { login, getUsuarioActual, onAuthChange, logout, getAlumno, getCompras, getReservasAlumno, getProfes, getProfesAdmin, getDisponibilidad, getReservasProfe, marcarReserva, cargarDevolucion, reprogramarReserva, setBloque, borrarBloque, getAlumnos, getTodasLasReservas, actualizarAlumno, actualizarProfe, actualizarPerfil, crearReserva, unirseGrupo, getGrupoInfo, verificarBloqueOcupado, getReservasDelDia, getMisReservasDelDia, getMensajes, enviarMensaje, suscribirMensajes, registrarAlumno, registrarProfe, enviarRecuperacion, actualizarPassword, onPasswordRecovery, crearResenia, getConfig, updateConfig, getPacks, devolverHoras, addHorasAdmin, crearPreferencia, contarMensajesNuevosProfe, subirAvatar } from "./db";
+import { login, getUsuarioActual, onAuthChange, logout, getAlumno, getCompras, getReservasAlumno, getProfes, getProfesAdmin, getDisponibilidad, getReservasProfe, marcarReserva, cargarDevolucion, reprogramarReserva, setBloque, borrarBloque, getAlumnos, getTodasLasReservas, actualizarAlumno, actualizarProfe, actualizarPerfil, crearReserva, unirseGrupo, getGrupoInfo, verificarBloqueOcupado, getReservasDelDia, getMisReservasDelDia, getMensajes, enviarMensaje, suscribirMensajes, registrarAlumno, registrarProfe, enviarRecuperacion, actualizarPassword, onPasswordRecovery, crearResenia, getConfig, updateConfig, getPacks, devolverHoras, addHorasAdmin, crearPreferencia, crearPreferenciaReserva, contarMensajesNuevosProfe, subirAvatar } from "./db";
 
 // ════════════════════════════════════════════════════════════════════════════
 // PUNTOCLASES — APP UNIFICADA
@@ -226,6 +226,8 @@ function Reservar({ saldo, onReservar, profes, alumnoId, onNav, cfg }) {
   const [misReservasDelDia, setMisReservasDelDia] = useState([]);
   const [aceptaCancelacion, setAceptaCancelacion] = useState(false);
   const [cupoPorHora, setCupoPorHora] = useState({});
+  const [pagoReserva, setPagoReserva] = useState("idle"); // idle | procesando
+  const [errorPagoReserva, setErrorPagoReserva] = useState("");
 
   useEffect(() => {
     if (!profeId) return;
@@ -636,8 +638,8 @@ function Reservar({ saldo, onReservar, profes, alumnoId, onNav, cfg }) {
             Entendí la política de cancelación
           </label>
           {saldoInsuficiente && (
-            <div style={{background:"#fff5f5",border:"1.5px solid #fecaca",borderRadius:12,padding:"10px 14px",fontSize:13,color:"#dc2626"}}>
-              ⚠️ Saldo insuficiente: esta reserva cuesta {costo} hora{costo===1?"":"s"} y tenés {saldo} hora{saldo===1?"":"s"}.
+            <div style={{background:"#eff6ff",border:"1.5px solid #bfdbfe",borderRadius:12,padding:"10px 14px",fontSize:13,color:"#1e40af"}}>
+              💳 Saldo insuficiente: esta reserva cuesta {costo} hora{costo===1?"":"s"} y tenés {saldo} hora{saldo===1?"":"s"}. Podés pagar con Mercado Pago.
             </div>
           )}
           {errorReserva && (
@@ -645,27 +647,57 @@ function Reservar({ saldo, onReservar, profes, alumnoId, onNav, cfg }) {
               ⚠️ {errorReserva}
             </div>
           )}
-          <div style={{display:"flex",gap:8}}>
-            <Btn onClick={() => setPaso(7)} variant="secondary" style={{flex:1}}>← Volver</Btn>
-            <Btn onClick={async () => {
-              setErrorReserva("");
-              try {
-                const hoy = toISO(new Date().getFullYear(), new Date().getMonth(), new Date().getDate());
-                if (fecha < hoy) { setErrorReserva("No podés reservar en una fecha pasada."); return; }
-                if (tipo === "grupal") {
-                  await unirseGrupo({ profeId, materia, fecha, hora: horaInicio, horas: duracion, modalidad, necesidad });
-                } else {
-                  await crearReserva({ profeId, materia, fecha, hora: horaInicio, horas: duracion, modalidad, tipo, alumnosGrupo: null, necesidad });
+          {errorPagoReserva && (
+            <div style={{background:"#fff5f5",border:"1.5px solid #fecaca",borderRadius:12,padding:"10px 14px",fontSize:13,color:"#dc2626"}}>
+              ⚠️ {errorPagoReserva}
+            </div>
+          )}
+          {saldoInsuficiente ? (
+            <div style={{display:"flex",gap:8}}>
+              <Btn onClick={() => setPaso(7)} variant="secondary" style={{flex:1}}>← Volver</Btn>
+              <Btn onClick={async () => {
+                setErrorPagoReserva("");
+                setPagoReserva("procesando");
+                try {
+                  const hoy = toISO(new Date().getFullYear(), new Date().getMonth(), new Date().getDate());
+                  if (fecha < hoy) { setErrorPagoReserva("No podés reservar en una fecha pasada."); setPagoReserva("idle"); return; }
+                  const { init_point, reserva_id } = await crearPreferenciaReserva({
+                    profeId, materia, fecha, hora: horaInicio, horas: duracion, modalidad, tipo, necesidad,
+                  });
+                  localStorage.setItem("pc_reserva_pendiente", JSON.stringify({ reserva_id, materia, profe: nombreProfeElegido, fecha, hora: horaInicio, horas: duracion }));
+                  window.location.href = init_point;
+                } catch (err) {
+                  console.error("Error al crear preferencia reserva:", err);
+                  setPagoReserva("idle");
+                  setErrorPagoReserva("No se pudo iniciar el pago. Revisá tu conexión y volvé a intentarlo.");
                 }
-                onReservar(costo);
-                setPaso(9);
-              } catch (err) {
-                setErrorReserva(err.message || "No se pudo confirmar la reserva. Intentá de nuevo.");
-              }
-            }} disabled={saldoInsuficiente || !aceptaCancelacion} style={{flex:2}}>
-              Confirmar reserva ✓
-            </Btn>
-          </div>
+              }} disabled={pagoReserva === "procesando" || !aceptaCancelacion} style={{flex:2}}>
+                {pagoReserva === "procesando" ? "Procesando…" : "Pagar con Mercado Pago →"}
+              </Btn>
+            </div>
+          ) : (
+            <div style={{display:"flex",gap:8}}>
+              <Btn onClick={() => setPaso(7)} variant="secondary" style={{flex:1}}>← Volver</Btn>
+              <Btn onClick={async () => {
+                setErrorReserva("");
+                try {
+                  const hoy = toISO(new Date().getFullYear(), new Date().getMonth(), new Date().getDate());
+                  if (fecha < hoy) { setErrorReserva("No podés reservar en una fecha pasada."); return; }
+                  if (tipo === "grupal") {
+                    await unirseGrupo({ profeId, materia, fecha, hora: horaInicio, horas: duracion, modalidad, necesidad });
+                  } else {
+                    await crearReserva({ profeId, materia, fecha, hora: horaInicio, horas: duracion, modalidad, tipo, alumnosGrupo: null, necesidad });
+                  }
+                  onReservar(costo);
+                  setPaso(9);
+                } catch (err) {
+                  setErrorReserva(err.message || "No se pudo confirmar la reserva. Intentá de nuevo.");
+                }
+              }} disabled={!aceptaCancelacion} style={{flex:2}}>
+                Confirmar reserva ✓
+              </Btn>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -2071,6 +2103,44 @@ function AppAlumno({ user, onLogout }) {
     }
   }, [user, datosAlumno]);
 
+  // ── Retorno de MP: pago por reserva (F6 Etapa 2b) ─────────────────────────
+  const [reservaPagoEstado, setReservaPagoEstado] = useState(null); // null | {status:"confirmando"|"aprobado"|"fallido", ...}
+  useEffect(() => {
+    if (!user) return;
+    const params = new URLSearchParams(window.location.search);
+    const collectionStatus = params.get("collection_status");
+    if (!collectionStatus) return;
+    const raw = localStorage.getItem("pc_reserva_pendiente");
+    if (!raw) return;
+    const pendiente = JSON.parse(raw);
+    localStorage.removeItem("pc_reserva_pendiente");
+    window.history.replaceState({}, "", window.location.pathname);
+
+    if (collectionStatus === "approved") {
+      setReservaPagoEstado({ status: "confirmando", ...pendiente });
+      let intentos = 0;
+      const poll = setInterval(async () => {
+        intentos++;
+        try {
+          const reservas = await getReservasAlumno(user.id);
+          const encontrada = (reservas || []).find(r => String(r.id) === String(pendiente.reserva_id));
+          if (encontrada) {
+            clearInterval(poll);
+            setReservaPagoEstado(s => s ? { ...s, status: "aprobado" } : s);
+            setReservasAlumno(reservas);
+            getAlumno(user.id).then(d => { if (d?.saldo !== undefined) setSaldo(d.saldo); }).catch(() => {});
+          } else if (intentos >= 20) {
+            clearInterval(poll);
+            setReservaPagoEstado(s => s ? { ...s, status: "aprobado" } : s);
+          }
+        } catch { /* retry */ }
+      }, 3000);
+      return () => clearInterval(poll);
+    } else {
+      setReservaPagoEstado({ status: "fallido", ...pendiente });
+    }
+  }, [user]);
+
   const nav = [
     {id:"inicio",icon:"🏠",label:"Inicio"},
     {id:"reservar",icon:"📅",label:"Reservar"},
@@ -2170,6 +2240,38 @@ function AppAlumno({ user, onLogout }) {
                 : "El pago no se completó. No se descontó ningún importe. Podés intentarlo de nuevo cuando quieras."}
             </p>
             <Btn onClick={()=>setCompraPendiente(null)}>Entendido</Btn>
+          </div>
+        </div>
+      )}
+
+      {/* Modal reserva pagada con MP — confirmando / aprobado / fallido */}
+      {reservaPagoEstado && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:50,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+          <div style={{background:"#fff",borderRadius:20,padding:"28px 22px",maxWidth:360,width:"100%",textAlign:"center",display:"flex",flexDirection:"column",gap:14,alignItems:"center"}}>
+            {reservaPagoEstado.status === "confirmando" && (<>
+              <div style={{width:64,height:64,borderRadius:"50%",background:"#eff6ff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:34}}>⏳</div>
+              <h3 style={{margin:0,color:DK,fontSize:19}}>Estamos confirmando tu pago…</h3>
+              <p style={{margin:0,fontSize:14,color:"#64748b"}}>
+                {reservaPagoEstado.materia} — {reservaPagoEstado.fecha ? fmtLarga(reservaPagoEstado.fecha) : ""} {reservaPagoEstado.hora}
+              </p>
+              <p style={{margin:0,fontSize:13,color:"#94a3b8"}}>Esto puede tardar unos segundos. No cierres esta pantalla.</p>
+            </>)}
+            {reservaPagoEstado.status === "aprobado" && (<>
+              <div style={{width:64,height:64,borderRadius:"50%",background:"#dcfce7",display:"flex",alignItems:"center",justifyContent:"center",fontSize:34}}>✓</div>
+              <h3 style={{margin:0,color:DK,fontSize:19}}>¡Clase reservada!</h3>
+              <p style={{margin:0,fontSize:14,color:"#64748b"}}>
+                {reservaPagoEstado.materia} con {reservaPagoEstado.profe}<br/>
+                {reservaPagoEstado.fecha ? fmtLarga(reservaPagoEstado.fecha) : ""} — {reservaPagoEstado.hora} ({reservaPagoEstado.horas}h)
+              </p>
+              <Badge bg="#dcfce7" col="#15803d">Pago confirmado por Mercado Pago</Badge>
+              <Btn onClick={() => { setReservaPagoEstado(null); setScreen("reservar"); }}>Listo</Btn>
+            </>)}
+            {reservaPagoEstado.status === "fallido" && (<>
+              <div style={{width:64,height:64,borderRadius:"50%",background:"#fff5f5",display:"flex",alignItems:"center",justifyContent:"center",fontSize:34}}>✕</div>
+              <h3 style={{margin:0,color:DK,fontSize:19}}>Pago no completado</h3>
+              <p style={{margin:0,fontSize:14,color:"#64748b"}}>El pago no se completó. No se reservó la clase. Podés intentarlo de nuevo.</p>
+              <Btn onClick={() => setReservaPagoEstado(null)}>Entendido</Btn>
+            </>)}
           </div>
         </div>
       )}

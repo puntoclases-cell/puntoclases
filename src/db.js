@@ -392,6 +392,14 @@ export async function crearPreferencia(horas, packId = null) {
   return data; // { init_point }
 }
 
+export async function crearPreferenciaReserva(reservaParams) {
+  const { data, error } = await supabase.functions.invoke("crear-preferencia", {
+    body: { reservaParams },
+  });
+  if (error) throw error;
+  return data; // { init_point, reserva_id }
+}
+
 // ── STORAGE: AVATARES ────────────────────────────────────────────────────────
 
 // Recibe un dataUrl (ya leído por FileReader en el front) — sin createObjectURL,
