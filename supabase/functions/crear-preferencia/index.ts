@@ -155,6 +155,14 @@ Deno.serve(async (req) => {
     const pref = await mpRes.json();
     if (!mpRes.ok) {
       console.error("Error MP al crear preferencia multi:", JSON.stringify(pref));
+      // Rollback: cancelar las reservas pendientes que se crearon
+      const admin = createClient(
+        Deno.env.get("SUPABASE_URL")!,
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+      );
+      for (const rid of reservaIds) {
+        await admin.from("reservas").update({ estado: "cancelada", marcada_en: new Date().toISOString() }).eq("id", rid);
+      }
       return new Response(
         JSON.stringify({ error: pref }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },

@@ -327,12 +327,10 @@ function Reservar({ saldo, onReservar, profes, alumnoId, onNav, cfg }) {
     ? bloquesDelDia.filter(h => !slotOcupadoEnDB(h) && !slotOcupadoEnCarrito(h) && slotsCons(h) >= 1)
     : [];
 
-  const addingCosto = addingTipo === "grupal"
-    ? +(addingDuracion * CFG.factorGrupal).toFixed(1)
-    : addingDuracion;
+  const addingCosto = addingDuracion;
 
   const totalCarrito = carrito.reduce((sum, item) => {
-    return sum + (item.tipo === "grupal" ? item.duracionHoras * CFG.factorGrupal : item.duracionHoras);
+    return sum + item.duracionHoras;
   }, 0);
   const totalHoras = +totalCarrito.toFixed(1);
 
@@ -379,7 +377,7 @@ function Reservar({ saldo, onReservar, profes, alumnoId, onNav, cfg }) {
           </li>
         ))}
       </ul>
-      <Badge bg="#dcfce7" col="#15803d">-{totalHoras} hora{totalHoras === 1 ? "" : "s"} descontada{totalHoras === 1 ? "" : "s"} de tu saldo</Badge>
+      <Badge bg="#dcfce7" col="#15803d">-{totalHoras} hora{totalHoras === 1 ? "" : "s"} de tu saldo</Badge>
       <Btn onClick={resetAll}>Reservar otra clase</Btn>
     </div>
   );
@@ -469,7 +467,7 @@ function Reservar({ saldo, onReservar, profes, alumnoId, onNav, cfg }) {
                     <div style={{flex:1}}>
                       <span style={{fontWeight:600}}>{fmtLarga(item.fecha)}</span><br/>
                       <span style={{fontSize:12,color:INK_SOFT}}>
-                        {item.horaInicio} → {t2str(tmins(item.horaInicio) + item.duracionHoras * 60)} · {item.tipo} · {item.modalidad} · {item.tipo === "grupal" ? +(item.duracionHoras * CFG.factorGrupal).toFixed(1) : item.duracionHoras}h
+                        {item.horaInicio} → {t2str(tmins(item.horaInicio) + item.duracionHoras * 60)} · {item.tipo} · {item.modalidad} · {item.duracionHoras}h
                       </span>
                     </div>
                     <button onClick={() => quitarDelCarrito(i)}
@@ -630,7 +628,7 @@ function Reservar({ saldo, onReservar, profes, alumnoId, onNav, cfg }) {
                   </span>
                 </div>
               ))}
-              <span style={{fontWeight:700,color:P,marginTop:4}}>⏱ {todasIndividual ? `Se descuentan ${totalHoras} horas` : `Se descuenta ${totalHoras} hora(s) equivalente(s)`} de tu saldo / pago</span>
+              <span style={{fontWeight:700,color:P,marginTop:4}}>⏱ Costo total: {totalHoras} hora{totalHoras===1?"":"s"} de clase</span>
             </div>
           </Card>
           <Card style={{background:"#fefce8",border:"1.5px solid #fde68a",padding:12}}>
@@ -751,9 +749,10 @@ function Historial({ reservas, onReprogramar, onCancelar, alumnoId, cfg }) {
   };
 
   const estadoBadge = {
-    confirmada: { bg:"#dcfce7", col:"#15803d", label:"Confirmada ✓" },
-    pendiente:  { bg:"#fefce8", col:"#92400e", label:"Pendiente" },
-    cancelada:  { bg:"#fff5f5", col:"#dc2626", label:"Cancelada" },
+    confirmada:     { bg:"#dcfce7", col:"#15803d", label:"Confirmada ✓" },
+    pendiente:      { bg:"#fefce8", col:"#92400e", label:"Pendiente" },
+    pendiente_pago: { bg:"#fff7ed", col:"#c2410c", label:"Pago pendiente" },
+    cancelada:      { bg:"#fff5f5", col:"#dc2626", label:"Cancelada" },
   };
   const getBadge = estado => estadoBadge[estado] || { bg:"#f1f5f9", col:"#64748b", label: estado || "Reservada" };
   const inicialesProfe = nombre => (nombre || "").split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase() || "P";
@@ -869,6 +868,19 @@ function Historial({ reservas, onReprogramar, onCancelar, alumnoId, cfg }) {
                           Cancelar
                         </button>
                       </div>
+                    )}
+                    {c.estado === "pendiente_pago" && (
+                      <button onClick={async () => {
+                        try {
+                          const result = await devolverHoras(c.id);
+                          onCancelar(c.id, result?.saldo_nuevo ?? 0);
+                        } catch (err) {
+                          console.error("Error cancelando reserva pendiente:", err);
+                        }
+                      }}
+                        style={{width:"100%",minHeight:48,background:"#fff5f5",border:"1.5px solid var(--pc-alert,#D94F3D)",borderRadius:12,cursor:"pointer",fontSize:16,fontWeight:700,color:"var(--pc-alert-text,#C0392B)"}}>
+                        Borrar reserva pendiente
+                      </button>
                     )}
                   </Card>
                 );
@@ -1032,7 +1044,7 @@ function Comprar({ onComprar, onVolver, compras, cfg: cfgProp, packsDB }) {
           <p style={{margin:"0 0 6px",fontWeight:700,fontSize:13,color:"#15803d"}}>💡 ¿Cómo funciona el saldo?</p>
           <div style={{fontSize:12,color:"#374151",lineHeight:1.7}}>
             <div>• Clase <strong>individual</strong>: descuenta <strong>1 hs</strong> de saldo (${cfgEfectiva.precioInd.toLocaleString("es-AR")}/hs)</div>
-            <div>• Clase <strong>grupal</strong>: descuenta <strong>{cfgEfectiva.factorGrupal} hs</strong> de saldo — pagás ${precioGrpHora(cfgEfectiva).toLocaleString("es-AR")} en lugar de ${cfgEfectiva.precioInd.toLocaleString("es-AR")} ✓</div>
+            <div>• Clase <strong>grupal</strong>: descuenta <strong>1 hs</strong> de saldo por alumno (${precioGrpHora(cfgEfectiva).toLocaleString("es-AR")}/hs)</div>
             <div>• Las horas vencen a los <strong>{cfgEfectiva.vencimiento||cfgEfectiva.vencimientoDias||CFG.vencimientoDias} días</strong> — el residual de grupales se acumula y no vence</div>
           </div>
         </div>
@@ -5872,7 +5884,7 @@ function OnboardingRegistroAlumno({ onTerminar }) {
             <p style={{margin:0,fontSize:14,color:"#64748b"}}>Revisá cómo funciona y aceptá los términos para crear tu cuenta.</p>
             <div style={{background:"#fff",borderRadius:12,padding:16,fontSize:13,color:"#374151",lineHeight:1.6,boxShadow:"0 1px 6px rgba(0,0,0,0.05)",display:"flex",flexDirection:"column",gap:8}}>
               <p style={{margin:0}}>• Comprás <strong>packs de horas</strong> que se descuentan de tu saldo al reservar.</p>
-              <p style={{margin:0}}>• Clase individual descuenta 1hs · grupal {CFG.factorGrupal}hs.</p>
+              <p style={{margin:0}}>• Clase individual descuenta 1hs · grupal 1hs.</p>
               <p style={{margin:0}}>• Las horas vencen a los <strong>{CFG.vencimientoDias} días</strong>.</p>
               <p style={{margin:0}}>• Cancelación con menos de 24hs: se retiene el <strong>{CFG.penalizacionPct}%</strong> de la hora.</p>
               <p style={{margin:0}}>• Las clases virtuales son individuales; las grupales son presenciales.</p>
@@ -6209,9 +6221,9 @@ function ModalReprogramar({ reserva, onCerrar, onConfirmar, onCancelar, cfg }) {
   const horasRestantes = (fechaClase - ahora) / (1000*60*60);
   const conCosto = horasRestantes < 24;
   // Lo que pierde el ALUMNO al cancelar tarde: penalización % de la hora.
-  // En grupal el saldo se mide sobre 0.8hs, así que pierde 0.8 × % .
-  const saldoPerdido = +(((reserva.tipo === "grupal" ? CFG.factorGrupal : 1) * CFG.penalizacionPct / 100).toFixed(2)); // hs (0.5 ind / 0.4 grupal)
-  const costoSeña = Math.round(saldoPerdido * CFG.precioInd); // $ que pierde el alumno ($10.000 ind / $8.000 grupal)
+  // Penalización: % de la hora que pierde el alumno al cancelar tarde.
+  const saldoPerdido = +(CFG.penalizacionPct / 100).toFixed(2); // 0.5hs para ambos
+  const costoSeña = Math.round(saldoPerdido * CFG.precioInd); // $ que pierde el alumno
 
   const [dispProfe, setDispProfe] = useState({});
   useEffect(() => {
