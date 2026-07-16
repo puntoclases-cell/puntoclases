@@ -686,10 +686,10 @@ function Reservar({ saldo, onReservar, profes, alumnoId, onNav, cfg }) {
                   profeId, materia, fecha: item.fecha, hora: item.horaInicio, horas: item.duracionHoras,
                   modalidad: item.modalidad, tipo: item.tipo, necesidad: item.necesidad,
                 }));
-                const { init_point, reserva_ids } = await crearPreferenciaMulti(carritoMapped);
+                const { init_point, reserva_ids, all_init_points } = await crearPreferenciaMulti(carritoMapped);
                 localStorage.setItem("pc_multi_reserva_pendiente", JSON.stringify({
                   reserva_ids, materia, profe: nombreProfeElegido, itemCount: carrito.length,
-                  items: carritoMapped,
+                  items: carritoMapped, pendingPayments: (all_init_points || []).slice(1),
                 }));
                 window.location.href = init_point;
               } catch (err) {
@@ -2182,6 +2182,32 @@ function AppAlumno({ user, onLogout }) {
     }
 
     // ── Single reserva return (flujo existente) ────────────────────────────
+    // Check for pending multi-reservation payments first
+    const rawMulti = localStorage.getItem("pc_multi_reserva_pendiente");
+    if (rawMulti) {
+      const multiData = JSON.parse(rawMulti);
+      if (multiData.pendingPayments && multiData.pendingPayments.length > 0) {
+        const nextUrl = multiData.pendingPayments.shift();
+        localStorage.setItem("pc_multi_reserva_pendiente", JSON.stringify(multiData));
+        window.history.replaceState({}, "", window.location.pathname);
+        setTimeout(() => { window.location.href = nextUrl; }, 1500);
+        setReservaPagoEstado({ status: "aprobado", materia: "", profe: "", fecha: "", hora: "", horas: 0, multi: true, pagandoRestantes: multiData.pendingPayments.length + 1 });
+        return;
+      } else {
+        localStorage.removeItem("pc_multi_reserva_pendiente");
+        const ids = multiData.reserva_ids || [];
+        const totalHoras = (multiData.items || []).reduce((s, p) => s + (p.horas || 0), 0);
+        const materias = multiData.materia || "";
+        if (collectionStatus === "approved" || !collectionStatus) {
+          setReservaPagoEstado({ status: "aprobado", materia: materias, profe: "", fecha: "", hora: "", horas: totalHoras, multi: true });
+          getReservasAlumno(user.id).then(r => setReservasAlumno(r)).catch(() => {});
+          getAlumno(user.id).then(d => { if (d?.saldo !== undefined) setSaldo(d.saldo); }).catch(() => {});
+        }
+        window.history.replaceState({}, "", window.location.pathname);
+        return;
+      }
+    }
+
     const raw = localStorage.getItem("pc_reserva_pendiente");
     if (!raw) return;
     const pendiente = JSON.parse(raw);

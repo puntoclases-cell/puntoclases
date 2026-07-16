@@ -401,11 +401,21 @@ export async function crearPreferenciaReserva(reservaParams) {
 }
 
 export async function crearPreferenciaMulti(carrito) {
-  const { data, error } = await supabase.functions.invoke("crear-preferencia", {
-    body: { carrito },
-  });
-  if (error) throw error;
-  return data; // { init_point, reserva_ids: number[] }
+  const reservaIds = [];
+  const allInitPoints = [];
+  for (const item of carrito) {
+    const { data, error } = await supabase.functions.invoke("crear-preferencia", {
+      body: { reservaParams: item },
+    });
+    if (error) throw error;
+    reservaIds.push(data.reserva_id);
+    allInitPoints.push(data.init_point);
+  }
+  return {
+    init_point: allInitPoints[0],
+    reserva_ids: reservaIds,
+    all_init_points: allInitPoints,
+  };
 }
 
 // ── STORAGE: AVATARES ────────────────────────────────────────────────────────
