@@ -335,6 +335,9 @@ function Reservar({ saldo, onReservar, profes, alumnoId, onNav, cfg }) {
   }, 0);
   const totalHoras = +totalCarrito.toFixed(1);
 
+  const precioHora = (tipo) => tipo === "grupal" ? Math.round(CFG.precioInd * CFG.factorGrupal) : CFG.precioInd;
+  const totalCarritoArs = carrito.reduce((sum, item) => sum + precioHora(item.tipo) * item.duracionHoras, 0);
+
   const todasIndividual = carrito.every(item => item.tipo === "individual");
   const puedeUsarSaldo = carrito.length > 0 && todasIndividual && totalHoras <= saldo;
 
@@ -629,7 +632,7 @@ function Reservar({ saldo, onReservar, profes, alumnoId, onNav, cfg }) {
                   </span>
                 </div>
               ))}
-              <span style={{fontWeight:700,color:P,marginTop:4}}>⏱ Costo total: {totalHoras} hora{totalHoras===1?"":"s"} de clase</span>
+              <span style={{fontWeight:700,color:P,marginTop:4}}>💰 Total: ${totalCarritoArs.toLocaleString("es-AR")}</span>
             </div>
           </Card>
           <Card style={{background:"#fefce8",border:"1.5px solid #fde68a",padding:12}}>
@@ -687,10 +690,10 @@ function Reservar({ saldo, onReservar, profes, alumnoId, onNav, cfg }) {
                   profeId, materia, fecha: item.fecha, hora: item.horaInicio, horas: item.duracionHoras,
                   modalidad: item.modalidad, tipo: item.tipo, necesidad: item.necesidad,
                 }));
-                const { init_point, reserva_ids, all_init_points } = await crearPreferenciaMulti(carritoMapped);
+                const { init_point, reserva_ids, monto_total } = await crearPreferenciaMulti(carritoMapped);
                 localStorage.setItem("pc_multi_reserva_pendiente", JSON.stringify({
                   reserva_ids, materia, profe: nombreProfeElegido, itemCount: carrito.length,
-                  items: carritoMapped, pendingPayments: (all_init_points || []).slice(1),
+                  items: carritoMapped, monto_total,
                 }));
                 window.location.href = init_point;
               } catch (err) {
@@ -2185,50 +2188,33 @@ function AppAlumno({ user, onLogout }) {
       return;
     }
 
-    // ── Single reserva return (flujo existente) ────────────────────────────
-    // Check for pending multi-reservation payments first
+    // ── Legacy: old sequential multi-reserva cleanup ────────────────────────
     const rawMulti = localStorage.getItem("pc_multi_reserva_pendiente");
     if (rawMulti) {
       const multiData = JSON.parse(rawMulti);
-      const multiIds = multiData.reserva_ids || [];
-      const totalHoras = (multiData.items || []).reduce((s, p) => s + (p.horas || 0), 0);
+      localStorage.removeItem("pc_multi_reserva_pendiente");
+      window.history.replaceState({}, "", window.location.pathname);
+      const ids = multiData.reserva_ids || [];
       const materias = multiData.materia || "";
-
+      const totalHoras = (multiData.items || []).reduce((s, p) => s + (p.horas || 0), 0);
       if (collectionStatus && collectionStatus !== "approved") {
-        localStorage.removeItem("pc_multi_reserva_pendiente");
-        window.history.replaceState({}, "", window.location.pathname);
-        const checkAndCancel = async () => {
+        const doCancel = async () => {
           try {
             const reservas = await getReservasAlumno(user.id);
-            const pendientes = (reservas || []).filter(r => multiIds.includes(r.id) && r.estado === "pendiente_pago");
-            for (const r of pendientes) {
-              devolverHoras(r.id).catch(() => {});
-            }
-            setReservasAlumno(reservas);
-          } catch {
-            multiIds.forEach(id => devolverHoras(id).catch(() => {}));
-          }
+            const pendientes = (reservas || []).filter(r => ids.includes(r.id) && r.estado === "pendiente_pago");
+            for (const r of pendientes) await devolverHoras(r.id).catch(() => {});
+            const updated = await getReservasAlumno(user.id);
+            setReservasAlumno(updated);
+          } catch { ids.forEach(id => devolverHoras(id).catch(() => {})); }
           setReservaPagoEstado({ status: "fallido", materia: materias, profe: "", fecha: "", hora: "", horas: totalHoras, multi: true });
         };
-        checkAndCancel();
+        doCancel();
         return;
       }
-
-      if (multiData.pendingPayments && multiData.pendingPayments.length > 0) {
-        const nextUrl = multiData.pendingPayments.shift();
-        localStorage.setItem("pc_multi_reserva_pendiente", JSON.stringify(multiData));
-        window.history.replaceState({}, "", window.location.pathname);
-        setTimeout(() => { window.location.href = nextUrl; }, 1500);
-        setReservaPagoEstado({ status: "aprobado", materia: "", profe: "", fecha: "", hora: "", horas: 0, multi: true, pagandoRestantes: multiData.pendingPayments.length + 1 });
-        return;
-      } else {
-        localStorage.removeItem("pc_multi_reserva_pendiente");
-        setReservaPagoEstado({ status: "aprobado", materia: materias, profe: "", fecha: "", hora: "", horas: totalHoras, multi: true });
-        getReservasAlumno(user.id).then(r => setReservasAlumno(r)).catch(() => {});
-        getAlumno(user.id).then(d => { if (d?.saldo !== undefined) setSaldo(d.saldo); }).catch(() => {});
-        window.history.replaceState({}, "", window.location.pathname);
-        return;
-      }
+      setReservaPagoEstado({ status: "aprobado", materia: materias, profe: "", fecha: "", hora: "", horas: totalHoras, multi: true });
+      getReservasAlumno(user.id).then(r => setReservasAlumno(r)).catch(() => {});
+      getAlumno(user.id).then(d => { if (d?.saldo !== undefined) setSaldo(d.saldo); }).catch(() => {});
+      return;
     }
 
     const raw = localStorage.getItem("pc_reserva_pendiente");

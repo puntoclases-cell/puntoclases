@@ -402,7 +402,7 @@ export async function crearPreferenciaReserva(reservaParams) {
 
 export async function crearPreferenciaMulti(carrito) {
   const reservaIds = [];
-  const allInitPoints = [];
+  const montos = [];
   try {
     for (const item of carrito) {
       const { data, error } = await supabase.functions.invoke("crear-preferencia", {
@@ -410,7 +410,7 @@ export async function crearPreferenciaMulti(carrito) {
       });
       if (error) throw error;
       reservaIds.push(data.reserva_id);
-      allInitPoints.push(data.init_point);
+      montos.push(data.monto_ars);
     }
   } catch (err) {
     if (reservaIds.length > 0) {
@@ -421,10 +421,45 @@ export async function crearPreferenciaMulti(carrito) {
     const msg = err?.message || err?.data?.error || err?.data?.message || "Error al crear preferencia de pago";
     throw new Error(msg);
   }
+
+  const mpToken = import.meta.env.VITE_MP_ACCESS_TOKEN;
+  const multiIds = reservaIds.join(",");
+  const mpItems = carrito.map((item, i) => ({
+    title: `Clase de ${item.materia} - PuntoClases`,
+    quantity: 1,
+    unit_price: montos[i],
+    currency_id: "ARS",
+  }));
+
+  const mpRes = await fetch("https://api.mercadopago.com/checkout/preferences", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${mpToken}`,
+    },
+    body: JSON.stringify({
+      items: mpItems,
+      external_reference: `mr_${multiIds}`,
+      notification_url: `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/mp-webhook`,
+      back_urls: {
+        success: `https://puntoclases.vercel.app?multi_reserva_ids=${multiIds}`,
+        failure: `https://puntoclases.vercel.app?multi_reserva_ids=${multiIds}`,
+        pending: `https://puntoclases.vercel.app?multi_reserva_ids=${multiIds}`,
+      },
+    }),
+  });
+  const pref = await mpRes.json();
+  if (!mpRes.ok) {
+    for (const rid of reservaIds) {
+      devolverHoras(rid).catch(() => {});
+    }
+    throw new Error("Error al crear preferencia de pago");
+  }
+
   return {
-    init_point: allInitPoints[0],
+    init_point: pref.init_point,
     reserva_ids: reservaIds,
-    all_init_points: allInitPoints,
+    monto_total: montos.reduce((s, m) => s + m, 0),
   };
 }
 
