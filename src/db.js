@@ -403,13 +403,23 @@ export async function crearPreferenciaReserva(reservaParams) {
 export async function crearPreferenciaMulti(carrito) {
   const reservaIds = [];
   const allInitPoints = [];
-  for (const item of carrito) {
-    const { data, error } = await supabase.functions.invoke("crear-preferencia", {
-      body: { reservaParams: item },
-    });
-    if (error) throw error;
-    reservaIds.push(data.reserva_id);
-    allInitPoints.push(data.init_point);
+  try {
+    for (const item of carrito) {
+      const { data, error } = await supabase.functions.invoke("crear-preferencia", {
+        body: { reservaParams: item },
+      });
+      if (error) throw error;
+      reservaIds.push(data.reserva_id);
+      allInitPoints.push(data.init_point);
+    }
+  } catch (err) {
+    if (reservaIds.length > 0) {
+      for (const rid of reservaIds) {
+        devolverHoras(rid).catch(() => {});
+      }
+    }
+    const msg = err?.message || err?.data?.error || err?.data?.message || "Error al crear preferencia de pago";
+    throw new Error(msg);
   }
   return {
     init_point: allInitPoints[0],

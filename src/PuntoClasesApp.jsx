@@ -302,8 +302,9 @@ function Reservar({ saldo, onReservar, profes, alumnoId, onNav, cfg }) {
   const slotOcupadoEnCarrito = h => carrito.some(item => {
     if (item.fecha !== addingFecha) return false;
     if (addingTipo === "grupal" && item.tipo !== "individual") return false;
-    const iS = tmins(item.horaInicio), iE = iS + item.duracionHoras * 60, s = tmins(h);
-    return s >= iS && s < iE;
+    const iS = tmins(item.horaInicio), iE = iS + item.duracionHoras * 60;
+    const s = tmins(h), e = s + addingDuracion * 60;
+    return s < iE && e > iS;
   });
 
   const slotsCons = startH => {
@@ -695,7 +696,10 @@ function Reservar({ saldo, onReservar, profes, alumnoId, onNav, cfg }) {
               } catch (err) {
                 console.error("Error al crear preferencia multi:", err);
                 setPagoReserva("idle");
-                setErrorPagoReserva("No se pudo iniciar el pago. Revisá tu conexión y volvé a intentarlo.");
+                const msg = err?.message || "";
+                setErrorPagoReserva(msg.includes("reserva en ese horario") || msg.includes(" grupo ")
+                  ? msg
+                  : "No se pudo iniciar el pago. Revisá tu conexión y volvé a intentarlo.");
               }
             }} disabled={pagoReserva === "procesando" || !aceptaCancelacion} style={{flex:puedeUsarSaldo ? 1 : 2}}>
               {pagoReserva === "procesando" ? "Procesando…" : "Pagar con MP →"}
