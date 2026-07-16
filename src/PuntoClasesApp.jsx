@@ -2190,6 +2190,30 @@ function AppAlumno({ user, onLogout }) {
     const rawMulti = localStorage.getItem("pc_multi_reserva_pendiente");
     if (rawMulti) {
       const multiData = JSON.parse(rawMulti);
+      const multiIds = multiData.reserva_ids || [];
+      const totalHoras = (multiData.items || []).reduce((s, p) => s + (p.horas || 0), 0);
+      const materias = multiData.materia || "";
+
+      if (collectionStatus && collectionStatus !== "approved") {
+        localStorage.removeItem("pc_multi_reserva_pendiente");
+        window.history.replaceState({}, "", window.location.pathname);
+        const checkAndCancel = async () => {
+          try {
+            const reservas = await getReservasAlumno(user.id);
+            const pendientes = (reservas || []).filter(r => multiIds.includes(r.id) && r.estado === "pendiente_pago");
+            for (const r of pendientes) {
+              devolverHoras(r.id).catch(() => {});
+            }
+            setReservasAlumno(reservas);
+          } catch {
+            multiIds.forEach(id => devolverHoras(id).catch(() => {}));
+          }
+          setReservaPagoEstado({ status: "fallido", materia: materias, profe: "", fecha: "", hora: "", horas: totalHoras, multi: true });
+        };
+        checkAndCancel();
+        return;
+      }
+
       if (multiData.pendingPayments && multiData.pendingPayments.length > 0) {
         const nextUrl = multiData.pendingPayments.shift();
         localStorage.setItem("pc_multi_reserva_pendiente", JSON.stringify(multiData));
@@ -2199,14 +2223,9 @@ function AppAlumno({ user, onLogout }) {
         return;
       } else {
         localStorage.removeItem("pc_multi_reserva_pendiente");
-        const ids = multiData.reserva_ids || [];
-        const totalHoras = (multiData.items || []).reduce((s, p) => s + (p.horas || 0), 0);
-        const materias = multiData.materia || "";
-        if (collectionStatus === "approved" || !collectionStatus) {
-          setReservaPagoEstado({ status: "aprobado", materia: materias, profe: "", fecha: "", hora: "", horas: totalHoras, multi: true });
-          getReservasAlumno(user.id).then(r => setReservasAlumno(r)).catch(() => {});
-          getAlumno(user.id).then(d => { if (d?.saldo !== undefined) setSaldo(d.saldo); }).catch(() => {});
-        }
+        setReservaPagoEstado({ status: "aprobado", materia: materias, profe: "", fecha: "", hora: "", horas: totalHoras, multi: true });
+        getReservasAlumno(user.id).then(r => setReservasAlumno(r)).catch(() => {});
+        getAlumno(user.id).then(d => { if (d?.saldo !== undefined) setSaldo(d.saldo); }).catch(() => {});
         window.history.replaceState({}, "", window.location.pathname);
         return;
       }
