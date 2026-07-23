@@ -115,12 +115,12 @@ export async function getReservasAlumno(alumnoId) {
 }
 
 // Reservas existentes de un profe en una fecha (para marcar slots ocupados en la grilla).
+// Usa RPC verificar_disponibilidad que solo devuelve hora/horas/tipo (sin alumno_id ni payment_id).
 export async function getReservasDelDia(profeId, fecha) {
-  const { data, error } = await supabase.from("reservas")
-    .select("hora, horas, tipo")
-    .eq("profe_id", profeId)
-    .eq("fecha", fecha)
-    .in("estado", ["confirmada", "pendiente"]);
+  const { data, error } = await supabase.rpc("verificar_disponibilidad", {
+    p_profe_id: profeId,
+    p_fecha: fecha,
+  });
   if (error) throw error;
   return data || [];
 }
@@ -138,16 +138,14 @@ export async function getMisReservasDelDia(alumnoId, profeId, fecha) {
 }
 
 // Crear reserva (descuenta saldo de forma atómica vía función SQL).
+// Usa verificar_disponibilidad para detectar si el slot ya está ocupado.
 export async function verificarBloqueOcupado(profeId, fecha, hora) {
-  const { data, error } = await supabase.from("reservas")
-    .select("id")
-    .eq("profe_id", profeId)
-    .eq("fecha", fecha)
-    .eq("hora", hora)
-    .in("estado", ["confirmada", "pendiente"])
-    .limit(1);
+  const { data, error } = await supabase.rpc("verificar_disponibilidad", {
+    p_profe_id: profeId,
+    p_fecha: fecha,
+  });
   if (error) throw error;
-  return data.length > 0;
+  return (data || []).some(r => r.hora === hora);
 }
 
 export async function crearReserva({ profeId, materia, fecha, hora, horas, modalidad, tipo, alumnosGrupo, necesidad }) {
@@ -382,85 +380,35 @@ export async function addHorasAdmin(alumnoId, delta = 1) {
   return data; // numeric saldo_nuevo
 }
 
-// ── EDGE FUNCTIONS ────────────────────────────────────────────────────────────
+// ── PREFERENCIAS DE PAGO (serverless) ───────────────────────────────────────
+
+async function mpAuthHeaders() {
+  const { data: { session } } = await supabase.auth.getSession();
+  const token = session?.access_token;
+  if (!token) throw new Error("No autenticado");
+  return { "Content-Type": "application/json", Authorization: `Bearer ${token}` };
+}
 
 export async function crearPreferencia(horas, packId = null) {
-  const { data, error } = await supabase.functions.invoke("crear-preferencia", {
-    body: { horas, packId },
+  const res = await fetch("/api/crear-preferencia-pack", {
+    method: "POST",
+    headers: await mpAuthHeaders(),
+    body: JSON.stringify({ horas, packId }),
   });
-  if (error) throw error;
-  return data; // { init_point }
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Error al crear preferencia de pago");
+  return data; // { init_point, compra_id }
 }
 
 export async function crearPreferenciaReserva(reservaParams) {
-  const { data, error } = await supabase.functions.invoke("crear-preferencia", {
-    body: { reservaParams },
-  });
-  if (error) throw error;
-  return data; // { init_point, reserva_id }
-}
-
-export async function crearPreferenciaMulti(carrito) {
-  const reservaIds = [];
-  const montos = [];
-  try {
-    for (const item of carrito) {
-      const { data, error } = await supabase.functions.invoke("crear-preferencia", {
-        body: { reservaParams: item },
-      });
-      if (error) throw error;
-      reservaIds.push(data.reserva_id);
-      montos.push(data.monto_ars);
-    }
-  } catch (err) {
-    if (reservaIds.length > 0) {
-      for (const rid of reservaIds) {
-        devolverHoras(rid).catch(() => {});
-      }
-    }
-    const msg = err?.message || err?.data?.error || err?.data?.message || "Error al crear preferencia de pago";
-    throw new Error(msg);
-  }
-
-  const mpToken = import.meta.env.VITE_MP_ACCESS_TOKEN;
-  const multiIds = reservaIds.join(",");
-  const mpItems = carrito.map((item, i) => ({
-    title: `Clase de ${item.materia} - PuntoClases`,
-    quantity: 1,
-    unit_price: montos[i],
-    currency_id: "ARS",
-  }));
-
-  const mpRes = await fetch("https://api.mercadopago.com/checkout/preferences", {
+  const res = await fetch("/api/crear-preferencia-reserva", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${mpToken}`,
-    },
-    body: JSON.stringify({
-      items: mpItems,
-      external_reference: `mr_${multiIds}`,
-      notification_url: `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/mp-webhook`,
-      back_urls: {
-        success: `https://puntoclases.vercel.app?multi_reserva_ids=${multiIds}`,
-        failure: `https://puntoclases.vercel.app?multi_reserva_ids=${multiIds}`,
-        pending: `https://puntoclases.vercel.app?multi_reserva_ids=${multiIds}`,
-      },
-    }),
+    headers: await mpAuthHeaders(),
+    body: JSON.stringify({ reservaParams }),
   });
-  const pref = await mpRes.json();
-  if (!mpRes.ok) {
-    for (const rid of reservaIds) {
-      devolverHoras(rid).catch(() => {});
-    }
-    throw new Error("Error al crear preferencia de pago");
-  }
-
-  return {
-    init_point: pref.init_point,
-    reserva_ids: reservaIds,
-    monto_total: montos.reduce((s, m) => s + m, 0),
-  };
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Error al crear preferencia de pago");
+  return data; // { init_point, reserva_id }
 }
 
 // ── STORAGE: AVATARES ────────────────────────────────────────────────────────
