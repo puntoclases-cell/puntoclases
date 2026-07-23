@@ -293,6 +293,25 @@ export async function actualizarProfe(profeId, cambios) {
   return data;
 }
 
+export async function actualizarMiPerfilProfe({
+  materias, monotributo, titulo, bio, modalidad,
+  anosExperiencia, ubicacion, instagram, niveles,
+}) {
+  const { data, error } = await supabase.rpc("actualizar_mi_perfil_profe", {
+    p_materias:         materias,
+    p_monotributo:      monotributo,
+    p_titulo:           titulo,
+    p_bio:              bio,
+    p_modalidad:        modalidad,
+    p_anos_experiencia: anosExperiencia,
+    p_ubicacion:        ubicacion,
+    p_instagram:        instagram,
+    p_niveles:          niveles,
+  });
+  if (error) throw error;
+  return data;
+}
+
 export async function actualizarAlumno(alumnoId, cambios) {
   const { data, error } = await supabase.from("alumnos").update(cambios).eq("id", alumnoId).select().single();
   if (error) throw error;

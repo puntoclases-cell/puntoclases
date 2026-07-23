@@ -1,5 +1,5 @@
 ﻿import { useState, useEffect, useRef } from "react";
-import { login, getUsuarioActual, onAuthChange, logout, getAlumno, getCompras, getReservasAlumno, getProfes, getProfesAdmin, getDisponibilidad, getReservasProfe, marcarReserva, cargarDevolucion, reprogramarReserva, setBloque, borrarBloque, getAlumnos, getTodasLasReservas, actualizarAlumno, actualizarProfe, actualizarPerfil, crearReserva, unirseGrupo, getGrupoInfo, verificarBloqueOcupado, getReservasDelDia, getMisReservasDelDia, getMensajes, enviarMensaje, suscribirMensajes, registrarAlumno, registrarProfe, enviarRecuperacion, actualizarPassword, onPasswordRecovery, crearResenia, getConfig, updateConfig, getPacks, devolverHoras, addHorasAdmin, crearPreferencia, crearPreferenciaReserva, contarMensajesNuevosProfe, subirAvatar } from "./db";
+import { login, getUsuarioActual, onAuthChange, logout, getAlumno, getCompras, getReservasAlumno, getProfes, getProfesAdmin, getDisponibilidad, getReservasProfe, marcarReserva, cargarDevolucion, reprogramarReserva, setBloque, borrarBloque, getAlumnos, getTodasLasReservas, actualizarAlumno, actualizarProfe, actualizarMiPerfilProfe, actualizarPerfil, crearReserva, unirseGrupo, getGrupoInfo, verificarBloqueOcupado, getReservasDelDia, getMisReservasDelDia, getMensajes, enviarMensaje, suscribirMensajes, registrarAlumno, registrarProfe, enviarRecuperacion, actualizarPassword, onPasswordRecovery, crearResenia, getConfig, updateConfig, getPacks, devolverHoras, addHorasAdmin, crearPreferencia, crearPreferenciaReserva, contarMensajesNuevosProfe, subirAvatar } from "./db";
 
 // ════════════════════════════════════════════════════════════════════════════
 // PUNTOCLASES — APP UNIFICADA
@@ -2052,7 +2052,22 @@ function AppAlumno({ user, onLogout }) {
   useEffect(() => {
     if (!user) return;
     getReservasAlumno(user.id)
-      .then((r) => { setReservasAlumno(r); })
+      .then(async (r) => {
+        setReservasAlumno(r);
+        const enPago = !!localStorage.getItem("pc_reserva_pendiente");
+        const pendientesPago = (r || []).filter(res => {
+          if (res.estado !== "pendiente_pago") return false;
+          if (enPago) return res.expira_en && new Date(res.expira_en) < new Date();
+          return true;
+        });
+        if (pendientesPago.length > 0) {
+          for (const res of pendientesPago) {
+            try { await devolverHoras(res.id); } catch (e) { console.error("Error cancelando pendiente vencida:", e); }
+          }
+          const refreshed = await getReservasAlumno(user.id).catch(() => null);
+          if (refreshed) setReservasAlumno(refreshed);
+        }
+      })
       .catch((err) => console.error("Error al cargar reservas:", err));
   }, [user]);
 
@@ -3368,6 +3383,7 @@ const NIVELES = ["Primaria","Secundaria","Preuniversitario","Universitario","Adu
 
 function PerfilProfe({ onLogoutProfe, profeData, onAvatarActualizado }) {
   const [editando, setEditando] = useState(false);
+  const [errorGuardado, setErrorGuardado] = useState(null);
   const [perfil, setPerfil] = useState({
     nombre: "",
     titulo: "",
@@ -3459,21 +3475,28 @@ function PerfilProfe({ onLogoutProfe, profeData, onAvatarActualizado }) {
   }));
 
   const guardar = async () => {
-    await Promise.all([
-      actualizarPerfil(profeData.id, { nombre: draft.nombre }),
-      actualizarProfe(profeData.id, {
-        titulo: draft.titulo,
-        bio: draft.sobreMi,
-        materias: draft.materias,
-        modalidad: draft.modalidad,
-        "años_experiencia": draft.experiencia ? parseInt(draft.experiencia, 10) : null,
-        ubicacion: draft.ubicacion,
-        instagram: draft.instagram,
-        niveles: draft.niveles,
-      }),
-    ]).catch(err => console.error("Error al guardar perfil profe:", err));
-    setPerfil(draft);
-    setSeccion("perfil");
+    setErrorGuardado(null);
+    try {
+      await Promise.all([
+        actualizarPerfil(profeData.id, { nombre: draft.nombre }),
+        actualizarMiPerfilProfe({
+          materias:         draft.materias,
+          monotributo:      profeData.monotributo,
+          titulo:           draft.titulo,
+          bio:              draft.sobreMi,
+          modalidad:        draft.modalidad,
+          anosExperiencia:  draft.experiencia ? parseInt(draft.experiencia, 10) : null,
+          ubicacion:        draft.ubicacion,
+          instagram:        draft.instagram,
+          niveles:          draft.niveles,
+        }),
+      ]);
+      setPerfil(draft);
+      setSeccion("perfil");
+    } catch (err) {
+      console.error("Error al guardar perfil profe:", err);
+      setErrorGuardado("No se pudo guardar el perfil. Revisá tu conexión e intentá de nuevo.");
+    }
   };
 
   // ── VISTA PREVIA (como la ve el alumno) ──────────────────────────────────
@@ -3618,6 +3641,11 @@ function PerfilProfe({ onLogoutProfe, profeData, onAvatarActualizado }) {
         </div>
       </div>
 
+      {errorGuardado && (
+        <div style={{background:"#fff5f5",border:"1.5px solid #fecaca",borderRadius:12,padding:"10px 14px",fontSize:14,color:"#dc2626"}}>
+          {errorGuardado}
+        </div>
+      )}
       <Btn onClick={guardar} disabled={!draft.nombre.trim()||draft.materias.length===0}>
         Guardar cambios ✓
       </Btn>

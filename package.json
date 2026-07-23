@@ -11,11 +11,13 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.107.0",
+    "pg": "^8.22.0",
     "react": "^19.2.6",
     "react-dom": "^19.2.6"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.61.1",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.1",
