@@ -1,10 +1,17 @@
 import { db, getUserFromRequest } from "./_db.js";
+import { withSentry, reportError, flushSentry } from "./_sentry.js";
 
-export default async function handler(req, res) {
+const ENDPOINT = "crear-preferencia-pack";
+
+async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).end();
 
   const mpToken = process.env.MP_ACCESS_TOKEN;
-  if (!mpToken) return res.status(500).json({ error: "MP_ACCESS_TOKEN no configurado" });
+  if (!mpToken) {
+    reportError("MP_ACCESS_TOKEN no configurado", { endpoint: ENDPOINT });
+    await flushSentry();
+    return res.status(500).json({ error: "MP_ACCESS_TOKEN no configurado" });
+  }
 
   const user = await getUserFromRequest(req);
   if (!user) return res.status(401).json({ error: "No autenticado" });
@@ -13,7 +20,11 @@ export default async function handler(req, res) {
   const pool = db();
 
   const { rows: [cfg] } = await pool.query("SELECT precio_ind FROM config LIMIT 1");
-  if (!cfg) return res.status(500).json({ error: "Error leyendo config" });
+  if (!cfg) {
+    reportError("Error leyendo config", { endpoint: ENDPOINT });
+    await flushSentry();
+    return res.status(500).json({ error: "Error leyendo config" });
+  }
   const precioInd = cfg.precio_ind;
 
   let actualHoras;
@@ -44,9 +55,15 @@ export default async function handler(req, res) {
     compraId = row?.id;
   } catch (err) {
     console.error("Error al registrar compra pendiente:", err);
+    reportError(err, { endpoint: ENDPOINT, alumno_id: user.id, pack_id: resolvedPackId, horas: actualHoras });
+    await flushSentry();
     return res.status(500).json({ error: "Error al registrar compra" });
   }
-  if (compraId == null) return res.status(500).json({ error: "Error al registrar compra" });
+  if (compraId == null) {
+    reportError("registrar_compra_pendiente devolvió id null", { endpoint: ENDPOINT, alumno_id: user.id });
+    await flushSentry();
+    return res.status(500).json({ error: "Error al registrar compra" });
+  }
 
   try {
     const mpRes = await fetch("https://api.mercadopago.com/checkout/preferences", {
@@ -67,9 +84,17 @@ export default async function handler(req, res) {
       }),
     });
     const pref = await mpRes.json();
-    if (!mpRes.ok) return res.status(500).json(pref);
+    if (!mpRes.ok) {
+      reportError("Mercado Pago rechazó la preferencia (pack)", { endpoint: ENDPOINT, compra_id: compraId, mp_status: mpRes.status });
+      await flushSentry();
+      return res.status(500).json(pref);
+    }
     return res.status(200).json({ init_point: pref.init_point, compra_id: compraId });
   } catch (err) {
+    reportError(err, { endpoint: ENDPOINT, compra_id: compraId });
+    await flushSentry();
     return res.status(500).json({ error: err.message });
   }
 }
+
+export default withSentry(handler, ENDPOINT);

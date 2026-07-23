@@ -3,6 +3,9 @@ import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig({
+  define: {
+    'process.env.VERCEL_ENV': JSON.stringify(process.env.VERCEL_ENV),
+  },
   plugins: [
     react(),
     VitePWA({

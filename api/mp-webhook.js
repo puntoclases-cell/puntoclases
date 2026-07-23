@@ -1,6 +1,9 @@
 import { webcrypto } from "node:crypto";
 import { db } from "./_db.js";
+import { withSentry, reportError, flushSentry } from "./_sentry.js";
 const { subtle } = webcrypto;
+
+const ENDPOINT = "mp-webhook";
 
 // Motivos terminales de confirmar_reserva_pago que disparan reembolso.
 // Deben coincidir exactamente con los RETURN strings de la función PG.
@@ -54,9 +57,11 @@ async function handleOrphan(pool, paymentId, reservaId, montoArs, motivo) {
     } else {
       const errBody = await refundRes.text();
       console.error("Reembolso MP fallido:", refundRes.status, errBody, "paymentId:", paymentId);
+      reportError("Reembolso MP fallido", { endpoint: ENDPOINT, payment_id: paymentId, mp_status: refundRes.status });
     }
   } catch (err) {
     console.error("Error de red al reembolsar en MP:", err, "paymentId:", paymentId);
+    reportError(err, { endpoint: ENDPOINT, payment_id: paymentId, etapa: "refund_network_error" });
   }
 
   const finalMotivo = refundOk ? motivo : "refund_pendiente";
@@ -64,10 +69,12 @@ async function handleOrphan(pool, paymentId, reservaId, montoArs, motivo) {
     await pool.query("UPDATE pagos_huerfanos SET motivo = $1 WHERE payment_id = $2", [finalMotivo, paymentId]);
   } catch (err) {
     console.error("Error al UPDATE motivo en pagos_huerfanos:", err, { paymentId, finalMotivo });
+    reportError(err, { endpoint: ENDPOINT, payment_id: paymentId, etapa: "update_motivo_error" });
   }
+  if (!refundOk) await flushSentry();
 }
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   // POST only
   if (req.method !== "POST") return res.status(200).send("ok");
 
@@ -91,6 +98,8 @@ export default async function handler(req, res) {
 
   if (!webhookSecret) {
     console.error("MP_WEBHOOK_SECRET no configurado — rechazando por seguridad");
+    reportError("MP_WEBHOOK_SECRET no configurado", { endpoint: ENDPOINT });
+    await flushSentry();
     return res.status(500).send("Webhook misconfigured");
   }
 
@@ -109,6 +118,9 @@ export default async function handler(req, res) {
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
   if (expected !== v1) {
+    // No se reporta a Sentry a propósito: puede dispararse por bots/scanners
+    // y por reintentos legítimos justo después de rotar el secreto — no es
+    // un error operativo, y hay que cuidar la cuota free.
     console.error("Firma MP inválida", { expected, v1, manifest });
     return res.status(401).send("Unauthorized");
   }
@@ -133,6 +145,8 @@ export default async function handler(req, res) {
     const reservaId = parseInt(extRef.slice(2), 10);
     if (isNaN(reservaId)) {
       console.error("external_reference r_ con id no numérico:", extRef);
+      reportError("external_reference r_ con id no numérico", { endpoint: ENDPOINT, external_reference: extRef, payment_id: paymentId });
+      await flushSentry();
       return res.status(500).send("error");
     }
 
@@ -145,6 +159,8 @@ export default async function handler(req, res) {
       resultado = String(row?.resultado ?? "");
     } catch (err) {
       console.error("Error en confirmar_reserva_pago:", err);
+      reportError(err, { endpoint: ENDPOINT, reserva_id: reservaId, payment_id: paymentId });
+      await flushSentry();
       return res.status(500).send("error");
     }
 
@@ -158,6 +174,8 @@ export default async function handler(req, res) {
     }
 
     console.error("confirmar_reserva_pago resultado inesperado:", resultado, { reservaId, paymentId });
+    reportError(`confirmar_reserva_pago resultado inesperado: ${resultado}`, { endpoint: ENDPOINT, reserva_id: reservaId, payment_id: paymentId });
+    await flushSentry();
     return res.status(500).send("error");
   }
 
@@ -171,6 +189,8 @@ export default async function handler(req, res) {
       );
     } catch (err) {
       console.error("Error en aprobar_compra:", err);
+      reportError(err, { endpoint: ENDPOINT, compra_id: compraId, payment_id: paymentId });
+      await flushSentry();
       return res.status(500).send("error");
     }
     return res.status(200).send("ok");
@@ -181,6 +201,8 @@ export default async function handler(req, res) {
   const { alumno_id, horas, precio, pack_id } = payment.metadata ?? {};
   if (!alumno_id || !horas || !precio) {
     console.error("Metadata incompleta (patrón legado), external_reference:", extRef, "payment:", paymentId);
+    reportError("Metadata incompleta (patrón legado)", { endpoint: ENDPOINT, external_reference: extRef, payment_id: paymentId });
+    await flushSentry();
     return res.status(500).send("error");
   }
   const safePackId = pack_id && UUID_RE.test(String(pack_id)) ? pack_id : null;
@@ -194,7 +216,11 @@ export default async function handler(req, res) {
     );
   } catch (err) {
     console.error("Error en acreditar_compra (legado):", err);
+    reportError(err, { endpoint: ENDPOINT, payment_id: paymentId });
+    await flushSentry();
     return res.status(500).send("error");
   }
   return res.status(200).send("ok");
 }
+
+export default withSentry(handler, ENDPOINT);

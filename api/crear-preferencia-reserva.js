@@ -1,10 +1,17 @@
 import { createClient } from "@supabase/supabase-js";
+import { withSentry, reportError, flushSentry } from "./_sentry.js";
 
-export default async function handler(req, res) {
+const ENDPOINT = "crear-preferencia-reserva";
+
+async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).end();
 
   const mpToken = process.env.MP_ACCESS_TOKEN;
-  if (!mpToken) return res.status(500).json({ error: "MP_ACCESS_TOKEN no configurado" });
+  if (!mpToken) {
+    reportError("MP_ACCESS_TOKEN no configurado", { endpoint: ENDPOINT });
+    await flushSentry();
+    return res.status(500).json({ error: "MP_ACCESS_TOKEN no configurado" });
+  }
 
   // crear_reserva_pendiente_pago usa auth.uid() internamente (no recibe alumno_id
   // como parámetro) — tiene que llamarse vía PostgREST con el JWT real del alumno,
@@ -66,9 +73,17 @@ export default async function handler(req, res) {
       }),
     });
     const pref = await mpRes.json();
-    if (!mpRes.ok) return res.status(500).json(pref);
+    if (!mpRes.ok) {
+      reportError("Mercado Pago rechazó la preferencia (reserva)", { endpoint: ENDPOINT, reserva_id: reservaId, mp_status: mpRes.status });
+      await flushSentry();
+      return res.status(500).json(pref);
+    }
     return res.status(200).json({ init_point: pref.init_point, reserva_id: reservaId });
   } catch (err) {
+    reportError(err, { endpoint: ENDPOINT, reserva_id: reservaId });
+    await flushSentry();
     return res.status(500).json({ error: err.message });
   }
 }
+
+export default withSentry(handler, ENDPOINT);

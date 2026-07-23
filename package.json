@@ -10,6 +10,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@sentry/node": "^10.67.0",
+    "@sentry/react": "^10.67.0",
     "@supabase/supabase-js": "^2.107.0",
     "pg": "^8.22.0",
     "react": "^19.2.6",
