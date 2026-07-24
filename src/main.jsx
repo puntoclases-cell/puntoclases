@@ -19,8 +19,6 @@ if (sentryDsn) {
     ],
     beforeSend: scrubSentryEvent,
   })
-  // TEST TEMPORAL Sentry — remover tras confirmar en dashboard (2026-07-24)
-  window.__sentryTest = () => Sentry.captureException(new Error('Sentry test — puntoclases front'))
 }
 
 // Nunca mandar PII de alumnos (mail, nombre) ni datos de sesión del navegador.

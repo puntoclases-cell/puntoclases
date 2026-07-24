@@ -78,13 +78,6 @@ async function handler(req, res) {
   // POST only
   if (req.method !== "POST") return res.status(200).send("ok");
 
-  // TEST TEMPORAL Sentry — remover tras confirmar en dashboard (2026-07-24)
-  if (req.headers["x-sentry-test"] === "pc-sentry-test-2026-07-24") {
-    reportError(`Sentry test — ${ENDPOINT}`, { endpoint: ENDPOINT, test: true });
-    await flushSentry();
-    return res.status(200).json({ sentry_test: "sent", endpoint: ENDPOINT });
-  }
-
   const url = new URL(req.url, `https://${req.headers.host}`);
 
   // Soporte para AMBOS formatos de notificación de MP:
