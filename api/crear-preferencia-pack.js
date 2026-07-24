@@ -6,6 +6,13 @@ const ENDPOINT = "crear-preferencia-pack";
 async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).end();
 
+  // TEST TEMPORAL Sentry — remover tras confirmar en dashboard (2026-07-24)
+  if (req.headers["x-sentry-test"] === "pc-sentry-test-2026-07-24") {
+    reportError(`Sentry test — ${ENDPOINT}`, { endpoint: ENDPOINT, test: true });
+    await flushSentry();
+    return res.status(200).json({ sentry_test: "sent", endpoint: ENDPOINT });
+  }
+
   const mpToken = process.env.MP_ACCESS_TOKEN;
   if (!mpToken) {
     reportError("MP_ACCESS_TOKEN no configurado", { endpoint: ENDPOINT });
