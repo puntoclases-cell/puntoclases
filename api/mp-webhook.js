@@ -1,9 +1,11 @@
 import { webcrypto } from "node:crypto";
 import { db } from "./_db.js";
 import { withSentry, reportError, flushSentry } from "./_sentry.js";
+import { getClientIp, rateLimitOk } from "./_ratelimit.js";
 const { subtle } = webcrypto;
 
 const ENDPOINT = "mp-webhook";
+const RL_IP = { limite: 60, ventanaSeg: 60 };
 
 // Motivos terminales de confirmar_reserva_pago que disparan reembolso.
 // Deben coincidir exactamente con los RETURN strings de la función PG.
@@ -129,7 +131,16 @@ async function handler(req, res) {
   if (notifType !== "payment") return res.status(200).send("ok");
   if (!paymentId) return res.status(200).send("ok");
 
-  // 3. Consultar pago real en MP — no confiar en la notificación sola
+  // 3. Rate limit por IP — recién acá (firma ya validada arriba); firma
+  // inválida ya corta gratis sin llegar a este punto, así que esto es
+  // piso extra contra un secreto filtrado o un reintentador descontrolado.
+  const pool = db();
+  const ip = getClientIp(req);
+  if (!(await rateLimitOk(pool, `webhook:ip:${ip}`, RL_IP.limite, RL_IP.ventanaSeg))) {
+    return res.status(429).send("Too Many Requests");
+  }
+
+  // 4. Consultar pago real en MP — no confiar en la notificación sola
   const mpRes = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
     headers: { Authorization: `Bearer ${process.env.MP_ACCESS_TOKEN}` },
   });
@@ -137,7 +148,6 @@ async function handler(req, res) {
 
   if (payment.status !== "approved") return res.status(200).send("ok");
 
-  const pool = db();
   const extRef = String(payment.external_reference ?? "");
 
   // ── RAMA A: reserva de clase (external_reference = "r_<bigint>") ──────────

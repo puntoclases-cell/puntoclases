@@ -1,10 +1,20 @@
 import { createClient } from "@supabase/supabase-js";
+import { db } from "./_db.js";
 import { withSentry, reportError, flushSentry } from "./_sentry.js";
+import { getClientIp, rateLimitOk, sendRateLimited } from "./_ratelimit.js";
 
 const ENDPOINT = "crear-preferencia-reserva";
+const RL_IP = { limite: 20, ventanaSeg: 300 };
+const RL_ALUMNO = { limite: 5, ventanaSeg: 300 };
 
 async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).end();
+
+  const pool = db();
+  const ip = getClientIp(req);
+  if (!(await rateLimitOk(pool, `reserva:ip:${ip}`, RL_IP.limite, RL_IP.ventanaSeg))) {
+    return sendRateLimited(res, RL_IP.ventanaSeg);
+  }
 
   const mpToken = process.env.MP_ACCESS_TOKEN;
   if (!mpToken) {
@@ -27,6 +37,10 @@ async function handler(req, res) {
   );
   const { data: { user }, error: authErr } = await userClient.auth.getUser();
   if (authErr || !user) return res.status(401).json({ error: "Token inválido" });
+
+  if (!(await rateLimitOk(pool, `reserva:alumno:${user.id}`, RL_ALUMNO.limite, RL_ALUMNO.ventanaSeg))) {
+    return sendRateLimited(res, RL_ALUMNO.ventanaSeg);
+  }
 
   const { reservaParams } = req.body;
   if (!reservaParams) return res.status(400).json({ error: "Falta reservaParams" });
