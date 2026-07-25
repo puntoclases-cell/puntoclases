@@ -190,10 +190,17 @@ export async function getProfes() {
   return data; // { id, activo, materias, suspendido, nombre } — sin datos sensibles
 }
 
-export async function getProfesAdmin() {
-  const { data, error } = await supabase.from("profes").select("*, profiles(nombre, mail, avatar_url)");
+export async function getProfesAdmin({ page = 1, pageSize = 50 } = {}) {
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+  const { data, error, count } = await supabase
+    .from("profes")
+    .select("*, profiles(nombre, mail, avatar_url)", { count: "exact" })
+    .order("creado_en", { ascending: false })
+    .order("id")
+    .range(from, to);
   if (error) throw error;
-  return data;
+  return { data, count, page, pageSize, totalPages: Math.max(1, Math.ceil((count || 0) / pageSize)) };
 }
 
 export async function registrarProfe({ mail, pass, nombre, tel }) {
@@ -272,19 +279,30 @@ export async function borrarBloque(profeId, fecha, hora) {
 
 // ── ADMIN ────────────────────────────────────────────────────────────────────
 
-export async function getAlumnos() {
-  const { data, error } = await supabase.from("alumnos").select("*, profiles(nombre, mail)");
+export async function getAlumnos({ page = 1, pageSize = 50 } = {}) {
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+  const { data, error, count } = await supabase
+    .from("alumnos")
+    .select("*, profiles(nombre, mail)", { count: "exact" })
+    .order("creado_en", { ascending: false })
+    .order("id")
+    .range(from, to);
   if (error) throw error;
-  return data;
+  return { data, count, page, pageSize, totalPages: Math.max(1, Math.ceil((count || 0) / pageSize)) };
 }
 
-export async function getTodasLasReservas() {
-  const { data, error } = await supabase
+export async function getTodasLasReservas({ page = 1, pageSize = 20 } = {}) {
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+  const { data, error, count } = await supabase
     .from("reservas")
-    .select("*, alumnos(profiles(nombre)), profes(profiles(nombre))")
-    .order("fecha", { ascending: false });
+    .select("*, alumnos(profiles(nombre)), profes(profiles(nombre))", { count: "exact" })
+    .order("fecha", { ascending: false })
+    .order("id", { ascending: false })
+    .range(from, to);
   if (error) throw error;
-  return data;
+  return { data, count, page, pageSize, totalPages: Math.max(1, Math.ceil((count || 0) / pageSize)) };
 }
 
 export async function actualizarProfe(profeId, cambios) {

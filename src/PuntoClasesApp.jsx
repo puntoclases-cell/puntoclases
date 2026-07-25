@@ -4069,7 +4069,7 @@ function AppProfeMain({ user, onLogout }) {
       }, {})))
       .catch(err => console.error("Error al cargar disponibilidad:", err));
     getProfesAdmin()
-      .then(data => setProfeData((data||[]).find(p => p.id === user.id) || null))
+      .then(({ data }) => setProfeData((data||[]).find(p => p.id === user.id) || null))
       .catch(err => console.error("Error al cargar datos del profe:", err));
   }, [user]);
 
@@ -4855,14 +4855,21 @@ function Personas({ alumnos, setAlumnos, profes, setProfes, reservas }) {
 // ════════════════════════════════════════════════════════════════════════════
 // 3. OPERACIONES (Reservas)
 // ════════════════════════════════════════════════════════════════════════════
-function Operaciones({ reservas }) {
+function Operaciones({ reservas, reservasPagina, paginaReservas, totalPaginasReservas, setPaginaReservas }) {
   const [filtro, setFiltro] = useState("todas");
   const [busqueda, setBusqueda] = useState("");
 
-  const lista = reservas
-    .filter(r=>filtro==="todas"||r.estado===filtro)
-    .filter(r=>!busqueda||(r.alumno||"").toLowerCase().includes(busqueda.toLowerCase())||r.materia.toLowerCase().includes(busqueda.toLowerCase()))
-    .sort((a,b)=>b.fecha.localeCompare(a.fecha));
+  // Sin filtro/búsqueda: se muestra la página real (server-side). En cuanto el
+  // admin filtra por estado o busca texto, se vuelve a filtrar sobre el set
+  // completo (`reservas`) como antes — el pager no aplica a un resultado filtrado.
+  const sinFiltro = filtro === "todas" && !busqueda;
+
+  const lista = sinFiltro
+    ? reservasPagina
+    : reservas
+        .filter(r=>filtro==="todas"||r.estado===filtro)
+        .filter(r=>!busqueda||(r.alumno||"").toLowerCase().includes(busqueda.toLowerCase())||r.materia.toLowerCase().includes(busqueda.toLowerCase()))
+        .sort((a,b)=>b.fecha.localeCompare(a.fecha));
 
   const total = lista.reduce((a,r)=>a+r.monto,0);
 
@@ -4887,7 +4894,7 @@ function Operaciones({ reservas }) {
       </div>
 
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-        <p style={{margin:0,fontSize:13,color:"#64748b"}}>{lista.length} reservas</p>
+        <p style={{margin:0,fontSize:13,color:"#64748b"}}>{lista.length} reservas{sinFiltro?` · página ${paginaReservas} de ${totalPaginasReservas}`:""}</p>
         <p style={{margin:0,fontWeight:800,fontSize:15,color:P}}>${total.toLocaleString("es-AR")}</p>
       </div>
 
@@ -4907,6 +4914,20 @@ function Operaciones({ reservas }) {
           </div>
         </Card>
       ))}
+
+      {sinFiltro && totalPaginasReservas > 1 && (
+        <div style={{display:"flex",justifyContent:"center",alignItems:"center",gap:12,marginTop:4}}>
+          <button onClick={()=>setPaginaReservas(p=>Math.max(1,p-1))} disabled={paginaReservas<=1}
+            style={{border:`1.5px solid ${PB}`,background:paginaReservas<=1?"#f1f5f9":PL,color:paginaReservas<=1?"#94a3b8":P,borderRadius:10,padding:"7px 14px",fontSize:13,fontWeight:700,cursor:paginaReservas<=1?"default":"pointer"}}>
+            ← Anterior
+          </button>
+          <span style={{fontSize:13,color:"#64748b",fontWeight:600}}>Página {paginaReservas} de {totalPaginasReservas}</span>
+          <button onClick={()=>setPaginaReservas(p=>Math.min(totalPaginasReservas,p+1))} disabled={paginaReservas>=totalPaginasReservas}
+            style={{border:`1.5px solid ${PB}`,background:paginaReservas>=totalPaginasReservas?"#f1f5f9":PL,color:paginaReservas>=totalPaginasReservas?"#94a3b8":P,borderRadius:10,padding:"7px 14px",fontSize:13,fontWeight:700,cursor:paginaReservas>=totalPaginasReservas?"default":"pointer"}}>
+            Siguiente →
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -5116,6 +5137,9 @@ function AppAdminMain({ onLogout }) {
   const [profes, setProfes] = useState([]);
   const [reservas, setReservas] = useState([]);
   const [cfg, setCfg] = useState(CONFIG_INIT);
+  const [reservasPagina, setReservasPagina] = useState([]);
+  const [paginaReservas, setPaginaReservas] = useState(1);
+  const [totalPaginasReservas, setTotalPaginasReservas] = useState(1);
 
   const normReservaAdmin = r => ({
     ...r,
@@ -5154,16 +5178,32 @@ function AppAdminMain({ onLogout }) {
     getConfig()
       .then(row => setCfg(prev => ({ ...prev, ...normCfg(row) })))
       .catch(err => console.error("Error al cargar config:", err));
-    Promise.all([getAlumnos(), getProfesAdmin(), getTodasLasReservas()])
+    // Set completo (no paginado) — alimenta agregados de Dashboard/Personas/Finanzas
+    // y los conteos + búsqueda de Operaciones. pageSize alto = "traer todo" al
+    // volumen actual; el día que esto no alcance, hay que sumar agregados server-side.
+    Promise.all([getAlumnos({ pageSize: 50 }), getProfesAdmin({ pageSize: 50 }), getTodasLasReservas({ pageSize: 500 })])
       .then(([alms, profs, reservs]) => {
-        const normR = (reservs || []).map(normReservaAdmin);
+        if (alms.count > alms.data.length) console.warn(`Personas: mostrando solo ${alms.data.length} de ${alms.count} alumnos — agregados incompletos, hace falta cálculo server-side`);
+        if (profs.count > profs.data.length) console.warn(`Personas: mostrando solo ${profs.data.length} de ${profs.count} profes — agregados incompletos, hace falta cálculo server-side`);
+        if (reservs.count > reservs.data.length) console.warn(`Finanzas/Dashboard: mostrando solo ${reservs.data.length} de ${reservs.count} reservas — agregados incompletos, hace falta cálculo server-side`);
+        const normR = (reservs.data || []).map(normReservaAdmin);
         setReservas(normR);
-        setAlumnos((alms || []).map(a => normAlumno(a, normR)));
-        setProfes((profs || []).map(p => normProfe(p, normR)));
+        setAlumnos((alms.data || []).map(a => normAlumno(a, normR)));
+        setProfes((profs.data || []).map(p => normProfe(p, normR)));
       })
       .catch(err => console.error("Error al cargar datos admin:", err));
   }, []);
 
+  useEffect(() => {
+    // Página real de reservas (server-side, .range()) — solo para la lista +
+    // pager de Operaciones cuando no hay filtro/búsqueda activos.
+    getTodasLasReservas({ page: paginaReservas, pageSize: 20 })
+      .then(({ data, totalPages }) => {
+        setReservasPagina((data || []).map(normReservaAdmin));
+        setTotalPaginasReservas(totalPages);
+      })
+      .catch(err => console.error("Error al cargar página de reservas:", err));
+  }, [paginaReservas]);
 
   const nav = [
     {id:"dashboard",icon:"🏠",label:"Inicio"},
@@ -5188,7 +5228,7 @@ function AppAdminMain({ onLogout }) {
       <div style={{flex:1,padding:"16px 16px 80px",overflowY:"auto"}}>
         {screen==="dashboard"   && <Dashboard alumnos={alumnos} profes={profes} reservas={reservas} cfg={cfg} onNav={setScreen} onLogout={onLogout}/>}
         {screen==="personas"    && <Personas alumnos={alumnos} setAlumnos={setAlumnos} profes={profes} setProfes={setProfes} reservas={reservas}/>}
-        {screen==="operaciones" && <Operaciones reservas={reservas}/>}
+        {screen==="operaciones" && <Operaciones reservas={reservas} reservasPagina={reservasPagina} paginaReservas={paginaReservas} totalPaginasReservas={totalPaginasReservas} setPaginaReservas={setPaginaReservas}/>}
         {screen==="finanzas"    && <Finanzas reservas={reservas} cfg={cfg} setCfg={setCfg}/>}
       </div>
 
