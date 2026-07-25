@@ -69,23 +69,47 @@ export function onPasswordRecovery(callback) {
 }
 
 // ── CONFIG Y PACKS ───────────────────────────────────────────────────────────
+// Cache en memoria (dura lo que dura la pestaña) con TTL — config y packs casi
+// no cambian. updateConfig refresca el cache con el valor recién guardado en
+// vez de invalidar+refetchear. Sin escritor de packs desde el front hoy (ver
+// invalidatePacksCache más abajo), pero se deja el hook listo para cuando exista.
+const CACHE_TTL_MS = 5 * 60 * 1000;
+let configCache = null; // { data, ts }
+let packsCache = null;
 
-export async function getConfig() {
+export async function getConfig({ skipCache = false } = {}) {
+  if (!skipCache && configCache && Date.now() - configCache.ts < CACHE_TTL_MS) {
+    return configCache.data;
+  }
   const { data, error } = await supabase.from("config").select("*").eq("id", 1).single();
   if (error) throw error;
+  configCache = { data, ts: Date.now() };
   return data; // { precio_ind, factor_grupal, tarifa_profe_ind, ... }
+}
+
+export function invalidateConfigCache() {
+  configCache = null;
 }
 
 export async function updateConfig(cambios) {
   const { data, error } = await supabase.from("config").update(cambios).eq("id", 1).select().single();
   if (error) throw error;
+  configCache = { data, ts: Date.now() };
   return data;
 }
 
-export async function getPacks() {
+export async function getPacks({ skipCache = false } = {}) {
+  if (!skipCache && packsCache && Date.now() - packsCache.ts < CACHE_TTL_MS) {
+    return packsCache.data;
+  }
   const { data, error } = await supabase.from("packs").select("*").eq("activo", true).order("orden");
   if (error) throw error;
+  packsCache = { data, ts: Date.now() };
   return data;
+}
+
+export function invalidatePacksCache() {
+  packsCache = null;
 }
 
 // ── ALUMNO ───────────────────────────────────────────────────────────────────
