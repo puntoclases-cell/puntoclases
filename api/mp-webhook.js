@@ -1,4 +1,5 @@
 import { webcrypto } from "node:crypto";
+import { waitUntil } from "@vercel/functions";
 import { db } from "./_db.js";
 import { withSentry, reportError, flushSentry } from "./_sentry.js";
 import { getClientIp, rateLimitOk } from "./_ratelimit.js";
@@ -23,16 +24,29 @@ const ORPHAN_MOTIVOS = new Set(["ttl_expirado", "cupo_excedido", "cancelada"]);
  * PREREQUISITO: pagos_huerfanos.payment_id debe tener índice UNIQUE
  * (migración 005). Sin él, el ON CONFLICT no tiene constraint sobre qué
  * columna conflictuar y no funciona como barrera.
+ *
+ * Se ejecuta en background (via waitUntil, ver más abajo) — el webhook ya
+ * respondió 200 antes de que esto corra, así que cualquier falla acá (incluido
+ * el INSERT) tiene que reportarse a Sentry explícitamente: ya no hay un 500
+ * que bubblee para que MP reintente.
  */
 async function handleOrphan(pool, paymentId, reservaId, montoArs, motivo) {
   // INSERT-first: atómico bajo el UNIQUE index
-  const { rows: inserted } = await pool.query(
-    `INSERT INTO pagos_huerfanos (payment_id, reserva_id, monto_ars, motivo)
-     VALUES ($1, $2, $3, 'pendiente')
-     ON CONFLICT (payment_id) DO NOTHING
-     RETURNING id`,
-    [paymentId, reservaId, Math.round(montoArs)],
-  );
+  let inserted;
+  try {
+    ({ rows: inserted } = await pool.query(
+      `INSERT INTO pagos_huerfanos (payment_id, reserva_id, monto_ars, motivo)
+       VALUES ($1, $2, $3, 'pendiente')
+       ON CONFLICT (payment_id) DO NOTHING
+       RETURNING id`,
+      [paymentId, reservaId, Math.round(montoArs)],
+    ));
+  } catch (err) {
+    console.error("Error al insertar pago huérfano:", err, "paymentId:", paymentId);
+    reportError(err, { endpoint: ENDPOINT, payment_id: paymentId, etapa: "insert_huerfano_error" });
+    await flushSentry();
+    return;
+  }
 
   if (inserted.length === 0) {
     console.log("Pago huérfano ya registrado (conflict), skipping:", paymentId);
@@ -179,7 +193,10 @@ async function handler(req, res) {
     }
 
     if (ORPHAN_MOTIVOS.has(resultado)) {
-      await handleOrphan(pool, String(paymentId), reservaId, payment.transaction_amount ?? 0, resultado);
+      // Fuera del camino crítico: refund + update de motivo corren después de
+      // responder. waitUntil evita que Vercel congele la función a mitad del
+      // fetch a MP una vez que ya mandamos la respuesta.
+      waitUntil(handleOrphan(pool, String(paymentId), reservaId, payment.transaction_amount ?? 0, resultado));
       return res.status(200).send("ok");
     }
 
