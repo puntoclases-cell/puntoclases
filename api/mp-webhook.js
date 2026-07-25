@@ -13,47 +13,20 @@ const RL_IP = { limite: 60, ventanaSeg: 60 };
 const ORPHAN_MOTIVOS = new Set(["ttl_expirado", "cupo_excedido", "cancelada"]);
 
 /**
- * Reembolsa un pago huérfano de forma atómica e idempotente.
+ * Reembolsa un pago huérfano ya registrado en pagos_huerfanos.
  *
- * PROTOCOLO INSERT-FIRST:
- *   1. INSERT con ON CONFLICT (payment_id) DO NOTHING
- *   2. Si no insertó (conflict) → otro webhook ya lo procesó → return
- *   3. Si insertó → somos el único handler → hacer refund en MP
- *   4. UPDATE motivo con resultado real (motivo original | 'refund_pendiente')
+ * Fase 2 de 2 del protocolo INSERT-FIRST (fase 1 — el INSERT que decide quién
+ * es el único handler — vive en RAMA A, en el camino crítico, awaited). Esta
+ * función solo corre para el handler que ganó ese INSERT.
  *
- * PREREQUISITO: pagos_huerfanos.payment_id debe tener índice UNIQUE
- * (migración 005). Sin él, el ON CONFLICT no tiene constraint sobre qué
- * columna conflictuar y no funciona como barrera.
- *
- * Se ejecuta en background (via waitUntil, ver más abajo) — el webhook ya
- * respondió 200 antes de que esto corra, así que cualquier falla acá (incluido
- * el INSERT) tiene que reportarse a Sentry explícitamente: ya no hay un 500
- * que bubblee para que MP reintente.
+ * Se ejecuta en background (via waitUntil, ver RAMA A) — el webhook ya
+ * respondió 200 antes de que esto corra, así que cualquier falla acá tiene
+ * que reportarse a Sentry explícitamente: ya no hay un 500 que bubblee para
+ * que MP reintente. A diferencia del INSERT (fase 1), perder un reintento acá
+ * no pierde la fila — pagos_huerfanos.motivo queda en 'pendiente' y se puede
+ * reparar a mano; por eso esta fase sí puede ir en background.
  */
-async function handleOrphan(pool, paymentId, reservaId, montoArs, motivo) {
-  // INSERT-first: atómico bajo el UNIQUE index
-  let inserted;
-  try {
-    ({ rows: inserted } = await pool.query(
-      `INSERT INTO pagos_huerfanos (payment_id, reserva_id, monto_ars, motivo)
-       VALUES ($1, $2, $3, 'pendiente')
-       ON CONFLICT (payment_id) DO NOTHING
-       RETURNING id`,
-      [paymentId, reservaId, Math.round(montoArs)],
-    ));
-  } catch (err) {
-    console.error("Error al insertar pago huérfano:", err, "paymentId:", paymentId);
-    reportError(err, { endpoint: ENDPOINT, payment_id: paymentId, etapa: "insert_huerfano_error" });
-    await flushSentry();
-    return;
-  }
-
-  if (inserted.length === 0) {
-    console.log("Pago huérfano ya registrado (conflict), skipping:", paymentId);
-    return;
-  }
-
-  // Ganamos el INSERT → somos el único que hace el refund
+async function refundPagoHuerfano(pool, paymentId, montoArs, motivo) {
   let refundOk = false;
   try {
     const refundRes = await fetch(
@@ -193,10 +166,31 @@ async function handler(req, res) {
     }
 
     if (ORPHAN_MOTIVOS.has(resultado)) {
-      // Fuera del camino crítico: refund + update de motivo corren después de
-      // responder. waitUntil evita que Vercel congele la función a mitad del
-      // fetch a MP una vez que ya mandamos la respuesta.
-      waitUntil(handleOrphan(pool, String(paymentId), reservaId, payment.transaction_amount ?? 0, resultado));
+      // FASE 1 (crítico, await): INSERT-first en pagos_huerfanos. Atómico bajo
+      // el UNIQUE index (migración 005) — decide si somos el único handler.
+      // Si esto falla, tiene que bubblear a un 500 real: sin la fila insertada
+      // no queda ni idempotencia ni rastro para reparar el reembolso después,
+      // así que necesitamos que MP reintente el webhook entero (por eso NO
+      // hay try/catch acá — un catch que "resuelve" el error con un return
+      // silencioso es exactamente lo que rompe el reintento).
+      const { rows: inserted } = await pool.query(
+        `INSERT INTO pagos_huerfanos (payment_id, reserva_id, monto_ars, motivo)
+         VALUES ($1, $2, $3, 'pendiente')
+         ON CONFLICT (payment_id) DO NOTHING
+         RETURNING id`,
+        [String(paymentId), reservaId, Math.round(payment.transaction_amount ?? 0)],
+      );
+
+      if (inserted.length === 0) {
+        console.log("Pago huérfano ya registrado (conflict), skipping:", paymentId);
+        return res.status(200).send("ok");
+      }
+
+      // FASE 2 (background, waitUntil): ganamos el INSERT → somos el único
+      // handler → refund a MP + update de motivo, que es la parte lenta.
+      // waitUntil evita que Vercel congele la función a mitad del fetch a MP
+      // una vez que ya mandamos la respuesta.
+      waitUntil(refundPagoHuerfano(pool, String(paymentId), payment.transaction_amount ?? 0, resultado));
       return res.status(200).send("ok");
     }
 
