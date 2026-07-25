@@ -6,6 +6,20 @@ BEGIN;
 -- calcPagoProfe/calcCoworkReserva en el front (src/PuntoClasesApp.jsx).
 -- Solo lectura, sin tablas/índices nuevos. Admin-only (mismo patrón que
 -- add_horas_admin: chequeo interno contra profiles.rol, sin REVOKE de PUBLIC).
+--
+-- estado = 'realizada' (VERIFICADO, no es un bug): 'realizada' SÍ es un
+-- label válido del enum estado_reserva (pg_enum: pendiente, confirmada,
+-- realizada, cancelada, rechazada, ausente, pendiente_pago, expirada) — lo
+-- que no hay HOY es ninguna fila con ese valor en los datos reales (los 51
+-- registros actuales son ausente/cancelada/confirmada/pendiente). Es el
+-- mismo criterio que usa el front en todos lados: marcarReserva(id,
+-- "realizada") escribe ese literal; Finanzas admin filtra
+-- reservas.filter(r=>r.estado==="realizada"); "Mis ingresos" del profe usa
+-- el boolean derivado r.realizada = (r.estado==="realizada"). Cambiarlo a
+-- otro criterio (ej. confirmada + fecha<=hoy) rompería la paridad con el
+-- front, que es justo lo que esta función tiene que preservar. Mientras no
+-- haya reservas marcadas 'realizada' en prod, esta función (y el front)
+-- van a devolver $0 — es la realidad de los datos, no un error de la query.
 CREATE OR REPLACE FUNCTION get_finanzas_periodo()
 RETURNS TABLE (
   periodo text,
