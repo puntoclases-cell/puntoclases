@@ -71,8 +71,10 @@ export function onPasswordRecovery(callback) {
 // ── CONFIG Y PACKS ───────────────────────────────────────────────────────────
 // Cache en memoria (dura lo que dura la pestaña) con TTL — config y packs casi
 // no cambian. updateConfig refresca el cache con el valor recién guardado en
-// vez de invalidar+refetchear. Sin escritor de packs desde el front hoy (ver
-// invalidatePacksCache más abajo), pero se deja el hook listo para cuando exista.
+// vez de invalidar+refetchear. packs no tiene invalidación explícita porque
+// no hay ningún escritor de esa tabla en el repo (confirmado por grep) — el
+// editor de "Packs con descuento" en Finanzas solo cambia estado local,
+// nunca persiste. Si se agrega un escritor real, sumar invalidatePacksCache.
 const CACHE_TTL_MS = 5 * 60 * 1000;
 let configCache = null; // { data, ts }
 let packsCache = null;
@@ -106,10 +108,6 @@ export async function getPacks({ skipCache = false } = {}) {
   if (error) throw error;
   packsCache = { data, ts: Date.now() };
   return data;
-}
-
-export function invalidatePacksCache() {
-  packsCache = null;
 }
 
 // ── ALUMNO ───────────────────────────────────────────────────────────────────
