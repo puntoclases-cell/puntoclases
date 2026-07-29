@@ -33,10 +33,13 @@ Arrancá del estado de abajo; **no re-diagnostiques lo ✅**.
 - React+Vite → Vercel (auto-deploy en push a `main`). Repo: `c:\Users\Dell\Desktop\puntoclases`.
 - Supabase ref: `ihwtdblkrxgzhdnzhzsh`. Pagos: Mercado Pago.
 - Tooling listo: Node v24, Supabase CLI 2.106 (`npx supabase`, logueada+linkeada), Vercel CLI.
-- Edge Functions: `crear-preferencia` (verify_jwt=true), `mp-webhook` (verify_jwt=false, público).
+- **⚠️ DOS implementaciones del webhook de pagos hoy — ver "P0 ABIERTO" abajo antes de tocar cualquiera de las dos:**
+  - `api/mp-webhook.js` (Vercel, `pg`/`DATABASE_URL`) — tiene HMAC fail-closed, rate limiting, Sentry, idempotencia, fix de refund async. Es lo que crea `crear-preferencia-pack.js`/`crear-preferencia-reserva.js` (Vercel) como `notification_url`.
+  - `supabase/functions/mp-webhook` (Edge Function, Deno) — es la URL cargada HOY en el panel de MP ("Tus integraciones → Webhooks → Modo productivo"), confirmado con entregas reales 200 OK. Sin Sentry, sin rate limiting, HMAC fail-open si falta el secret. `supabase/functions/crear-preferencia` (su contraparte) ya no la llama el front.
+  - No confirmado todavía: si un pago real creado por el código de Vercel hoy termina notificando a Vercel o a la Edge Function (no hay pagos reales completados desde el 22/07 para comprobarlo). Plan de cutover con evidencia: ver "P0 ABIERTO".
 - MP test: vendedor de prueba `3462408456`. Comprador de prueba `3462408458`. Tarjeta: `4509 9535 6623 3704`, titular **APRO APRO**, 11/30, CVV 123, DNI 12345678.
 - **NO pongas secretos en este archivo (se commitea a git).**
-- **DB prod**: connection string en `DATABASE_URL` (`.env.local`, ignorado por git). Para consultar: `psql $DATABASE_URL -c "SELECT ..."`.
+- **DB prod**: connection string en `DATABASE_URL` (`.env.local`, ignorado por git). `MP_WEBHOOK_SECRET` también en `.env.local` (cargado 2026-07-25) y en Vercel Production. Para consultar: `psql $DATABASE_URL -c "SELECT ..."` (o vía `pg` desde Node si `psql` no está en el PATH).
 
 ## Esquema (ojo)
 - La tabla `compras` **NO tiene columna `created_at`** (sí tiene `creado_en`). Leé las columnas reales antes de consultarla.
@@ -45,27 +48,39 @@ Arrancá del estado de abajo; **no re-diagnostiques lo ✅**.
 - `registrar_compra_pendiente(alumno_id, horas, precio, pack_id)` → inserta fila con `estado_pago='pendiente'`, devuelve `id BIGINT`.
 - `aprobar_compra(compra_id, payment_id)` → idempotente: si ya está `'aprobado'` devuelve saldo sin tocar nada; si no, actualiza `compras` y `alumnos` en un solo tx.
 
-## ESTADO ACTUAL — al 2026-07-15
+## ESTADO ACTUAL — al 2026-07-25
 
-✅ Pagos prod — fix definitivo (2026-07-02): causa raíz real era que MP Checkout Pro **no propaga `metadata` de la preferencia al payment**. El webhook leía `payment.metadata` → vacío → devolvía 200 silencioso → nunca acreditaba. Fix: patrón "compra pendiente en DB" (Opción B): `crear-preferencia` llama a `registrar_compra_pendiente` antes de ir a MP y usa el id numérico de DB como `external_reference`; `mp-webhook` usa `external_reference` para llamar a `aprobar_compra` (idempotente). 500 en lugar de 200 silencioso cuando algo falla (MP reintenta).
+**P0 ABIERTO — unificar webhook de MP (correctitud/plata, ver "Entorno" arriba):**
+Diagnóstico hecho, plan de cutover propuesto, **nada ejecutado todavía** (panel de MP lo toca David). Pendiente: pago de prueba (sandbox o productivo de mínimo monto, a decidir) para confirmar por dónde entra hoy un pago creado con el código de Vercel, y recién ahí decidir si hace falta cambiar la URL del panel o no.
 
-✅ Regresiones cerradas: `getCompras` filtra `estado_pago='aprobado'` (filas pendientes no aparecen en UI ni afectan `esNuevoAlumno`). `crearCompra` eliminada (tenía columna incorrecta `precio` en lugar de `monto`).
+✅ Backend de pagos reescrito a `pg`/`DATABASE_URL` (2026-07-22, `dd42dd8`): `api/crear-preferencia-pack.js`, `api/crear-preferencia-reserva.js`, `api/mp-webhook.js` en Vercel, sin depender de `SUPABASE_SERVICE_ROLE_KEY`. Auth híbrida: funciones con `auth.uid()` interno (`crear_reserva_pendiente_pago`) vía JWT/PostgREST; el resto vía `pg` directo (rol `postgres`, ya tiene EXECUTE en todas las RPC).
 
-✅ `MP_WEBHOOK_SECRET` rotado (2026-06-24): valor anterior pasó por chat; nuevo valor cargado en Supabase.
+✅ Carrito multi-reserva revertido (2026-07-22, `75fb3c7`): vuelta a una clase por vez. La rama `mr_...` sigue existiendo (muerta) en la Edge Function vieja.
 
-✅ `devolver_horas` bigint fix (2026-07-05): `p_reserva_id` era `uuid` pero `reservas.id` es `BIGINT` → "invalid input syntax for type uuid". Migración `20260705000001`: DROP uuid, CREATE bigint, GRANT PUBLIC+authenticated. En prod. Commit `cb395f3`.
+✅ Rate limiting en prod (2026-07-24/25): tabla `rate_limits` + función `chequear_rate_limit` (ventana fija, atómica, `EXECUTE` solo `postgres`) aplicadas y **verificadas en DB** (existencia + grants + filas reales de uso). Activo en los 3 endpoints Vercel (pack/reserva/webhook). Migración `20260724000001_rate_limits.sql`.
 
-✅ F6 Etapa 1 — migraciones additive aplicadas a prod (2026-07-05):
-- `20260705000002_f6_enum_states.sql`: `estado_reserva` tiene `pendiente_pago` y `expirada`.
-- `20260705000003_f6_reserva_pago.sql`: columnas `expira_en`+`payment_id` en `reservas`; tabla `pagos_huerfanos` (RLS on, GRANT INSERT/SELECT a service_role); índices únicos reconstruidos con `pendiente_pago`; funciones nuevas `crear_reserva_pendiente_pago` (GRANT PUBLIC) y `confirmar_reserva_pago` (GRANT service_role only, REVOKE PUBLIC); `crear_reserva`+`get_grupo_info`+`devolver_horas` actualizadas (grants preservados). Rama `f6-review`, commit `7423780`. NO mergeado a main.
-- Backup pre-migración: definiciones de `crear_reserva`, `get_grupo_info`, `devolver_horas` + definiciones de los 2 índices DROPeados → guardado en scratchpad de sesión.
+✅ Sentry instrumentado (2026-07-24, `7c61513`): front (`@sentry/react`) + los 3 endpoints Vercel (`@sentry/node`, `api/_sentry.js`). Scrubbing de secrets/PII. Requiere `SENTRY_DSN`/`VITE_SENTRY_DSN` cargados en Vercel (ya están). **No cubre la Edge Function** (ver P0).
 
-✅ F6 Etapa 2a — backend pago por clase deployado a prod (2026-07-05):
-- `20260705000004_f6_confirmar_motivos.sql`: `confirmar_reserva_pago` ahora retorna `'ttl_expirado'`/`'cupo_excedido'`/`'cancelada'` (antes: `'expirada_pago_tardio'` genérico). Grants: service_role only, PUBLIC revocado.
-- `20260705000005_pagos_huerfanos_payment_unique.sql`: `payment_id` UNIQUE en `pagos_huerfanos`. Prerequisito del handleOrphan atómico.
-- `crear-preferencia` deployada: rama A (`reservaParams`) llama `crear_reserva_pendiente_pago` via JWT alumno; precio server-side; `external_reference = "r_<reservaId>"`; `back_url?reserva_id=<id>`. Rama B (packs) intacta.
-- `mp-webhook` deployada: rama A (`r_<id>`) llama `confirmar_reserva_pago`; si huérfano → `handleOrphan` (INSERT-first atómico con upsert `ignoreDuplicates`, refund MP, UPDATE motivo final). Ramas B (packs) y C (legado) intactas. HMAC sin cambios.
-- NO activo en el front (el botón de pago por clase está en Etapa 2b). Rama `f6-review`, commit `9704a70`. NO mergeado a main.
+✅ Paginación admin (2026-07-25, `74b268e`): `getAlumnos`/`getProfesAdmin`/`getTodasLasReservas` con `{page, pageSize}` + `.range()`. Los agregados de Dashboard/Personas/Finanzas siguen trayendo el set completo (pageSize alto) para no romper conteos — con `console.warn` si se trunca.
+
+✅ Cache config/packs (2026-07-25, `84b46e2`): TTL 5min en memoria del cliente, `updateConfig` refresca el cache al guardar.
+
+✅ Refund de pago huérfano fuera del camino crítico (2026-07-25, `9242332` + fix `8e7ad35`): el INSERT-first en `pagos_huerfanos` queda `await`-eado en el crítico (si falla, bubblea a 500 real → MP reintenta); solo el refund a MP + update de motivo van en background vía `waitUntil` (`@vercel/functions`). *Ojo: este fix es solo para `api/mp-webhook.js` — la Edge Function nunca tuvo este bug porque nunca tuvo el patrón async que lo causaba.*
+
+✅ Endpoint de reconciliación de huérfanos (2026-07-25, `1e3b014`): `GET /api/admin/reconciliar-huerfanos` (admin-only), solo lista y loguea filas `pendiente`/`refund_pendiente` de `pagos_huerfanos`. **Refund automático deshabilitado a propósito** (código comentado, activar requiere OK explícito de David).
+
+⏸️ `get_finanzas_periodo()` — migración escrita y documentada (`20260725000001_finanzas_agregados.sql`), agregados server-side de ingresos por período para Finanzas/Dashboard. **NO aplicada a la DB todavía.**
+
+⏸️ `npm audit fix` parcial (2026-07-25, `0d7c383`): resueltos `fast-uri`/`postcss`. Queda `brace-expansion` (alta, transitivo de `vite-plugin-pwa`→`workbox-build`, requiere `--force` y bajar `vite-plugin-pwa` a 1.2.0 — breaking change, no aplicado, riesgo real bajo por ser build-time).
+
+✅ `invalidatePacksCache()` borrada (2026-07-25, `bc41f61`) — código muerto confirmado, no hay ningún escritor de `packs` en el repo.
+
+--- histórico (2026-07-02 a 2026-07-15), cerrado, sin acción pendiente ---
+
+✅ Fix definitivo del bug original de acreditación (2026-07-02): MP Checkout Pro no propaga `metadata` al payment → patrón "compra pendiente en DB" (Opción B), `external_reference` = id numérico, 500 en vez de 200 silencioso.
+✅ `MP_WEBHOOK_SECRET` rotado 2026-06-24 (valor viejo había pasado por chat).
+✅ `devolver_horas` bigint fix (2026-07-05, `cb395f3`).
+✅ F6 Etapa 1 (migraciones `pendiente_pago`/`expirada`, `pagos_huerfanos`, `crear_reserva_pendiente_pago`, `confirmar_reserva_pago`) y Etapa 2a (backend pago por clase + `handleOrphan`) — aplicadas a prod el 2026-07-05, en su momento en rama `f6-review`.
 
 ## INVARIANTES DE INTEGRIDAD (obligatorias en todas las fases)
 1. Dinero y saldo solo se mueven server-side en RPCs atómicas e idempotentes (clave: payment_id / reserva_id). El front jamás confirma pagos ni descuenta saldo.
@@ -79,25 +94,18 @@ Arrancá del estado de abajo; **no re-diagnostiques lo ✅**.
 Toda fase nueva se diseña para que violar estas reglas sea imposible, y agrega verificación de esto en sus criterios de aceptación.
 
 ## REDISEÑO — COLA DE FASES
-- **F1 ✅ 2026-07-04**: design system accesible + fixes front (tokens CSS, flash login, ← volver, progreso real, a11y, recurrente oculto, precio desde DB). Commits `13c0307`..`439bb62`. En prod.
-- **F1.1 ✅ 2026-07-04**: hotfix 5 textos <16px (header badge ⏱, card saldo Inicio). Commit `470f2f9`.
-- **F3 ✅ 2026-07-04**: wizard reserva 8 pasos — fix slotsCons (DB es horaria, no 30 min), tipo/modalidad en pasos separados, lenguaje humano en tipo, "Elegir otro día" en P6 sin horarios. Commit `42dffcb`. En prod.
-  - **F3.1 ✅ 2026-07-04**: mini-calendario híbrido en P5 · días con nombre completo ("Miércoles 8 de julio") · singular/plural hora/horas. Commit `01bcb6d`.
-- **F4 ✅ 2026-07-04**: agenda del alumno — `Historial` reescrito: card destacada próxima clase, mini-calendario híbrido (días con clase marcados, filtro por día), lista de cards grandes (≥16px, ≥48px targets), fechas en palabra completa (`fmtLarga`), botones Reprogramar/Cancelar separados, `fmtLarga` promovida a global. Commit `9f44049`. En prod.
-- **F5 ✅ 2026-07-05**: grupal real — tabla `grupos`, advisory lock por slot, cupo en vivo (sin columna desnormalizada), `unirse_grupo` RPC (join-or-create atómico), `get_grupo_info` RPC. Migración `20260704000001_f5_grupal_real.sql` aplicada a prod. Commits `af489ab`..`6eb8d0d`. En prod.
-  - **F5.1 ✅ 2026-07-05**: fix slot grupal — `slotOcupado` ignora reservas grupales cuando `tipo=grupal` (solo individuales bloquean). P6 muestra "N de 4 lugares" / "Ya estás anotado" / "Grupo lleno" según cupo real. `getReservasDelDia` agrega `tipo`; nueva `getMisReservasDelDia`. Commit `58c1f5d`. En prod.
-  - **RADAR F6**: cancelar grupo → devolver saldo a todos los inscriptos · reconciliar tipo 'ambas' de disponibilidad con F6.
-  - **LÍMITE CONOCIDO (no bloqueante)**: `unirse_grupo` NO valida solapamiento entre dos grupos del mismo profe a horas distintas (ej: grupo A 10:00-12:00 y grupo B 11:00-12:00 coexistirían). El chequeo individual-vs-grupal SÍ usa rango completo. Resolver en F6 si se necesita.
-- **F6 Etapa 1 ✅ 2026-07-05**: migraciones DB en prod (ver ESTADO ACTUAL). Front + Edge Functions: Etapa 2 pendiente.
-  - **RADAR (a) — BLOQUEANTE antes de activar pago en el front**: cuando `confirmar_reserva_pago` retorna `'expirada_pago_tardio'` (TTL vencido, cupo lleno, o alumno canceló), el webhook necesita insertar en `pagos_huerfanos` Y llamar a MP para reembolsar al alumno. El webhook actual (`mp-webhook`) no hace ni lo uno ni lo otro todavía. Resolver en Etapa 2 junto con la edge function, ANTES de conectar el botón de pago en el front.
-  - **RADAR (b) — Etapa 2**: `crear_reserva` actualmente acepta `p_tipo = 'grupal'` y descuenta saldo. En F6 el path grupal usa `crear_reserva_pendiente_pago`. Agregar guardia en `crear_reserva` para rechazar `'grupal'` con RAISE EXCEPTION (o simplemente el front deja de llamarla con grupal).
-- **F6 Etapa 2b** (próxima): front wizard pago por clase (P8 nuevo flujo). Notas UI:
-  - Grupal pagada con plata → mostrar **"Reprogramar"** como opción principal; si el alumno igual cancela, advertir explícito: *"Esta clase no se reembolsa"*.
-  - **VERIFICAR en 2b (bloqueante)**: que reprogramar una grupal pagada funcione de extremo a extremo — cupo disponible en el nuevo horario, re-agrupación correcta. Si no funciona, el alumno queda atrapado con una clase que no puede usar ni recuperar.
-- **F6 Etapa 2c** (en rama f6-review, NO en prod): `devolver_horas` — 4 casos por tipo/origen. Migración `20260705000006`. Pendiente de aprobación.
-- **F6 Etapa 2b ✅ 2026-07-15**: front wizard pago por clase — P8 muestra "Pagar con MP" cuando saldo insuficiente, llama `crearPreferenciaReserva` (Rama A), polling de retorno. Commit `502a09a`. En rama `f6-review`.
-- **F6 Etapa 2c ✅ 2026-07-15**: `devolver_horas` 4 casos (saldo, MP individual, MP grupal no reembolsa, pendiente). Migración `20260705000006` aplicada a prod. Commits `9b30aa4`, `30ad2f5`. En rama `f6-review`.
-- **F7** (opcional): carrito progresivo "Agregar otra clase".
+- **F1–F5.1 ✅** (2026-07-04/05): design system accesible, wizard reserva 8 pasos, agenda del alumno rediseñada, grupal real (tabla `grupos`, cupo en vivo, `unirse_grupo`/`get_grupo_info`). Todo en prod, sin cambios desde entonces.
+  - **RADAR F6 pendiente**: cancelar grupo → devolver saldo a todos los inscriptos · reconciliar tipo 'ambas' de disponibilidad.
+  - **LÍMITE CONOCIDO (no bloqueante)**: `unirse_grupo` no valida solapamiento entre dos grupos del mismo profe a horas distintas.
+- **F6 (Etapas 1, 2a, 2b, 2c) ✅ — en `main`, no en `f6-review`**: el pago por clase (reserva → `pendiente_pago` con TTL → pago MP → `confirmar_reserva_pago` → huérfano/refund si corresponde) está completo y mergeado. La bitácora vieja decía "en rama f6-review" para 2b/2c — quedó desactualizada; confirmado en código que `api/crear-preferencia-reserva.js` y el flujo completo viven en `main` desde el push del 2026-07-22.
+  - **VERIFICAR pendiente (no bloqueante, no crítico hoy)**: reprogramar una grupal pagada de extremo a extremo — cupo en el nuevo horario, re-agrupación correcta.
+- **F7** (opcional, no arrancado): carrito progresivo "Agregar otra clase".
+
+## AUDITORÍA DE ESCALABILIDAD — cola aparte (track distinto al rediseño)
+- **FASE 1 ✅**: diagnóstico completo, solo reporte (10 áreas: DB/pooler, índices, RLS, caching, paginación, async, rate limit, monitoreo, realtime). Sin cambios de código.
+- **FASE 2 (en curso)**: fixes uno por uno, ver ✅/⏸️ en ESTADO ACTUAL arriba (índices, rate limiting, Sentry, paginación admin, cache, refund async, reconciliación huérfanos, npm audit). Pendientes: aplicar `get_finanzas_periodo`, `npm audit --force` (decisión), P0 del webhook.
+- **FASE 3 (no arrancada)**: load testing contra un Preview deploy (no prod). Explícitamente pausada hasta cerrar FASE 2.
+- **Objetivo declarado**: soportar ~15 profes × 20 alumnos (hasta 300 usuarios). Ver resumen ejecutivo de la sesión 2026-07-25 para el detalle de qué es mínimo indispensable antes de esa carga (hoy: P0 del webhook es el ítem #1).
 
 ## Regla de negocio — Vencimiento de horas (fija)
 - `saldo >= 0.8 hs` cuando vence → se pierde todo (saldo = 0). La clase mínima es 0.8 hs; si tenés menos no podés reservar.
