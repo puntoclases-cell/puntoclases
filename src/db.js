@@ -327,6 +327,17 @@ export async function getTodasLasReservas({ page = 1, pageSize = 20 } = {}) {
   return { data, count, page, pageSize, totalPages: Math.max(1, Math.ceil((count || 0) / pageSize)) };
 }
 
+// Agregados de Finanzas/Dashboard calculados server-side, por período (mes).
+// Admin-only (la función chequea profiles.rol='admin' contra auth.uid()
+// internamente — un no-admin recibe un error de PostgREST, no datos).
+// Devuelve [{ periodo, clases, bruto, pago_profe, costo_cowork, neto }, ...]
+// ordenado por período descendente. Array vacío si no hay reservas 'realizada'.
+export async function getFinanzasPeriodo() {
+  const { data, error } = await supabase.rpc("get_finanzas_periodo");
+  if (error) throw error;
+  return data;
+}
+
 export async function actualizarProfe(profeId, cambios) {
   const { data, error } = await supabase.from("profes").update(cambios).eq("id", profeId).select().single();
   if (error) throw error;

@@ -1,5 +1,5 @@
 ﻿import { useState, useEffect, useRef } from "react";
-import { login, getUsuarioActual, onAuthChange, logout, getAlumno, getCompras, getReservasAlumno, getProfes, getProfesAdmin, getDisponibilidad, getReservasProfe, marcarReserva, cargarDevolucion, reprogramarReserva, setBloque, borrarBloque, getAlumnos, getTodasLasReservas, actualizarAlumno, actualizarProfe, actualizarMiPerfilProfe, actualizarPerfil, crearReserva, unirseGrupo, getGrupoInfo, verificarBloqueOcupado, getReservasDelDia, getMisReservasDelDia, getMensajes, enviarMensaje, suscribirMensajes, registrarAlumno, registrarProfe, enviarRecuperacion, actualizarPassword, onPasswordRecovery, crearResenia, getConfig, updateConfig, getPacks, devolverHoras, addHorasAdmin, crearPreferencia, crearPreferenciaReserva, contarMensajesNuevosProfe, subirAvatar } from "./db";
+import { login, getUsuarioActual, onAuthChange, logout, getAlumno, getCompras, getReservasAlumno, getProfes, getProfesAdmin, getDisponibilidad, getReservasProfe, marcarReserva, cargarDevolucion, reprogramarReserva, setBloque, borrarBloque, getAlumnos, getTodasLasReservas, getFinanzasPeriodo, actualizarAlumno, actualizarProfe, actualizarMiPerfilProfe, actualizarPerfil, crearReserva, unirseGrupo, getGrupoInfo, verificarBloqueOcupado, getReservasDelDia, getMisReservasDelDia, getMensajes, enviarMensaje, suscribirMensajes, registrarAlumno, registrarProfe, enviarRecuperacion, actualizarPassword, onPasswordRecovery, crearResenia, getConfig, updateConfig, getPacks, devolverHoras, addHorasAdmin, crearPreferencia, crearPreferenciaReserva, contarMensajesNuevosProfe, subirAvatar } from "./db";
 
 // ════════════════════════════════════════════════════════════════════════════
 // PUNTOCLASES — APP UNIFICADA
@@ -4286,13 +4286,16 @@ const MESES_CORTO = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct"
 // ════════════════════════════════════════════════════════════════════════════
 // 1. DASHBOARD
 // ════════════════════════════════════════════════════════════════════════════
-function Dashboard({ alumnos, profes, reservas, cfg, onNav, onLogout }) {
+function Dashboard({ alumnos, profes, reservas, cfg, finanzas, onNav, onLogout }) {
   const realizadas = reservas.filter(r=>r.estado==="realizada");
-  const bruto = realizadas.reduce((a,r)=>a+r.monto,0);
-  const pagoProfe = sumPagoProfe(realizadas, cfg);
-  // Cowork: $ fijo por alumno por clase, SOLO presenciales (las virtuales no usan el espacio).
-  const costoCowork = sumCowork(realizadas, cfg);
-  const neto = bruto - pagoProfe - costoCowork;
+  // Cálculo viejo (client-side, sobre `reservas` con pageSize:500) — reemplazado
+  // por get_finanzas_periodo() server-side. Dejado comentado hasta confirmar en
+  // prod, no borrado (ver CLAUDE.md, tarea P1 2026-07-29).
+  // const bruto = realizadas.reduce((a,r)=>a+r.monto,0);
+  // const pagoProfe = sumPagoProfe(realizadas, cfg);
+  // const costoCowork = sumCowork(realizadas, cfg);
+  // const neto = bruto - pagoProfe - costoCowork;
+  const { bruto, pagoProfe, costoCowork, neto } = finanzas;
 
   // Alertas accionables
   const alertas = [];
@@ -4326,6 +4329,11 @@ function Dashboard({ alumnos, profes, reservas, cfg, onNav, onLogout }) {
       <div style={{background:BL,borderRadius:20,padding:"22px 20px",color:DK,position:"relative",overflow:"hidden"}}>
         <div style={{position:"absolute",top:-30,right:-30,width:120,height:120,borderRadius:"50%",background:"rgba(255,255,255,0.25)"}}/>
         <p style={{margin:"0 0 4px",fontSize:11,opacity:0.55,textTransform:"uppercase",letterSpacing:1}}>Tu ganancia este mes</p>
+        {finanzas.error ? (
+          <p style={{margin:"0 0 16px",fontSize:13,color:P}}>No se pudo cargar el resumen financiero: {finanzas.error}</p>
+        ) : finanzas.cargando ? (
+          <p style={{margin:"0 0 16px",fontSize:13,opacity:0.6}}>Cargando…</p>
+        ) : (<>
         <p style={{margin:"0 0 16px",fontSize:34,fontWeight:800,color:neto>=0?DK:P}}>${neto.toLocaleString("es-AR")}</p>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
           {[
@@ -4339,6 +4347,7 @@ function Dashboard({ alumnos, profes, reservas, cfg, onNav, onLogout }) {
             </div>
           ))}
         </div>
+        </>)}
       </div>
 
       {/* Alertas accionables */}
@@ -4935,19 +4944,23 @@ function Operaciones({ reservas, reservasPagina, paginaReservas, totalPaginasRes
 // ════════════════════════════════════════════════════════════════════════════
 // 4. FINANZAS (Reportes + Config)
 // ════════════════════════════════════════════════════════════════════════════
-function Finanzas({ reservas, cfg, setCfg }) {
+function Finanzas({ reservas, cfg, setCfg, finanzas }) {
   const [tab, setTab] = useState("reportes");
   const [guardado, setGuardado] = useState(false);
   const [errGuardado, setErrGuardado] = useState(null);
 
   const realizadas = reservas.filter(r=>r.estado==="realizada");
-  const bruto = realizadas.reduce((a,r)=>a+r.monto,0);
-  const pagoProfe = sumPagoProfe(realizadas, cfg);
+  // Cálculo viejo (client-side, sobre `reservas` con pageSize:500) — reemplazado
+  // por get_finanzas_periodo() server-side. Dejado comentado hasta confirmar en
+  // prod, no borrado (ver CLAUDE.md, tarea P1 2026-07-29).
+  // const bruto = realizadas.reduce((a,r)=>a+r.monto,0);
+  // const pagoProfe = sumPagoProfe(realizadas, cfg);
+  // const costoCowork = sumCowork(realizadas, cfg);
+  // const neto = bruto-pagoProfe-costoCowork;
+  const { bruto, pagoProfe, costoCowork, neto } = finanzas;
   const presenciales = realizadas.filter(r=>r.modalidad==="Presencial");
   // Cowork: SOLO presenciales, $ por alumno (las virtuales no usan el espacio).
   const alumnosClaseCowork = presenciales.reduce((a,r)=>a+(r.alumnosGrupo||1)*(r.horas||1),0);
-  const costoCowork = sumCowork(realizadas, cfg);
-  const neto = bruto-pagoProfe-costoCowork;
 
   const porMateria = {};
   realizadas.forEach(r=>{
@@ -4999,7 +5012,11 @@ function Finanzas({ reservas, cfg, setCfg }) {
         {/* P&L */}
         <Card style={{background:BL,color:DK}}>
           <p style={{margin:"0 0 14px",fontSize:11,opacity:0.55,textTransform:"uppercase",letterSpacing:0.8}}>Estado de resultados</p>
-          {[
+          {finanzas.error ? (
+            <p style={{margin:0,fontSize:13,color:P}}>No se pudo cargar el resumen financiero: {finanzas.error}</p>
+          ) : finanzas.cargando ? (
+            <p style={{margin:0,fontSize:13,opacity:0.6}}>Cargando…</p>
+          ) : [
             {l:"📥 Facturado bruto",v:bruto,col:DK,bold:false},
             {l:"👨‍🏫 Pagos a profes (tarifa fija)",v:-pagoProfe,col:"#374151",bold:false},
             {l:"🏢 Costo cowork",v:-costoCowork,col:"#374151",bold:false},
@@ -5140,6 +5157,8 @@ function AppAdminMain({ onLogout }) {
   const [reservasPagina, setReservasPagina] = useState([]);
   const [paginaReservas, setPaginaReservas] = useState(1);
   const [totalPaginasReservas, setTotalPaginasReservas] = useState(1);
+  const [finanzasAgregado, setFinanzasAgregado] = useState(null); // null = cargando
+  const [finanzasError, setFinanzasError] = useState(null);
 
   const normReservaAdmin = r => ({
     ...r,
@@ -5192,6 +5211,17 @@ function AppAdminMain({ onLogout }) {
         setProfes((profs.data || []).map(p => normProfe(p, normR)));
       })
       .catch(err => console.error("Error al cargar datos admin:", err));
+
+    // Agregados de Finanzas/Dashboard server-side (get_finanzas_periodo, admin-only).
+    // Reemplaza el cálculo client-side sobre `reservas` (que dependía del pageSize
+    // alto de arriba). Si falla (ej. sesión no-admin), se muestra un error prolijo
+    // en vez de romper la pantalla.
+    getFinanzasPeriodo()
+      .then(rows => setFinanzasAgregado(rows || []))
+      .catch(err => {
+        console.error("Error al cargar finanzas agregadas:", err);
+        setFinanzasError(err.message || "No se pudo cargar el resumen financiero");
+      });
   }, []);
 
   useEffect(() => {
@@ -5204,6 +5234,16 @@ function AppAdminMain({ onLogout }) {
       })
       .catch(err => console.error("Error al cargar página de reservas:", err));
   }, [paginaReservas]);
+
+  // Suma todos los períodos devueltos por get_finanzas_periodo() → total histórico,
+  // mismo alcance que el cálculo viejo (que sumaba TODAS las reservas realizadas).
+  const finanzasTotales = (finanzasAgregado || []).reduce((acc, r) => ({
+    bruto: acc.bruto + Number(r.bruto),
+    pagoProfe: acc.pagoProfe + Number(r.pago_profe),
+    costoCowork: acc.costoCowork + Number(r.costo_cowork),
+    neto: acc.neto + Number(r.neto),
+  }), { bruto: 0, pagoProfe: 0, costoCowork: 0, neto: 0 });
+  const finanzas = { ...finanzasTotales, cargando: finanzasAgregado === null, error: finanzasError };
 
   const nav = [
     {id:"dashboard",icon:"🏠",label:"Inicio"},
@@ -5226,10 +5266,10 @@ function AppAdminMain({ onLogout }) {
       </div>
 
       <div style={{flex:1,padding:"16px 16px 80px",overflowY:"auto"}}>
-        {screen==="dashboard"   && <Dashboard alumnos={alumnos} profes={profes} reservas={reservas} cfg={cfg} onNav={setScreen} onLogout={onLogout}/>}
+        {screen==="dashboard"   && <Dashboard alumnos={alumnos} profes={profes} reservas={reservas} cfg={cfg} finanzas={finanzas} onNav={setScreen} onLogout={onLogout}/>}
         {screen==="personas"    && <Personas alumnos={alumnos} setAlumnos={setAlumnos} profes={profes} setProfes={setProfes} reservas={reservas}/>}
         {screen==="operaciones" && <Operaciones reservas={reservas} reservasPagina={reservasPagina} paginaReservas={paginaReservas} totalPaginasReservas={totalPaginasReservas} setPaginaReservas={setPaginaReservas}/>}
-        {screen==="finanzas"    && <Finanzas reservas={reservas} cfg={cfg} setCfg={setCfg}/>}
+        {screen==="finanzas"    && <Finanzas reservas={reservas} cfg={cfg} setCfg={setCfg} finanzas={finanzas}/>}
       </div>
 
       <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:480,background:"#fff",borderTop:"1px solid #e2e8f0",display:"flex",padding:"8px 0 12px",zIndex:10}}>
