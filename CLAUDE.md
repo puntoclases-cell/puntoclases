@@ -33,10 +33,8 @@ Arrancá del estado de abajo; **no re-diagnostiques lo ✅**.
 - React+Vite → Vercel (auto-deploy en push a `main`). Repo: `c:\Users\Dell\Desktop\puntoclases`.
 - Supabase ref: `ihwtdblkrxgzhdnzhzsh`. Pagos: Mercado Pago.
 - Tooling listo: Node v24, Supabase CLI 2.106 (`npx supabase`, logueada+linkeada), Vercel CLI.
-- **⚠️ DOS implementaciones del webhook de pagos hoy — ver "P0 ABIERTO" abajo antes de tocar cualquiera de las dos:**
-  - `api/mp-webhook.js` (Vercel, `pg`/`DATABASE_URL`) — tiene HMAC fail-closed, rate limiting, Sentry, idempotencia, fix de refund async. Es lo que crea `crear-preferencia-pack.js`/`crear-preferencia-reserva.js` (Vercel) como `notification_url`.
-  - `supabase/functions/mp-webhook` (Edge Function, Deno) — es la URL cargada HOY en el panel de MP ("Tus integraciones → Webhooks → Modo productivo"), confirmado con entregas reales 200 OK. Sin Sentry, sin rate limiting, HMAC fail-open si falta el secret. `supabase/functions/crear-preferencia` (su contraparte) ya no la llama el front.
-  - No confirmado todavía: si un pago real creado por el código de Vercel hoy termina notificando a Vercel o a la Edge Function (no hay pagos reales completados desde el 22/07 para comprobarlo). Plan de cutover con evidencia: ver "P0 ABIERTO".
+- **Webhook de pagos: unificado en Vercel ✅ (P0 cerrado 2026-07-29).** `api/mp-webhook.js` es el que procesa pagos reales — panel de MP ("Tus integraciones → Webhooks → Modo productivo") apunta a `https://puntoclases.vercel.app/api/mp-webhook`, confirmado con el simulador real de MP (firma generada por MP → 200 OK). `supabase/functions/mp-webhook` (Edge Function, Deno) queda **intacta como rollback** — no se tocó ni se desactivó, no reescribir ni borrar sin decisión explícita.
+- **⚠️ Supavisor está en modo SESIÓN (puerto 5432), no en modo transacción (6543) como decía la doc vieja.** `pool_size` real: **15**. Confirmado empíricamente (2026-07-29, load test) con el error real de Supavisor: `EMAXCONNSESSION: max clients reached in session mode - max clients are limited to pool_size: 15`. Esto aplica a CUALQUIER conexión que abra `api/_db.js` (los 4 endpoints Vercel: pack/reserva/webhook/reconciliar-huerfanos) — a partir de ~15-20 invocaciones concurrentes que toquen la DB, empiezan los errores. Los reads que van directo a PostgREST (`supabase.from(...)` desde el front) NO tienen este problema — Supabase pooléa esa capa aparte y aguantó 300 concurrentes sin error en el mismo test. Ver "AUDITORÍA DE ESCALABILIDAD" para el detalle y la recomendación (pasar `DATABASE_URL` a puerto 6543).
 - MP test: vendedor de prueba `3462408456`. Comprador de prueba `3462408458`. Tarjeta: `4509 9535 6623 3704`, titular **APRO APRO**, 11/30, CVV 123, DNI 12345678.
 - **NO pongas secretos en este archivo (se commitea a git).**
 - **DB prod**: connection string en `DATABASE_URL` (`.env.local`, ignorado por git). `MP_WEBHOOK_SECRET` también en `.env.local` (cargado 2026-07-25) y en Vercel Production. Para consultar: `psql $DATABASE_URL -c "SELECT ..."` (o vía `pg` desde Node si `psql` no está en el PATH).
@@ -48,10 +46,15 @@ Arrancá del estado de abajo; **no re-diagnostiques lo ✅**.
 - `registrar_compra_pendiente(alumno_id, horas, precio, pack_id)` → inserta fila con `estado_pago='pendiente'`, devuelve `id BIGINT`.
 - `aprobar_compra(compra_id, payment_id)` → idempotente: si ya está `'aprobado'` devuelve saldo sin tocar nada; si no, actualiza `compras` y `alumnos` en un solo tx.
 
-## ESTADO ACTUAL — al 2026-07-25
+## ESTADO ACTUAL — al 2026-07-29
 
-**P0 ABIERTO — unificar webhook de MP (correctitud/plata, ver "Entorno" arriba):**
-Diagnóstico hecho, plan de cutover propuesto, **nada ejecutado todavía** (panel de MP lo toca David). Pendiente: pago de prueba (sandbox o productivo de mínimo monto, a decidir) para confirmar por dónde entra hoy un pago creado con el código de Vercel, y recién ahí decidir si hace falta cambiar la URL del panel o no.
+✅ **P0 cerrado**: webhook unificado en Vercel, confirmado con MP real (ver "Entorno" arriba). Edge Function intacta como rollback, no tocar.
+
+✅ `get_finanzas_periodo()` corregida y en prod (2026-07-29, migración `20260729000001`): tenía un bug real (no de criterio) — `bruto` declarado `numeric` pero `sum(reservas.monto)` daba `bigint`, la función tiraba error en TODA invocación (`structure of query does not match function result type`). Fix: cast `::numeric`. Verificado antes/después simulando sesión admin real contra prod (GUC `request.jwt.claims`, transacción con ROLLBACK).
+
+✅ Finanzas/Dashboard conectados a `get_finanzas_periodo()` server-side (2026-07-29, `cc9a7c5`): `AppAdminMain` llama la RPC una vez, suma los períodos para el total histórico, pasa `finanzas={bruto,pagoProfe,costoCowork,neto,cargando,error}` a `Dashboard`/`Finanzas`. Cálculo viejo queda comentado (no borrado). Error de RPC se muestra prolijo en vez de romper la pantalla. **Paridad verificada solo trivialmente** (0=0, no hay reservas `'realizada'` en prod todavía) — falta confirmar con números reales no-cero.
+
+⚠️ **Hallazgo del load test (2026-07-29)**: el techo real de conexiones para los endpoints Vercel es **~15 concurrentes**, no 60 (ver "Entorno" arriba — Supavisor en modo sesión, `pool_size:15`). Con 15 profes × 20 alumnos, cualquier pico que dispare 15-20 invocaciones simultáneas de `crear-preferencia-pack/reserva`/`mp-webhook` puede empezar a tirar errores reales a usuarios. Recomendación (no aplicada, requiere decisión): pasar `DATABASE_URL` al puerto 6543 (modo transacción) para multiplexar conexiones en vez de una dedicada por invocación.
 
 ✅ Backend de pagos reescrito a `pg`/`DATABASE_URL` (2026-07-22, `dd42dd8`): `api/crear-preferencia-pack.js`, `api/crear-preferencia-reserva.js`, `api/mp-webhook.js` en Vercel, sin depender de `SUPABASE_SERVICE_ROLE_KEY`. Auth híbrida: funciones con `auth.uid()` interno (`crear_reserva_pendiente_pago`) vía JWT/PostgREST; el resto vía `pg` directo (rol `postgres`, ya tiene EXECUTE en todas las RPC).
 
@@ -103,9 +106,9 @@ Toda fase nueva se diseña para que violar estas reglas sea imposible, y agrega 
 
 ## AUDITORÍA DE ESCALABILIDAD — cola aparte (track distinto al rediseño)
 - **FASE 1 ✅**: diagnóstico completo, solo reporte (10 áreas: DB/pooler, índices, RLS, caching, paginación, async, rate limit, monitoreo, realtime). Sin cambios de código.
-- **FASE 2 (en curso)**: fixes uno por uno, ver ✅/⏸️ en ESTADO ACTUAL arriba (índices, rate limiting, Sentry, paginación admin, cache, refund async, reconciliación huérfanos, npm audit). Pendientes: aplicar `get_finanzas_periodo`, `npm audit --force` (decisión), P0 del webhook.
-- **FASE 3 (no arrancada)**: load testing contra un Preview deploy (no prod). Explícitamente pausada hasta cerrar FASE 2.
-- **Objetivo declarado**: soportar ~15 profes × 20 alumnos (hasta 300 usuarios). Ver resumen ejecutivo de la sesión 2026-07-25 para el detalle de qué es mínimo indispensable antes de esa carga (hoy: P0 del webhook es el ítem #1).
+- **FASE 2 ✅ (cerrada 2026-07-29)**: índices, rate limiting, Sentry, paginación admin, cache, refund async, reconciliación huérfanos, `get_finanzas_periodo` (con su fix), P0 del webhook. Pendiente de decisión (no bloqueante): `npm audit --force` (bajaría `vite-plugin-pwa`, breaking change).
+- **FASE 3 ✅ (2026-07-29)**: load testing ejecutado contra Preview (`dpl_GvYD7GvbcX5f4TpVir4C7v2oWtB8`) — con la salvedad de que Vercel Deployment Protection bloquea requests directos a las URLs de Preview, y `DATABASE_URL`/`MP_ACCESS_TOKEN`/`MP_WEBHOOK_SECRET` no están scopeados a Preview en Vercel (solo Production). El test real se corrió contra Supabase directo (PostgREST + `pg`), que es donde vive el cuello de botella real. Hallazgo principal: **techo de ~15 conexiones concurrentes** para cualquier cosa que use `DATABASE_URL` (ver "Entorno" arriba) — mucho más bajo que el `max_connections=60` de Postgres que se asumía como límite. Reads vía PostgREST (front) escalan bien a 300 concurrentes. Reserva concurrente sobre el mismo slot: sin doble booking, funciona bien.
+- **Objetivo declarado**: soportar ~15 profes × 20 alumnos (hasta 300 usuarios). **Bloqueante real hoy**: el techo de conexiones de Supavisor (15), no el `max_connections` de Postgres. Recomendación pendiente de decisión: `DATABASE_URL` a puerto 6543 (modo transacción).
 
 ## Regla de negocio — Vencimiento de horas (fija)
 - `saldo >= 0.8 hs` cuando vence → se pierde todo (saldo = 0). La clase mínima es 0.8 hs; si tenés menos no podés reservar.
