@@ -271,10 +271,24 @@ export async function cargarDevolucion(reservaId, devolucion, avance) {
   return data;
 }
 
+// Usada por el PROFE (ModalReprogramarProfe) — permitido por RLS (reservas_profe_update,
+// columnas acotadas) porque el profe reprograma sus propias reservas directo en la tabla.
 export async function reprogramarReserva(reservaId, nuevaFecha, nuevaHora) {
   const { data, error } = await supabase.from("reservas")
     .update({ fecha: nuevaFecha, hora: nuevaHora, estado: "confirmada" })
     .eq("id", reservaId).select().single();
+  if (error) throw error;
+  return data;
+}
+
+// Usada por el ALUMNO (ModalReprogramar, Historial) — no hay UPDATE directo posible desde
+// este lado (nunca hubo policy RLS para alumno sobre reservas), así que va por RPC
+// SECURITY DEFINER que revalida todo server-side (dueño, estado, 24hs, disponibilidad real,
+// solapamiento) en vez de confiar en lo que ya filtró el front.
+export async function reprogramarReservaAlumno(reservaId, nuevaFecha, nuevaHora) {
+  const { data, error } = await supabase.rpc("reprogramar_reserva_alumno", {
+    p_reserva_id: reservaId, p_fecha: nuevaFecha, p_hora: nuevaHora,
+  });
   if (error) throw error;
   return data;
 }

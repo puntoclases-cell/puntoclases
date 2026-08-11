@@ -1,5 +1,5 @@
 ﻿import { useState, useEffect, useRef } from "react";
-import { login, getUsuarioActual, onAuthChange, logout, getAlumno, getCompras, getReservasAlumno, getProfes, getProfesAdmin, getDisponibilidad, getReservasProfe, marcarReserva, cargarDevolucion, reprogramarReserva, setBloque, borrarBloque, getAlumnos, getTodasLasReservas, getFinanzasPeriodo, actualizarAlumno, actualizarProfe, actualizarMiPerfilProfe, actualizarPerfil, crearReserva, unirseGrupo, getGrupoInfo, verificarBloqueOcupado, getReservasDelDia, getMisReservasDelDia, getMensajes, enviarMensaje, suscribirMensajes, registrarAlumno, registrarProfe, enviarRecuperacion, actualizarPassword, onPasswordRecovery, crearResenia, getConfig, updateConfig, getPacks, devolverHoras, addHorasAdmin, crearPreferencia, crearPreferenciaReserva, contarMensajesNuevosProfe, subirAvatar } from "./db";
+import { login, getUsuarioActual, onAuthChange, logout, getAlumno, getCompras, getReservasAlumno, getProfes, getProfesAdmin, getDisponibilidad, getReservasProfe, marcarReserva, cargarDevolucion, reprogramarReserva, reprogramarReservaAlumno, setBloque, borrarBloque, getAlumnos, getTodasLasReservas, getFinanzasPeriodo, actualizarAlumno, actualizarProfe, actualizarMiPerfilProfe, actualizarPerfil, crearReserva, unirseGrupo, getGrupoInfo, verificarBloqueOcupado, getReservasDelDia, getMisReservasDelDia, getMensajes, enviarMensaje, suscribirMensajes, registrarAlumno, registrarProfe, enviarRecuperacion, actualizarPassword, onPasswordRecovery, crearResenia, getConfig, updateConfig, getPacks, devolverHoras, addHorasAdmin, crearPreferencia, crearPreferenciaReserva, contarMensajesNuevosProfe, subirAvatar } from "./db";
 
 // ════════════════════════════════════════════════════════════════════════════
 // PUNTOCLASES — APP UNIFICADA
@@ -6283,6 +6283,8 @@ function ModalReprogramar({ reserva, onCerrar, onConfirmar, onCancelar, cfg }) {
   const [mes, setMes] = useState(new Date().getMonth());
   const [confirmado, setConfirmado] = useState(false);
   const [errCancelar, setErrCancelar] = useState(null);
+  const [errReprogramar, setErrReprogramar] = useState(null);
+  const [guardandoReprog, setGuardandoReprog] = useState(false);
   const year = new Date().getFullYear();
 
   // Calcular si la clase es en menos de 24hs (simulado)
@@ -6372,14 +6374,21 @@ function ModalReprogramar({ reserva, onCerrar, onConfirmar, onCancelar, cfg }) {
           ) : (<>
             <p style={{margin:0,fontWeight:700,fontSize:15,color:DK}}>¿Qué querés hacer?</p>
             <div style={{display:"flex",flexDirection:"column",gap:10}}>
-              <button onClick={()=>{setAccion("reprogramar");setPaso(2);}}
-                style={{background:"#f0fdf4",border:"1.5px solid #bbf7d0",borderRadius:14,padding:"16px",cursor:"pointer",textAlign:"left",display:"flex",alignItems:"center",gap:12}}>
-                <span style={{fontSize:28}}>🔄</span>
-                <div>
-                  <p style={{margin:0,fontWeight:700,fontSize:14,color:"#15803d"}}>Reprogramar clase</p>
-                  <p style={{margin:"3px 0 0",fontSize:12,color:"#64748b"}}>Sin costo con +24hs de anticipación</p>
-                </div>
-              </button>
+              {reserva.tipo !== "grupal" && (
+                <button onClick={()=>{setAccion("reprogramar");setPaso(2);}}
+                  style={{background:"#f0fdf4",border:"1.5px solid #bbf7d0",borderRadius:14,padding:"16px",cursor:"pointer",textAlign:"left",display:"flex",alignItems:"center",gap:12}}>
+                  <span style={{fontSize:28}}>🔄</span>
+                  <div>
+                    <p style={{margin:0,fontWeight:700,fontSize:14,color:"#15803d"}}>Reprogramar clase</p>
+                    <p style={{margin:"3px 0 0",fontSize:12,color:"#64748b"}}>Sin costo con +24hs de anticipación</p>
+                  </div>
+                </button>
+              )}
+              {reserva.tipo === "grupal" && (
+                <p style={{margin:0,fontSize:12,color:"#94a3b8",padding:"4px 2px"}}>
+                  Las clases grupales todavía no se pueden reprogramar acá — contactá al profe por el chat.
+                </p>
+              )}
               {reserva.tipo !== "grupal" && (
                 <button onClick={()=>{setAccion("cancelar");setPaso(2);}}
                   style={{background:"#fff5f5",border:"1.5px solid #fecaca",borderRadius:14,padding:"16px",cursor:"pointer",textAlign:"left",display:"flex",alignItems:"center",gap:12}}>
@@ -6398,7 +6407,8 @@ function ModalReprogramar({ reserva, onCerrar, onConfirmar, onCancelar, cfg }) {
         {paso===2 && accion==="reprogramar" && (<>
           <p style={{margin:0,fontWeight:700,fontSize:15,color:DK}}>Elegí el nuevo horario</p>
 
-          {/* Calendario */}
+          {/* Calendario — solo cuenta bloques compatibles con individual (tipo "individual" o "ambas"),
+              la RPC igual revalida esto server-side, esto es solo para no ofrecer opciones que van a fallar. */}
           <div style={{background:"#f8fafc",borderRadius:14,padding:14}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
               <button onClick={()=>setMes(m=>Math.max(m-1,0))} style={{background:"none",border:"none",fontSize:20,cursor:"pointer",color:P}}>‹</button>
@@ -6411,10 +6421,11 @@ function ModalReprogramar({ reserva, onCerrar, onConfirmar, onCancelar, cfg }) {
               {Array(new Date(year,mes+1,0).getDate()).fill(null).map((_,i)=>{
                 const d=i+1;
                 const iso=`${year}-${String(mes+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
-                const tieneDispon = !!(dispProfe[iso] && Object.keys(dispProfe[iso]).length>0);
+                const horasIndividual = Object.entries(dispProfe[iso]||{}).filter(([,t])=>t==="individual"||t==="ambas");
+                const tieneDispon = horasIndividual.length>0;
                 const sel = nuevaFecha===iso;
                 return (
-                  <button key={d} disabled={!tieneDispon} onClick={()=>{setNuevaFecha(iso);setNuevaHora(null);}}
+                  <button key={d} disabled={!tieneDispon} onClick={()=>{setNuevaFecha(iso);setNuevaHora(null);setErrReprogramar(null);}}
                     style={{aspectRatio:"1",borderRadius:6,border:sel?`2px solid ${P}`:"none",background:sel?P:tieneDispon?PL:"transparent",color:sel?"#fff":tieneDispon?P:"#cbd5e1",fontSize:11,fontWeight:tieneDispon?700:400,cursor:tieneDispon?"pointer":"default"}}>
                     {d}
                   </button>
@@ -6426,8 +6437,8 @@ function ModalReprogramar({ reserva, onCerrar, onConfirmar, onCancelar, cfg }) {
           {/* Horarios */}
           {nuevaFecha && (
             <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
-              {Object.keys(dispProfe[nuevaFecha]||{}).sort().map(h=>(
-                <button key={h} onClick={()=>setNuevaHora(h)}
+              {Object.entries(dispProfe[nuevaFecha]||{}).filter(([,t])=>t==="individual"||t==="ambas").map(([h])=>h).sort().map(h=>(
+                <button key={h} onClick={()=>{setNuevaHora(h);setErrReprogramar(null);}}
                   style={{background:nuevaHora===h?P:PL,color:nuevaHora===h?"#fff":P,border:`1.5px solid ${nuevaHora===h?P:PB}`,borderRadius:10,padding:"10px 16px",fontSize:13,fontWeight:700,cursor:"pointer"}}>
                   {h}
                 </button>
@@ -6444,13 +6455,25 @@ function ModalReprogramar({ reserva, onCerrar, onConfirmar, onCancelar, cfg }) {
             </div>
           )}
 
+          {errReprogramar && (
+            <div style={{background:"#fff5f5",border:"1.5px solid #fecaca",borderRadius:12,padding:"10px 14px",fontSize:13,color:"#dc2626"}}>⚠️ {errReprogramar}</div>
+          )}
+
           <button onClick={async ()=>{
-            await reprogramarReserva(reserva.id, nuevaFecha, nuevaHora).catch(err=>console.error("Error al reprogramar:",err));
-            onConfirmar(nuevaFecha, nuevaHora);
-            setConfirmado(true);
-          }} disabled={!nuevaFecha||!nuevaHora}
-            style={{background:nuevaFecha&&nuevaHora?P:"#e2e8f0",color:nuevaFecha&&nuevaHora?"#fff":"#94a3b8",border:"none",borderRadius:12,padding:"14px",fontSize:15,fontWeight:700,cursor:nuevaFecha&&nuevaHora?"pointer":"not-allowed"}}>
-            Confirmar reprogramación ✓
+            setErrReprogramar(null);
+            setGuardandoReprog(true);
+            try {
+              await reprogramarReservaAlumno(reserva.id, nuevaFecha, nuevaHora);
+              onConfirmar(nuevaFecha, nuevaHora);
+              setConfirmado(true);
+            } catch (err) {
+              setErrReprogramar(err.message || "No se pudo reprogramar. Intentá de nuevo.");
+            } finally {
+              setGuardandoReprog(false);
+            }
+          }} disabled={!nuevaFecha||!nuevaHora||guardandoReprog}
+            style={{background:nuevaFecha&&nuevaHora?P:"#e2e8f0",color:nuevaFecha&&nuevaHora?"#fff":"#94a3b8",border:"none",borderRadius:12,padding:"14px",fontSize:15,fontWeight:700,cursor:nuevaFecha&&nuevaHora&&!guardandoReprog?"pointer":"not-allowed"}}>
+            {guardandoReprog ? "Confirmando..." : "Confirmar reprogramación ✓"}
           </button>
         </>)}
 
