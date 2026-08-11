@@ -1,5 +1,5 @@
 ﻿import { useState, useEffect, useRef } from "react";
-import { login, getUsuarioActual, onAuthChange, logout, getAlumno, getCompras, getReservasAlumno, getProfes, getProfesAdmin, getDisponibilidad, getReservasProfe, marcarReserva, cargarDevolucion, reprogramarReserva, reprogramarReservaAlumno, setBloque, borrarBloque, getAlumnos, getTodasLasReservas, getFinanzasPeriodo, actualizarAlumno, actualizarProfe, actualizarMiPerfilProfe, actualizarPerfil, crearReserva, unirseGrupo, getGrupoInfo, verificarBloqueOcupado, getReservasDelDia, getMisReservasDelDia, getMensajes, enviarMensaje, suscribirMensajes, registrarAlumno, registrarProfe, enviarRecuperacion, actualizarPassword, onPasswordRecovery, crearResenia, getConfig, updateConfig, getPacks, actualizarPack, devolverHoras, addHorasAdmin, crearPreferencia, crearPreferenciaReserva, contarMensajesNuevosProfe, subirAvatar } from "./db";
+import { login, getUsuarioActual, onAuthChange, logout, getAlumno, getCompras, getReservasAlumno, getProfes, getProfesAdmin, getDisponibilidad, getReservasProfe, marcarReserva, cargarDevolucion, reprogramarReserva, reprogramarReservaAlumno, setBloque, borrarBloque, getAlumnos, getTodasLasReservas, getFinanzasPeriodo, actualizarAlumno, actualizarProfe, actualizarMiPerfilProfe, actualizarPerfil, crearReserva, unirseGrupo, getGrupoInfo, verificarBloqueOcupado, getReservasDelDia, getMisReservasDelDia, getMensajes, enviarMensaje, suscribirMensajes, registrarAlumno, registrarProfe, enviarRecuperacion, actualizarPassword, onPasswordRecovery, crearResenia, getConfig, updateConfig, getPacks, actualizarPack, devolverHoras, marcarCompraFallida, addHorasAdmin, crearPreferencia, crearPreferenciaReserva, contarMensajesNuevosProfe, subirAvatar } from "./db";
 
 // ════════════════════════════════════════════════════════════════════════════
 // PUNTOCLASES — APP UNIFICADA
@@ -1160,14 +1160,15 @@ function Comprar({ onComprar, onVolver, compras, cfg: cfgProp, packsDB }) {
           setPago("procesando");
           setErrorPago(null);
           try {
-            localStorage.setItem("pc_compra_pendiente", JSON.stringify({
-              horas: seleccion.horas,
-              precio: seleccion.precio,
-            }));
-            const { init_point } = await crearPreferencia(
+            const { init_point, compra_id } = await crearPreferencia(
               seleccion.horas,
               tab === "packs" ? sel : null,
             );
+            localStorage.setItem("pc_compra_pendiente", JSON.stringify({
+              horas: seleccion.horas,
+              precio: seleccion.precio,
+              compra_id,
+            }));
             window.location.href = init_point;
           } catch (err) {
             console.error("Error al crear preferencia MP:", err);
@@ -2136,7 +2137,7 @@ function AppAlumno({ user, onLogout }) {
     const paymentId = params.get("payment_id") || params.get("collection_id") || null;
     if (!collectionStatus) return;
     const raw = localStorage.getItem("pc_compra_pendiente");
-    const { horas, precio } = raw ? JSON.parse(raw) : {};
+    const { horas, precio, compra_id } = raw ? JSON.parse(raw) : {};
     localStorage.removeItem("pc_compra_pendiente");
     window.history.replaceState({}, "", window.location.pathname);
 
@@ -2150,6 +2151,14 @@ function AppAlumno({ user, onLogout }) {
     } else {
       const estadoPago = collectionStatus === "pending" ? "pendiente" : "fallido";
       setCompraPendiente({ status: estadoPago });
+      // Fase F (overnight 2026-08-10): limpieza de la fila 'pendiente' colgada.
+      // Solo en failure real, no en pending (todavía puede aprobarse después vía
+      // webhook — marcar_compra_fallida no pisa una fila que ya esté 'aprobado',
+      // así que aunque se crucen no hay riesgo, pero no tiene sentido marcarla
+      // fallida mientras MP mismo dice que sigue pendiente).
+      if (estadoPago === "fallido" && compra_id) {
+        marcarCompraFallida(compra_id).catch(err => console.error("Error al marcar compra fallida:", err));
+      }
     }
   }, [user, datosAlumno]);
 

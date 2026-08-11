@@ -506,6 +506,15 @@ export async function crearPreferenciaReserva(reservaParams) {
   return data; // { init_point, reserva_id }
 }
 
+// Fase F (overnight 2026-08-10): limpieza de compras pendientes colgadas — se
+// llama cuando MP vuelve con failure, con el compra_id guardado en localStorage
+// antes de redirigir. Solo higiene (estado_pago 'pendiente'→'fallido'), no
+// toca saldo ni reemplaza al webhook.
+export async function marcarCompraFallida(compraId) {
+  const { error } = await supabase.rpc("marcar_compra_fallida", { p_compra_id: compraId });
+  if (error) throw error;
+}
+
 // ── STORAGE: AVATARES ────────────────────────────────────────────────────────
 
 // Recibe un dataUrl (ya leído por FileReader en el front) — sin createObjectURL,
