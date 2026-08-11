@@ -1,5 +1,5 @@
 ﻿import { useState, useEffect, useRef } from "react";
-import { login, getUsuarioActual, onAuthChange, logout, getAlumno, getCompras, getReservasAlumno, getProfes, getProfesAdmin, getDisponibilidad, getReservasProfe, marcarReserva, cargarDevolucion, reprogramarReserva, reprogramarReservaAlumno, setBloque, borrarBloque, getAlumnos, getTodasLasReservas, getFinanzasPeriodo, actualizarAlumno, actualizarProfe, actualizarMiPerfilProfe, actualizarPerfil, crearReserva, unirseGrupo, getGrupoInfo, verificarBloqueOcupado, getReservasDelDia, getMisReservasDelDia, getMensajes, enviarMensaje, suscribirMensajes, registrarAlumno, registrarProfe, enviarRecuperacion, actualizarPassword, onPasswordRecovery, crearResenia, getConfig, updateConfig, getPacks, devolverHoras, addHorasAdmin, crearPreferencia, crearPreferenciaReserva, contarMensajesNuevosProfe, subirAvatar } from "./db";
+import { login, getUsuarioActual, onAuthChange, logout, getAlumno, getCompras, getReservasAlumno, getProfes, getProfesAdmin, getDisponibilidad, getReservasProfe, marcarReserva, cargarDevolucion, reprogramarReserva, reprogramarReservaAlumno, setBloque, borrarBloque, getAlumnos, getTodasLasReservas, getFinanzasPeriodo, actualizarAlumno, actualizarProfe, actualizarMiPerfilProfe, actualizarPerfil, crearReserva, unirseGrupo, getGrupoInfo, verificarBloqueOcupado, getReservasDelDia, getMisReservasDelDia, getMensajes, enviarMensaje, suscribirMensajes, registrarAlumno, registrarProfe, enviarRecuperacion, actualizarPassword, onPasswordRecovery, crearResenia, getConfig, updateConfig, getPacks, actualizarPack, devolverHoras, addHorasAdmin, crearPreferencia, crearPreferenciaReserva, contarMensajesNuevosProfe, subirAvatar } from "./db";
 
 // ════════════════════════════════════════════════════════════════════════════
 // PUNTOCLASES — APP UNIFICADA
@@ -5005,6 +5005,19 @@ function Finanzas({ reservas, cfg, setCfg, finanzas }) {
     setErrGuardado(null);
     try {
       await updateConfig(cfgADB(cfg));
+      // Packs: antes esto no persistía nada (Fase E overnight) — ahora escribe
+      // el descuento real de cada pack contra la tabla `packs`, en paralelo.
+      // Si algún pack no tiene `id` real (no debería pasar, cfg.packs viene de
+      // getPacks() ahora) se filtra para no mandar un UPDATE con id undefined.
+      const resultados = await Promise.allSettled(
+        cfg.packs.filter(pk => pk.id).map(pk => actualizarPack(pk.id, { descuento: pk.descuento }))
+      );
+      const fallidos = resultados.filter(r => r.status === "rejected");
+      if (fallidos.length > 0) {
+        console.error("Error al guardar packs:", fallidos.map(f => f.reason));
+        setErrGuardado(`Se guardó la configuración, pero ${fallidos.length} pack(s) no se pudieron actualizar.`);
+        return;
+      }
       setGuardado(true);
       setTimeout(() => setGuardado(false), 2500);
     } catch(err) {
@@ -5227,6 +5240,16 @@ function AppAdminMain({ onLogout }) {
     getConfig()
       .then(row => setCfg(prev => ({ ...prev, ...normCfg(row) })))
       .catch(err => console.error("Error al cargar config:", err));
+    // Packs reales de la tabla (Fase E overnight) — antes cfg.packs quedaba
+    // siempre en el fallback hardcodeado (CONFIG_INIT.packs), sin relación con
+    // lo que persiste. skipCache: true porque el admin necesita ver el valor
+    // real más reciente, no el que quedó cacheado 5min del lado alumno.
+    getPacks({ skipCache: true })
+      .then(packs => setCfg(prev => ({
+        ...prev,
+        packs: (packs || []).map(p => ({ ...p, precio: precioPackTotal(p.horas, p.descuento, prev) })),
+      })))
+      .catch(err => console.error("Error al cargar packs:", err));
     // Set completo (no paginado) — alimenta agregados de Dashboard/Personas/Finanzas
     // y los conteos + búsqueda de Operaciones. pageSize alto = "traer todo" al
     // volumen actual; el día que esto no alcance, hay que sumar agregados server-side.

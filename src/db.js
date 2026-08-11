@@ -110,6 +110,17 @@ export async function getPacks({ skipCache = false } = {}) {
   return data;
 }
 
+// Admin-only (protegido por policy packs_admin, mi_rol()='admin'). Único escritor real
+// de `packs` en el repo (Fase E overnight 2026-08-10 — antes el editor de Finanzas no
+// persistía nada, GRANT column-level nuevo: solo `descuento`). Invalida el cache para
+// que Comprar() del alumno vea el precio nuevo en su próximo getPacks().
+export async function actualizarPack(packId, cambios) {
+  const { data, error } = await supabase.from("packs").update(cambios).eq("id", packId).select().single();
+  if (error) throw error;
+  packsCache = null;
+  return data;
+}
+
 // ── ALUMNO ───────────────────────────────────────────────────────────────────
 
 export async function getAlumno(alumnoId) {
