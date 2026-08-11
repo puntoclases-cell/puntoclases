@@ -134,15 +134,68 @@ posible hacia la DB.
 
 ---
 
-## FASE C — Carrito de reservas múltiples 🚧 rama `feature/carrito`, NO mergeada, NO aplicada a prod
+## FASE C — Carrito de reservas múltiples ✅ verificada y mergeada a `main` (2026-08-11)
 
-**Rama**: `feature/carrito`, pusheada a `origin/feature/carrito` (no a `main`).
-**Commit**: `c410a0f`.
-**Nada de esta fase tocó la base de datos de producción** — la migración
-(`20260810000008_carrito_reservas.sql`) existe como archivo en la rama, no se
-ejecutó. Se validó su SQL en `ROLLBACK` contra prod (nada quedó aplicado) para
-confirmar que compila y que la lógica es correcta, pero aplicarla de verdad
-queda para cuando decidas mergear.
+**Historia**: armada en `feature/carrito` la noche del 2026-08-10 (commit
+`c410a0f`), sin tocar prod. Verificada al día siguiente contra prod real con
+una cuenta de alumno de prueba dedicada (checklist de 10 puntos, ver más
+abajo) — mergeada a `main` (`d691bee`) y desplegada recién los 10 puntos
+cerraron con evidencia. La rama `feature/carrito` ya fue borrada (local y
+remota), está todo en `main`.
+
+---
+
+### ✅ VERIFICACIÓN DE CIERRE (2026-08-11)
+
+**Metodología**: cuenta de alumno de prueba dedicada
+(`carritotest_<timestamp>@puntoclases.test`), creada vía `supabase.auth.signUp`
+real (mismo trigger `handle_new_user` que un alta real), con sesión real
+(JWT real, no simulado con `SET LOCAL role`) para las llamadas RPC que en
+producción corren vía PostgREST. **Operaciones REALES committeadas, no
+`ROLLBACK`** — se necesitaba inspeccionar el estado persistido en cada paso.
+Al final, TODO lo generado por la cuenta (reservas, compras, pagos_huerfanos,
+grupos vacíos, la fila de alumnos/profiles/auth.users) se borró y se
+verificó en `0` filas.
+
+**Limitación de entorno, no de código — documentada, no ocultada**: no se
+pudo hacer el checkout real de Mercado Pago por navegador ni pegarle al
+webhook HTTP realmente desplegado, por dos motivos independientes y
+anteriores a esta sesión:
+1. `MP_ACCESS_TOKEN` y `MP_WEBHOOK_SECRET` en Vercel son variables **solo de
+   `Production`** (confirmado con `vercel env ls production`) — no existen en
+   `Preview`. `MP_ACCESS_TOKEN` además está marcada `--sensitive`: ni
+   `vercel env pull` la trae (se confirmó bajándola — el valor vino vacío,
+   `""`, a propósito, es write-only).
+2. Los deployments de `Preview` (donde SÍ vivía el código de Fase C antes de
+   mergear) están detrás de **Vercel Deployment Protection** — cualquier
+   request directo devuelve `401 Protected deployment` y pide login SSO de
+   Vercel. Mismo límite que ya había encontrado la Fase 3 de escalabilidad
+   contra estos mismos Preview.
+
+Ninguna de las dos cosas es un bug de Fase C — es infraestructura de Vercel
+ya configurada así antes de esta sesión. Se sustituyó con la evidencia más
+rigurosa posible sin esas credenciales: réplica exacta, línea por línea, de
+la lógica real (la misma que corre `api/crear-preferencia-reserva.js` y
+`api/mp-webhook.js`) contra la base real, con datos reales committeados.
+
+#### Resultado de los 10 puntos
+
+| # | Punto | Resultado |
+|---|---|---|
+| 1 | `reprogramar_reserva_alumno` y `devolver_horas` sobre una reserva con `carrito_id` | ✅ se comportan idéntico a una reserva sin `carrito_id` — reprogramada, `carrito_id` intacto; cancelada, saldo devuelto |
+| 2 | Pago mixto real (1 individual+saldo, 1 grupal+MP) | ✅ a nivel DB/RPC real: saldo descontado UNA vez (3.0→2.0), grupal quedó `confirmada` con `cupo_max=4`/`inscriptos=1` reales, `external_reference` con formato `cart_<uuid>` confirmado por código. Checkout MP por navegador: no posible (ver limitación arriba) |
+| 3 | Carrito 100% saldo (monto MP = 0) | ✅ confirmado — cuando todo se cubre con saldo, el código (`if (paraMp.length === 0) return` antes de llamar `crearPreferenciaCarrito`) nunca llega a pedirle nada a MP; 0 filas `pendiente_pago` generadas |
+| 4 | TTL vence a mitad de carrito | ✅ el ítem vencido devuelve `ttl_expirado` sin afectar al resto del carrito, que confirma normal; el slot vencido queda re-reservable (lazy expiry, mismo mecanismo pre-existente que ya usa RAMA A de una sola clase) |
+| 5 | Tope de 10 ítems | ✅ por code review — el guard `carritoItems.length > MAX_ITEMS_CARRITO` corre ANTES de cualquier llamada a RPC/DB, un 11° ítem no crea ninguna fila. HTTP real bloqueado por Deployment Protection (ver limitación arriba) |
+| 6 | Quitar un ítem antes de pagar | ✅ "Agregar otra clase" nunca llama al backend (solo hace `setCarrito` local) — un ítem quitado antes de "Pagar todo" nunca llegó a existir en la DB, no hace falta liberar nada |
+| 7 | Huérfano parcial simulado (grupal pierde cupo mientras el individual del mismo carrito sí se paga) | ✅ individual `confirmada`, grupal `cupo_excedido` → `cancelada` automáticamente por la propia `confirmar_reserva_pago`; `pagos_huerfanos` recibe la clave sintética `<payment_id>_cart_r<reserva_id>`; reintento del mismo INSERT (idempotencia de MP) no duplica; saldo sin tocar en ningún momento |
+| 8 | Regresión: flujo de 1 sola clase | ✅ `crear_reserva_pendiente_pago` sin `p_carrito_id` sigue igual, `carrito_id` queda `NULL`, `confirmar_reserva_pago` (RAMA A) sin tocar |
+| 9 | Regresión: compra de packs | ✅ `registrar_compra_pendiente`/`aprobar_compra` vía `pg` (como corre el endpoint real) sin cambios, saldo +2hs correcto. De paso: confirmó que siguen bloqueadas para `authenticated` vía PostgREST (fix de la sesión de seguridad anterior sigue en pie) |
+| 10 | Build + revisión UI | ✅ `npm run build` limpio. Se agregó una card "Cómo se paga cada clase" (desglose saldo vs. MP) visible ANTES de tocar "Pagar todo" — antes solo se sabía después de pagar. Botón "Quitar" agrandado (antes texto suelto, ahora con fondo/borde/`aria-label`, `min-height:32px`) |
+
+Todos los datos de prueba (14 reservas, 1 compra, 1 fila en `pagos_huerfanos`,
+2 grupos, la cuenta completa) se borraron al final — verificado con `SELECT
+count(*)` en `0` para cada tabla.
 
 ### Cómo levantar la rama y probarla local
 
