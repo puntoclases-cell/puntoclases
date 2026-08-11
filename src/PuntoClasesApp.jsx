@@ -106,6 +106,8 @@ const fmtLarga = iso => { const [y,m,d]=iso.split('-').map(Number); const dt=new
 const diasVenc = iso => { if (!iso) return 0; const [y,m,d]=iso.split("-"); const hoy=new Date(); hoy.setHours(0,0,0,0); return Math.ceil((new Date(+y,+m-1,+d)-hoy)/(1000*60*60*24)); };
 // Saldo real disponible aplicando la regla de umbral 0.8: si venció y era ≥0.8 hs → 0; si <0.8 → se conserva.
 const saldoVivo = (sal, vencimiento) => { if (!vencimiento) return sal; return (diasVenc(vencimiento) < 0 && sal >= 0.8) ? 0 : sal; };
+// Para buscadores: insensible a mayúsculas y a tildes ("ma" matchea "Matemática").
+const normalizarTexto = s => (s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 
 // ── UI PRIMITIVOS ────────────────────────────────────────────────────────────
 const Av = ({i,size=40,color=P,url}) => (
@@ -228,6 +230,8 @@ function Reservar({ saldo, onReservar, profes, alumnoId, onNav, cfg }) {
   const [cupoPorHora, setCupoPorHora] = useState({});
   const [pagoReserva, setPagoReserva] = useState("idle"); // idle | procesando
   const [errorPagoReserva, setErrorPagoReserva] = useState("");
+  const [buscarMateria, setBuscarMateria] = useState("");
+  const [buscarProfe, setBuscarProfe] = useState("");
 
   useEffect(() => {
     if (!profeId) return;
@@ -326,7 +330,9 @@ function Reservar({ saldo, onReservar, profes, alumnoId, onNav, cfg }) {
   const saldoInsuficiente = costo > saldo;
 
   const materiasUnicas = [...new Set((profes || []).flatMap(p => p.materias || []))].sort();
+  const materiasFiltradas = materiasUnicas.filter(m => normalizarTexto(m).includes(normalizarTexto(buscarMateria)));
   const profesParaMateria = (profes || []).filter(p => (p.materias || []).includes(materia));
+  const profesFiltrados = profesParaMateria.filter(p => normalizarTexto(p.nombre || p.titulo || "").includes(normalizarTexto(buscarProfe)));
   const TOTAL_PASOS = 8;
 
   if (paso === 9) return (
@@ -341,7 +347,7 @@ function Reservar({ saldo, onReservar, profes, alumnoId, onNav, cfg }) {
       <Btn onClick={() => {
         setPaso(1); setProfeId(null); setMateria(""); setTipo("individual"); setModalidad("Presencial");
         setFecha(null); setHoraInicio(null); setDuracionHoras(1); setNecesidad(""); setNombreProfeElegido("");
-        setAceptaCancelacion(false);
+        setAceptaCancelacion(false); setBuscarMateria(""); setBuscarProfe("");
       }}>Reservar otra clase</Btn>
     </div>
   );
@@ -365,14 +371,22 @@ function Reservar({ saldo, onReservar, profes, alumnoId, onNav, cfg }) {
           {!profes ? (
             <p style={{color:"#94a3b8",fontSize:13}}>Cargando materias...</p>
           ) : (
-            <div style={{display:"flex",flexDirection:"column",gap:8}}>
-              {materiasUnicas.map(m => (
-                <button key={m} onClick={() => { setMateria(m); setPaso(2); }}
-                  style={{background:materia===m?PRIMARY:"#fff",color:materia===m?"#fff":DK,border:`2px solid ${materia===m?PRIMARY:"#e2e8f0"}`,borderRadius:12,padding:"14px 18px",fontSize:15,fontWeight:600,cursor:"pointer",textAlign:"left",transition:"all 0.15s"}}>
-                  {m}
-                </button>
-              ))}
-            </div>
+            <>
+              <input type="text" value={buscarMateria} onChange={e => setBuscarMateria(e.target.value)}
+                placeholder="Buscar materia..."
+                style={{width:"100%",boxSizing:"border-box",borderRadius:12,border:"2px solid #e2e8f0",padding:"12px 14px",fontSize:14,fontFamily:"inherit",outline:"none"}}/>
+              <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                {materiasFiltradas.map(m => (
+                  <button key={m} onClick={() => { setMateria(m); setPaso(2); }}
+                    style={{background:materia===m?PRIMARY:"#fff",color:materia===m?"#fff":DK,border:`2px solid ${materia===m?PRIMARY:"#e2e8f0"}`,borderRadius:12,padding:"14px 18px",fontSize:15,fontWeight:600,cursor:"pointer",textAlign:"left",transition:"all 0.15s"}}>
+                    {m}
+                  </button>
+                ))}
+                {materiasFiltradas.length === 0 && (
+                  <p style={{color:"#94a3b8",fontSize:13,textAlign:"center",padding:"8px 0"}}>No hay materias que coincidan.</p>
+                )}
+              </div>
+            </>
           )}
           <Btn onClick={() => onNav?.("inicio")} variant="secondary">← Volver al inicio</Btn>
         </div>
@@ -439,7 +453,15 @@ function Reservar({ saldo, onReservar, profes, alumnoId, onNav, cfg }) {
           {profesParaMateria.length === 0 && (
             <p style={{color:"#94a3b8",fontSize:13}}>No hay profes para {materia}.</p>
           )}
-          {profesParaMateria.map(p => {
+          {profesParaMateria.length > 0 && (
+            <input type="text" value={buscarProfe} onChange={e => setBuscarProfe(e.target.value)}
+              placeholder="Buscar profe..."
+              style={{width:"100%",boxSizing:"border-box",borderRadius:12,border:"2px solid #e2e8f0",padding:"12px 14px",fontSize:14,fontFamily:"inherit",outline:"none"}}/>
+          )}
+          {profesParaMateria.length > 0 && profesFiltrados.length === 0 && (
+            <p style={{color:"#94a3b8",fontSize:13,textAlign:"center",padding:"8px 0"}}>No hay profes que coincidan.</p>
+          )}
+          {profesFiltrados.map(p => {
             const modalidades = (p.modalidades || ["Presencial"]);
             return (
               <button key={p.id} onClick={() => {
@@ -1181,7 +1203,9 @@ function Comprar({ onComprar, onVolver, compras, cfg: cfgProp, packsDB }) {
 
 // ── PANTALLA PROFES ──────────────────────────────────────────────────────────
 function Profes({ onReservar, onVolver, profes }) {
+  const [buscar, setBuscar] = useState("");
   if (!profes) return <p style={{color:INK_SOFT,textAlign:"center",padding:20}}>Cargando...</p>;
+  const profesFiltrados = profes.filter(p => normalizarTexto(p.nombre || "").includes(normalizarTexto(buscar)));
   return (
     <div style={{display:"flex",flexDirection:"column",gap:14}}>
       <button onClick={onVolver} aria-label="Volver a Inicio"
@@ -1189,7 +1213,13 @@ function Profes({ onReservar, onVolver, profes }) {
         ← Volver
       </button>
       <h3 style={{margin:0,color:DK}}>Nuestro profe</h3>
-      {profes.map(p=>{
+      <input type="text" value={buscar} onChange={e => setBuscar(e.target.value)}
+        placeholder="Buscar profe..."
+        style={{width:"100%",boxSizing:"border-box",borderRadius:12,border:"2px solid #e2e8f0",padding:"12px 14px",fontSize:14,fontFamily:"inherit",outline:"none"}}/>
+      {profesFiltrados.length === 0 && (
+        <p style={{color:"#94a3b8",fontSize:13,textAlign:"center",padding:"8px 0"}}>No hay profes que coincidan.</p>
+      )}
+      {profesFiltrados.map(p=>{
         const nombreProfe = p.nombre || "";
         const initiales = nombreProfe.split(" ").map(n=>n[0]).join("").slice(0,2).toUpperCase() || "P";
         return (
