@@ -656,8 +656,8 @@ function Reservar({ saldo, onReservar, profes, alumnoId, onNav, cfg }) {
                 {carrito.map((it,i)=>(
                   <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"#fff",borderRadius:10,padding:"8px 10px"}}>
                     <span style={{fontSize:13,color:DK}}>{it.materia} · {fmt(it.fecha)} {it.horaInicio} ({it.duracionHoras}h{it.tipo==="grupal"?" · grupal":""})</span>
-                    <button onClick={()=>setCarrito(c=>c.filter((_,j)=>j!==i))}
-                      style={{background:"none",border:"none",color:"#dc2626",cursor:"pointer",fontSize:12,fontWeight:700}}>Quitar</button>
+                    <button onClick={()=>setCarrito(c=>c.filter((_,j)=>j!==i))} aria-label={`Quitar ${it.materia} del carrito`}
+                      style={{background:"#fff5f5",border:"1px solid #fecaca",borderRadius:8,color:"#dc2626",cursor:"pointer",fontSize:12,fontWeight:700,padding:"6px 10px",minHeight:32}}>✕ Quitar</button>
                   </div>
                 ))}
               </div>
@@ -712,6 +712,35 @@ function Reservar({ saldo, onReservar, profes, alumnoId, onNav, cfg }) {
           }}>
             ➕ Agregar otra clase
           </Btn>
+
+          {/* Desglose ANTES de pagar: qué se paga con saldo y qué va a Mercado Pago — para que quede
+              claro antes de tocar el botón, no como sorpresa después. Mismo criterio de reparto que
+              usa el botón "Pagar todo" de abajo, calculado acá solo para mostrar (no reserva nada). */}
+          {carrito.length > 0 && (() => {
+            const itemActualPreview = { materia, tipo, costo };
+            const todos = [...carrito, itemActualPreview];
+            let saldoPreview = saldo;
+            const conSaldo = [], conMp = [];
+            for (const it of todos) {
+              if (it.tipo === "individual" && it.costo <= saldoPreview) { conSaldo.push(it); saldoPreview -= it.costo; }
+              else conMp.push(it);
+            }
+            return (
+              <Card style={{background:"#fff",border:"1.5px solid #e2e8f0",padding:14}}>
+                <p style={{margin:"0 0 8px",fontWeight:700,fontSize:13,color:DK}}>Cómo se paga cada clase</p>
+                {conSaldo.length > 0 && (
+                  <p style={{margin:"0 0 6px",fontSize:13,color:"#166534"}}>
+                    💳 Con tu saldo: {conSaldo.map(it=>it.materia).join(", ")} ({conSaldo.reduce((a,it)=>a+it.costo,0)}h)
+                  </p>
+                )}
+                {conMp.length > 0 && (
+                  <p style={{margin:0,fontSize:13,color:"#1e3a8a"}}>
+                    💰 Con Mercado Pago: {conMp.map(it=>it.materia).join(", ")}
+                  </p>
+                )}
+              </Card>
+            );
+          })()}
 
           {/* Con carrito vacío: los 2 botones de siempre, SIN NINGÚN CAMBIO (flujo de una clase intacto).
               Con carrito: un solo botón que paga todo junto (individuales con saldo hasta agotarlo,
