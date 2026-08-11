@@ -506,6 +506,20 @@ export async function crearPreferenciaReserva(reservaParams) {
   return data; // { init_point, reserva_id }
 }
 
+// Fase C (rama feature/carrito) — mismo endpoint, camino nuevo: manda un array
+// en vez de un objeto único. El backend arma UNA preferencia de MP con un ítem
+// por clase y external_reference=carrito_id.
+export async function crearPreferenciaCarrito(carritoItems) {
+  const res = await fetch("/api/crear-preferencia-reserva", {
+    method: "POST",
+    headers: await mpAuthHeaders(),
+    body: JSON.stringify({ carritoItems }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Error al crear preferencia de pago del carrito");
+  return data; // { init_point, carrito_id, reservas: [ids] }
+}
+
 // ── STORAGE: AVATARES ────────────────────────────────────────────────────────
 
 // Recibe un dataUrl (ya leído por FileReader en el front) — sin createObjectURL,
