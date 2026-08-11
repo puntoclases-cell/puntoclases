@@ -839,7 +839,10 @@ function Reservar({ saldo, onReservar, profes, alumnoId, onNav, cfg }) {
                     profeId: it.profeId, materia: it.materia, fecha: it.fecha, hora: it.horaInicio,
                     horas: it.duracionHoras, modalidad: it.modalidad, tipo: it.tipo, necesidad: it.necesidad,
                   })));
-                  localStorage.setItem("pc_carrito_pendiente", JSON.stringify({ carrito_id, cantidad: paraMp.length, ts: Date.now() }));
+                  // conSaldo viaja en el localStorage porque el viaje a MP y la vuelta son un
+                  // request nuevo — sin esto, el modal de "fallido" no tiene forma de saber si
+                  // ya se habían confirmado clases con saldo ANTES del intento de pago con MP.
+                  localStorage.setItem("pc_carrito_pendiente", JSON.stringify({ carrito_id, cantidad: paraMp.length, conSaldo: totalDescontado > 0, ts: Date.now() }));
                   setCarrito([]); // se está por navegar afuera; si algo ya se pagó con saldo no queremos que quede reflejado acá
                   window.location.href = init_point;
                 } catch (err) {
@@ -2583,8 +2586,14 @@ function AppAlumno({ user, onLogout }) {
             {carritoPagoEstado.status === "fallido" && (<>
               <div style={{width:64,height:64,borderRadius:"50%",background:"#fff5f5",display:"flex",alignItems:"center",justifyContent:"center",fontSize:34}}>✕</div>
               <h3 style={{margin:0,color:DK,fontSize:19}}>Pago no completado</h3>
-              <p style={{margin:0,fontSize:14,color:"#64748b"}}>El pago no se completó. No se reservó ninguna clase del carrito. Podés intentarlo de nuevo.</p>
-              <Btn onClick={() => setCarritoPagoEstado(null)}>Entendido</Btn>
+              <p style={{margin:0,fontSize:14,color:"#64748b"}}>
+                {carritoPagoEstado.conSaldo
+                  ? "El pago con Mercado Pago no se completó, esas clases no se reservaron. Pero las que se habían pagado con tu saldo SÍ quedaron reservadas — revisalas en tu Historial."
+                  : "El pago no se completó. No se reservó ninguna clase del carrito. Podés intentarlo de nuevo."}
+              </p>
+              <Btn onClick={() => { setCarritoPagoEstado(null); if (carritoPagoEstado.conSaldo) setScreen("historial"); }}>
+                {carritoPagoEstado.conSaldo ? "Ver mis clases" : "Entendido"}
+              </Btn>
             </>)}
           </div>
         </div>
