@@ -338,6 +338,63 @@ Solo higiene, no cambia comportamiento de negocio ni toca saldo.
 
 ---
 
+## FASE OPCIONAL (2026-08-11, post-cierre de Fase C)
+
+### Cron de limpieza de compras colgadas ✅ en prod
+
+`api/admin/limpiar-compras-colgadas.js` + `vercel.json` → `crons` (`17ab9a2`).
+Diario 6am UTC, protegido con `CRON_SECRET` (Vercel lo manda automático como
+`Authorization: Bearer $CRON_SECRET` en la invocación real del cron).
+
+**Probado en vivo contra prod** (no simulado):
+
+| Caso | Resultado |
+|---|---|
+| Sin `Authorization` | 🔒 401 |
+| Con secreto incorrecto | 🔒 401 |
+| Con `CRON_SECRET` real (primera corrida) | ✅ `{"candidatas":1,"marcadas":1,"errores":0,"ids_marcadas":["5"]}` — la única compra `pendiente` real que había en prod (id=5, del 23-jul, resto de un smoketest viejo) pasó a `fallido` |
+| Estado real después | ✅ las 2 `aprobado` (id 1, 3) y la 1 `fallido` que ya existía (id 4) quedaron sin tocar |
+| Segunda corrida (idempotencia) | ✅ `{"candidatas":0,"marcadas":0,"errores":0,"ids_marcadas":[]}` |
+| Cron registrado | ✅ `vercel crons ls` → `/api/admin/limpiar-compras-colgadas` cada `0 6 * * *` |
+
+### Overlap de grupos del mismo profe 🔍 diagnosticado, sin arreglar (pendiente OK)
+
+Confirmado con el código real (`pg_get_functiondef`) de `unirse_grupo` y la
+rama grupal de `crear_reserva_pendiente_pago`: ambas chequean solapamiento
+contra reservas `individual` del profe, pero **nunca entre dos `grupos`
+distintos** del mismo profe en horarios que se pisan — el matching de grupo
+es por `(profe_id, fecha, hora)` exacto, así que un grupo a las 10:00 (2hs) y
+otro a las 11:00 (1hs) del mismo profe son grupos completamente separados,
+sin ningún chequeo cruzado entre ellos. Ya estaba anotado como límite
+conocido en la sección REDISEÑO de `CLAUDE.md`, ahora con la causa exacta
+confirmada en código.
+
+**Fix propuesto (no aplicado)** — mismo patrón que ya usan ambas funciones
+para individual-vs-individual, agregado antes del find-or-create del grupo:
+
+```sql
+IF EXISTS (
+  SELECT 1 FROM reservas r
+  WHERE r.profe_id = p_profe_id
+    AND r.fecha    = p_fecha
+    AND r.tipo     = 'grupal'
+    AND r.hora     <> p_hora  -- no confundir con el propio grupo que se está por unir/crear
+    AND r.estado   IN ('confirmada', 'pendiente', 'pendiente_pago')
+    AND (r.expira_en IS NULL OR r.expira_en > now())
+    AND r.hora::time < (p_hora::time + p_horas * interval '1 hour')
+    AND (r.hora::time + r.horas * interval '1 hour') > p_hora::time
+) THEN
+  RAISE EXCEPTION 'El profe ya tiene otro grupo en ese horario.';
+END IF;
+```
+
+Habría que agregarlo en las dos funciones (`unirse_grupo` y la rama grupal de
+`crear_reserva_pendiente_pago`) para que ambos caminos de pago queden
+protegidos por igual. **No aplicado** — toca lógica de cupo compartida en
+vivo, queda para que lo revises antes.
+
+---
+
 ## Resumen de la noche
 
 | Fase | Estado | Dónde |
