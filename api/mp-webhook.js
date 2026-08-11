@@ -137,6 +137,84 @@ async function handler(req, res) {
 
   const extRef = String(payment.external_reference ?? "");
 
+  // ── RAMA A0: carrito de reservas (external_reference = "cart_<uuid>") ─────
+  // Fase C (rama feature/carrito, no en main). Un solo pago de MP cubre varias
+  // reservas que comparten carrito_id. Reusa confirmar_reserva_pago tal cual,
+  // sin reescribirla — solo la llama en loop, una vez por reserva del carrito.
+  if (extRef.startsWith("cart_")) {
+    const carritoId = extRef.slice(5);
+
+    let itemsCarrito;
+    try {
+      const r = await pool.query(
+        "SELECT id FROM reservas WHERE carrito_id = $1 AND estado = 'pendiente_pago'",
+        [carritoId],
+      );
+      itemsCarrito = r.rows;
+    } catch (err) {
+      console.error("Error al buscar reservas del carrito:", err);
+      reportError(err, { endpoint: ENDPOINT, carrito_id: carritoId, payment_id: paymentId });
+      await flushSentry();
+      return res.status(500).send("error");
+    }
+
+    if (itemsCarrito.length === 0) {
+      // Nada en pendiente_pago con ese carrito_id: o ya se confirmó todo en un
+      // webhook anterior (reintento de MP, idempotente), o el carrito_id no
+      // existe. 200 en ambos casos — no hay nada más que hacer, y no queremos
+      // que MP reintente para siempre algo que no va a cambiar.
+      return res.status(200).send("ok");
+    }
+
+    const huerfanos = [];
+    for (const row of itemsCarrito) {
+      let resultado;
+      try {
+        const { rows: [r] } = await pool.query(
+          "SELECT confirmar_reserva_pago(p_reserva_id => $1, p_payment_id => $2) AS resultado",
+          [row.id, String(paymentId)],
+        );
+        resultado = String(r?.resultado ?? "");
+      } catch (err) {
+        // Un ítem del carrito falló — se sigue con el resto en vez de cortar
+        // todo el webhook (los otros ítems sí tienen que confirmarse). El que
+        // falló queda pendiente_pago, se puede reintentar/reparar a mano.
+        console.error("Error en confirmar_reserva_pago (carrito):", err, { reservaId: row.id, carritoId });
+        reportError(err, { endpoint: ENDPOINT, carrito_id: carritoId, reserva_id: row.id, payment_id: paymentId });
+        continue;
+      }
+      if (ORPHAN_MOTIVOS.has(resultado)) huerfanos.push({ reservaId: row.id, resultado });
+    }
+
+    if (huerfanos.length > 0) {
+      // DECISIÓN DE NEGOCIO PENDIENTE, no adivinada: el pago del carrito es UNO
+      // solo (un monto total, un payment_id) cubriendo varias clases. Si una o
+      // más quedan huérfanas (cupo lleno / TTL vencido mientras se pagaba) no
+      // está definido si corresponde reembolsar solo la parte de esa clase
+      // (¿cómo se prorratea?), el total, o reprogramar sin costo. A diferencia
+      // de RAMA A (reserva suelta) NO se dispara el refund automático acá — solo
+      // se deja registro en pagos_huerfanos (clave sintética payment_id+reserva_id
+      // porque la real se repite entre ítems del mismo carrito, y esa columna es
+      // UNIQUE) para revisión manual. Ver docs/overnight-2026-08-10.md.
+      for (const h of huerfanos) {
+        try {
+          await pool.query(
+            `INSERT INTO pagos_huerfanos (payment_id, reserva_id, monto_ars, motivo)
+             VALUES ($1, $2, $3, $4)
+             ON CONFLICT (payment_id) DO NOTHING`,
+            [`${paymentId}_cart_r${h.reservaId}`, h.reservaId, null, `carrito:${h.resultado}`],
+          );
+        } catch (err) {
+          console.error("Error al registrar huérfano de carrito:", err);
+          reportError(err, { endpoint: ENDPOINT, carrito_id: carritoId, reserva_id: h.reservaId, payment_id: paymentId });
+        }
+      }
+      await flushSentry();
+    }
+
+    return res.status(200).send("ok");
+  }
+
   // ── RAMA A: reserva de clase (external_reference = "r_<bigint>") ──────────
   if (extRef.startsWith("r_")) {
     const reservaId = parseInt(extRef.slice(2), 10);

@@ -1,5 +1,5 @@
 ﻿import { useState, useEffect, useRef } from "react";
-import { login, getUsuarioActual, onAuthChange, logout, getAlumno, getCompras, getReservasAlumno, getProfes, getProfesAdmin, getDisponibilidad, getReservasProfe, marcarReserva, cargarDevolucion, reprogramarReserva, reprogramarReservaAlumno, setBloque, borrarBloque, getAlumnos, getTodasLasReservas, getFinanzasPeriodo, actualizarAlumno, actualizarProfe, actualizarMiPerfilProfe, actualizarPerfil, crearReserva, unirseGrupo, getGrupoInfo, verificarBloqueOcupado, getReservasDelDia, getMisReservasDelDia, getMensajes, enviarMensaje, suscribirMensajes, registrarAlumno, registrarProfe, enviarRecuperacion, actualizarPassword, onPasswordRecovery, crearResenia, getConfig, updateConfig, getPacks, actualizarPack, devolverHoras, marcarCompraFallida, addHorasAdmin, crearPreferencia, crearPreferenciaReserva, contarMensajesNuevosProfe, subirAvatar } from "./db";
+import { login, getUsuarioActual, onAuthChange, logout, getAlumno, getCompras, getReservasAlumno, getProfes, getProfesAdmin, getDisponibilidad, getReservasProfe, marcarReserva, cargarDevolucion, reprogramarReserva, reprogramarReservaAlumno, setBloque, borrarBloque, getAlumnos, getTodasLasReservas, getFinanzasPeriodo, actualizarAlumno, actualizarProfe, actualizarMiPerfilProfe, actualizarPerfil, crearReserva, unirseGrupo, getGrupoInfo, verificarBloqueOcupado, getReservasDelDia, getMisReservasDelDia, getMensajes, enviarMensaje, suscribirMensajes, registrarAlumno, registrarProfe, enviarRecuperacion, actualizarPassword, onPasswordRecovery, crearResenia, getConfig, updateConfig, getPacks, actualizarPack, devolverHoras, marcarCompraFallida, addHorasAdmin, crearPreferencia, crearPreferenciaReserva, crearPreferenciaCarrito, contarMensajesNuevosProfe, subirAvatar } from "./db";
 
 // ════════════════════════════════════════════════════════════════════════════
 // PUNTOCLASES — APP UNIFICADA
@@ -232,6 +232,11 @@ function Reservar({ saldo, onReservar, profes, alumnoId, onNav, cfg }) {
   const [errorPagoReserva, setErrorPagoReserva] = useState("");
   const [buscarMateria, setBuscarMateria] = useState("");
   const [buscarProfe, setBuscarProfe] = useState("");
+  // Fase C (rama feature/carrito): clases ya agregadas antes de la que se está
+  // armando ahora. Cada ítem guarda todo lo necesario para crear_reserva /
+  // crear_reserva_pendiente_pago después, sin volver a preguntar nada.
+  const [carrito, setCarrito] = useState([]);
+  const [errorCarrito, setErrorCarrito] = useState("");
 
   useEffect(() => {
     if (!profeId) return;
@@ -347,7 +352,7 @@ function Reservar({ saldo, onReservar, profes, alumnoId, onNav, cfg }) {
       <Btn onClick={() => {
         setPaso(1); setProfeId(null); setMateria(""); setTipo("individual"); setModalidad("Presencial");
         setFecha(null); setHoraInicio(null); setDuracionHoras(1); setNecesidad(""); setNombreProfeElegido("");
-        setAceptaCancelacion(false); setBuscarMateria(""); setBuscarProfe("");
+        setAceptaCancelacion(false); setBuscarMateria(""); setBuscarProfe(""); setCarrito([]); setErrorCarrito("");
       }}>Reservar otra clase</Btn>
     </div>
   );
@@ -640,14 +645,35 @@ function Reservar({ saldo, onReservar, profes, alumnoId, onNav, cfg }) {
       {paso === 8 && (
         <div style={{display:"flex",flexDirection:"column",gap:14}}>
           <h3 style={{margin:0,color:DK}}>Confirmá tu reserva</h3>
+
+          {/* Carrito acumulado (Fase C, rama feature/carrito) — solo aparece si ya se agregó algo */}
+          {carrito.length > 0 && (
+            <Card style={{background:"#f0f6fa",border:`1.5px solid ${BL}`,padding:14}}>
+              <p style={{margin:"0 0 10px",fontWeight:700,fontSize:13,color:BL}}>
+                Tu carrito ({carrito.length} clase{carrito.length===1?"":"s"})
+              </p>
+              <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                {carrito.map((it,i)=>(
+                  <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"#fff",borderRadius:10,padding:"8px 10px"}}>
+                    <span style={{fontSize:13,color:DK}}>{it.materia} · {fmt(it.fecha)} {it.horaInicio} ({it.duracionHoras}h{it.tipo==="grupal"?" · grupal":""})</span>
+                    <button onClick={()=>setCarrito(c=>c.filter((_,j)=>j!==i))} aria-label={`Quitar ${it.materia} del carrito`}
+                      style={{background:"#fff5f5",border:"1px solid #fecaca",borderRadius:8,color:"#dc2626",cursor:"pointer",fontSize:12,fontWeight:700,padding:"6px 10px",minHeight:32}}>✕ Quitar</button>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
+
           <Card style={{background:"#f0fdf4",border:"1.5px solid #bbf7d0",padding:14}}>
-            <p style={{margin:"0 0 10px",fontWeight:700,fontSize:13,color:"#166534"}}>Resumen</p>
+            <p style={{margin:"0 0 10px",fontWeight:700,fontSize:13,color:"#166534"}}>
+              {carrito.length > 0 ? "Clase nueva a agregar" : "Resumen"}
+            </p>
             <div style={{display:"flex",flexDirection:"column",gap:6,fontSize:14,color:"#374151"}}>
               <span>👨‍🏫 {nombreProfeElegido} — {materia}</span>
               <span>📅 {fecha ? fmtLarga(fecha) : ""}</span>
               <span>🕐 {horaInicio} → {horaInicio ? t2str(tmins(horaInicio) + duracionHoras * 60) : ""} ({duracionHoras} hora{duracionHoras===1?"":"s"})</span>
               <span>📍 {modalidad} · Clase {tipo}</span>
-              <span style={{fontWeight:700,color:P}}>⏱ {costo===1?"Se descuenta":"Se descuentan"} {costo} hora{costo===1?"":"s"} de tu saldo</span>
+              <span style={{fontWeight:700,color:P}}>⏱ {costo===1?"Se descuenta":"Se descuentan"} {costo} hora{costo===1?"":"s"} de tu saldo (si alcanza)</span>
             </div>
           </Card>
           <Card style={{background:"#fefce8",border:"1.5px solid #fde68a",padding:12}}>
@@ -669,48 +695,172 @@ function Reservar({ saldo, onReservar, profes, alumnoId, onNav, cfg }) {
               ⚠️ {errorPagoReserva}
             </div>
           )}
-          <div style={{display:"flex",gap:8}}>
-            <Btn onClick={() => setPaso(7)} variant="secondary" style={{flex:1}}>← Volver</Btn>
-            {!saldoInsuficiente && tipo !== "grupal" && (
+          {errorCarrito && (
+            <div style={{background:"#fff5f5",border:"1.5px solid #fecaca",borderRadius:12,padding:"10px 14px",fontSize:13,color:"#dc2626"}}>
+              ⚠️ {errorCarrito}
+            </div>
+          )}
+
+          {/* "Agregar otra clase" — guarda la clase actual en el carrito y vuelve al paso 1 */}
+          <Btn variant="secondary" disabled={!aceptaCancelacion} onClick={() => {
+            const hoy = toISO(new Date().getFullYear(), new Date().getMonth(), new Date().getDate());
+            if (fecha < hoy) { setErrorReserva("No podés reservar en una fecha pasada."); return; }
+            setCarrito(c => [...c, { profeId, nombreProfeElegido, materia, tipo, modalidad, fecha, horaInicio, duracionHoras, necesidad, costo }]);
+            setPaso(1); setProfeId(null); setMateria(""); setTipo("individual"); setModalidad("Presencial");
+            setFecha(null); setHoraInicio(null); setDuracionHoras(1); setNecesidad(""); setNombreProfeElegido("");
+            setAceptaCancelacion(false); setErrorReserva(""); setErrorPagoReserva(""); setErrorCarrito("");
+          }}>
+            ➕ Agregar otra clase
+          </Btn>
+
+          {/* Desglose ANTES de pagar: qué se paga con saldo y qué va a Mercado Pago — para que quede
+              claro antes de tocar el botón, no como sorpresa después. Mismo criterio de reparto que
+              usa el botón "Pagar todo" de abajo, calculado acá solo para mostrar (no reserva nada). */}
+          {carrito.length > 0 && (() => {
+            const itemActualPreview = { materia, tipo, costo };
+            const todos = [...carrito, itemActualPreview];
+            let saldoPreview = saldo;
+            const conSaldo = [], conMp = [];
+            for (const it of todos) {
+              if (it.tipo === "individual" && it.costo <= saldoPreview) { conSaldo.push(it); saldoPreview -= it.costo; }
+              else conMp.push(it);
+            }
+            return (
+              <Card style={{background:"#fff",border:"1.5px solid #e2e8f0",padding:14}}>
+                <p style={{margin:"0 0 8px",fontWeight:700,fontSize:13,color:DK}}>Cómo se paga cada clase</p>
+                {conSaldo.length > 0 && (
+                  <p style={{margin:"0 0 6px",fontSize:13,color:"#166534"}}>
+                    💳 Con tu saldo: {conSaldo.map(it=>it.materia).join(", ")} ({conSaldo.reduce((a,it)=>a+it.costo,0)}h)
+                  </p>
+                )}
+                {conMp.length > 0 && (
+                  <p style={{margin:0,fontSize:13,color:"#1e3a8a"}}>
+                    💰 Con Mercado Pago: {conMp.map(it=>it.materia).join(", ")}
+                  </p>
+                )}
+              </Card>
+            );
+          })()}
+
+          {/* Con carrito vacío: los 2 botones de siempre, SIN NINGÚN CAMBIO (flujo de una clase intacto).
+              Con carrito: un solo botón que paga todo junto (individuales con saldo hasta agotarlo,
+              en el orden que se agregaron; grupales y lo que no alcance con saldo van juntas a UNA
+              preferencia de MP). */}
+          {carrito.length === 0 ? (
+            <div style={{display:"flex",gap:8}}>
+              <Btn onClick={() => setPaso(7)} variant="secondary" style={{flex:1}}>← Volver</Btn>
+              {!saldoInsuficiente && tipo !== "grupal" && (
+                <Btn onClick={async () => {
+                  setErrorReserva("");
+                  try {
+                    const hoy = toISO(new Date().getFullYear(), new Date().getMonth(), new Date().getDate());
+                    if (fecha < hoy) { setErrorReserva("No podés reservar en una fecha pasada."); return; }
+                    if (tipo === "grupal") {
+                      await unirseGrupo({ profeId, materia, fecha, hora: horaInicio, horas: duracion, modalidad, necesidad });
+                    } else {
+                      await crearReserva({ profeId, materia, fecha, hora: horaInicio, horas: duracion, modalidad, tipo, alumnosGrupo: null, necesidad });
+                    }
+                    onReservar(costo);
+                    setPaso(9);
+                  } catch (err) {
+                    setErrorReserva(err.message || "No se pudo confirmar la reserva. Intentá de nuevo.");
+                  }
+                }} disabled={!aceptaCancelacion} style={{flex:1}}>
+                  Usar saldo ({costo}h)
+                </Btn>
+              )}
               <Btn onClick={async () => {
-                setErrorReserva("");
+                setErrorPagoReserva("");
+                setPagoReserva("procesando");
                 try {
                   const hoy = toISO(new Date().getFullYear(), new Date().getMonth(), new Date().getDate());
-                  if (fecha < hoy) { setErrorReserva("No podés reservar en una fecha pasada."); return; }
-                  if (tipo === "grupal") {
-                    await unirseGrupo({ profeId, materia, fecha, hora: horaInicio, horas: duracion, modalidad, necesidad });
-                  } else {
-                    await crearReserva({ profeId, materia, fecha, hora: horaInicio, horas: duracion, modalidad, tipo, alumnosGrupo: null, necesidad });
-                  }
-                  onReservar(costo);
-                  setPaso(9);
+                  if (fecha < hoy) { setErrorPagoReserva("No podés reservar en una fecha pasada."); setPagoReserva("idle"); return; }
+                  const { init_point, reserva_id } = await crearPreferenciaReserva({
+                    profeId, materia, fecha, hora: horaInicio, horas: duracion, modalidad, tipo, necesidad,
+                  });
+                  localStorage.setItem("pc_reserva_pendiente", JSON.stringify({ reserva_id, materia, profe: nombreProfeElegido, fecha, hora: horaInicio, horas: duracion }));
+                  window.location.href = init_point;
                 } catch (err) {
-                  setErrorReserva(err.message || "No se pudo confirmar la reserva. Intentá de nuevo.");
+                  console.error("Error al crear preferencia reserva:", err);
+                  setPagoReserva("idle");
+                  setErrorPagoReserva("No se pudo iniciar el pago. Revisá tu conexión y volvé a intentarlo.");
                 }
-              }} disabled={!aceptaCancelacion} style={{flex:1}}>
-                Usar saldo ({costo}h)
+              }} disabled={pagoReserva === "procesando" || !aceptaCancelacion} style={{flex: (saldoInsuficiente || tipo === "grupal") ? 2 : 1}}>
+                {pagoReserva === "procesando" ? "Procesando…" : "Pagar con MP →"}
               </Btn>
-            )}
-            <Btn onClick={async () => {
-              setErrorPagoReserva("");
-              setPagoReserva("procesando");
-              try {
+            </div>
+          ) : (
+            <div style={{display:"flex",gap:8}}>
+              <Btn onClick={() => setPaso(7)} variant="secondary" style={{flex:1}}>← Volver</Btn>
+              <Btn disabled={pagoReserva === "procesando" || !aceptaCancelacion} style={{flex:2}} onClick={async () => {
+                setErrorCarrito(""); setErrorReserva(""); setErrorPagoReserva("");
+                setPagoReserva("procesando");
+
                 const hoy = toISO(new Date().getFullYear(), new Date().getMonth(), new Date().getDate());
-                if (fecha < hoy) { setErrorPagoReserva("No podés reservar en una fecha pasada."); setPagoReserva("idle"); return; }
-                const { init_point, reserva_id } = await crearPreferenciaReserva({
-                  profeId, materia, fecha, hora: horaInicio, horas: duracion, modalidad, tipo, necesidad,
-                });
-                localStorage.setItem("pc_reserva_pendiente", JSON.stringify({ reserva_id, materia, profe: nombreProfeElegido, fecha, hora: horaInicio, horas: duracion }));
-                window.location.href = init_point;
-              } catch (err) {
-                console.error("Error al crear preferencia reserva:", err);
-                setPagoReserva("idle");
-                setErrorPagoReserva("No se pudo iniciar el pago. Revisá tu conexión y volvé a intentarlo.");
-              }
-            }} disabled={pagoReserva === "procesando" || !aceptaCancelacion} style={{flex: (saldoInsuficiente || tipo === "grupal") ? 2 : 1}}>
-              {pagoReserva === "procesando" ? "Procesando…" : "Pagar con MP →"}
-            </Btn>
-          </div>
+                const itemActual = { profeId, nombreProfeElegido, materia, tipo, modalidad, fecha, horaInicio, duracionHoras, necesidad, costo };
+                const items = [...carrito, itemActual];
+
+                if (items.some(it => it.fecha < hoy)) {
+                  setErrorCarrito("Alguna clase del carrito quedó en una fecha pasada — quitala e intentá de nuevo.");
+                  setPagoReserva("idle");
+                  return;
+                }
+
+                // Individuales primero, en el orden agregado, pagan con saldo hasta agotarlo.
+                // Grupales SIEMPRE van a MP — misma regla que ya regía para una clase sola.
+                let saldoRestante = saldo;
+                const paraMp = [];
+                let totalDescontado = 0;
+                for (const it of items) {
+                  const intentaSaldo = it.tipo === "individual" && it.costo <= saldoRestante;
+                  if (!intentaSaldo) { paraMp.push(it); continue; }
+                  try {
+                    await crearReserva({ profeId: it.profeId, materia: it.materia, fecha: it.fecha, hora: it.horaInicio, horas: it.duracionHoras, modalidad: it.modalidad, tipo: it.tipo, alumnosGrupo: null, necesidad: it.necesidad });
+                    saldoRestante -= it.costo;
+                    totalDescontado += it.costo;
+                  } catch (err) {
+                    // No corta el resto del carrito por una que falló (ej. el slot se ocupó
+                    // justo ahora) — se manda a MP en vez de perderla silenciosamente.
+                    console.error("No se pudo pagar con saldo, se manda a MP:", it, err);
+                    paraMp.push(it);
+                  }
+                }
+                if (totalDescontado > 0) onReservar(totalDescontado);
+
+                if (paraMp.length === 0) {
+                  setCarrito([]);
+                  setPagoReserva("idle");
+                  setPaso(9);
+                  return;
+                }
+
+                try {
+                  const { init_point, carrito_id } = await crearPreferenciaCarrito(paraMp.map(it => ({
+                    profeId: it.profeId, materia: it.materia, fecha: it.fecha, hora: it.horaInicio,
+                    horas: it.duracionHoras, modalidad: it.modalidad, tipo: it.tipo, necesidad: it.necesidad,
+                  })));
+                  localStorage.setItem("pc_carrito_pendiente", JSON.stringify({ carrito_id, cantidad: paraMp.length, ts: Date.now() }));
+                  setCarrito([]); // se está por navegar afuera; si algo ya se pagó con saldo no queremos que quede reflejado acá
+                  window.location.href = init_point;
+                } catch (err) {
+                  console.error("Error al crear preferencia del carrito:", err);
+                  setPagoReserva("idle");
+                  // Simplificación deliberada (documentada en docs/overnight-2026-08-10.md):
+                  // en vez de intentar un retry parcial prolijo (riesgo de re-cobrar saldo de
+                  // lo que ya se confirmó), se le pide recargar antes de reintentar — las
+                  // clases pagadas con saldo YA quedaron confirmadas de verdad.
+                  setCarrito([]);
+                  setErrorCarrito(
+                    totalDescontado > 0
+                      ? "Las clases pagadas con saldo ya se reservaron (revisalas en tu Historial). No se pudo iniciar el pago del resto — recargá la página antes de reintentar."
+                      : "No se pudo iniciar el pago. Revisá tu conexión, recargá la página y volvé a intentarlo."
+                  );
+                }
+              }}>
+                {pagoReserva === "procesando" ? "Procesando…" : `Pagar todo (${carrito.length + 1} clase${carrito.length+1===1?"":"s"})`}
+              </Btn>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -2219,6 +2369,55 @@ function AppAlumno({ user, onLogout }) {
     }
   }, [user]);
 
+  // ── Retorno de MP: pago por CARRITO (Fase C, rama feature/carrito) ─────────
+  // Mismo patrón que el polling de una sola reserva de arriba, pero mirando
+  // varias filas (todas las de ese carrito_id) en vez de una. Simplificación
+  // deliberada vs. el camino de una sola clase: si el pago no vuelve
+  // "approved", NO se llama devolverHoras en loop para limpiar los
+  // pendiente_pago del carrito — quedan para expirar solos por TTL (30min),
+  // igual que ya pasa hoy con cualquier pendiente_pago abandonada. Ver
+  // docs/overnight-2026-08-10.md.
+  const [carritoPagoEstado, setCarritoPagoEstado] = useState(null); // null | {status, cantidad, ...}
+  useEffect(() => {
+    if (!user) return;
+    const params = new URLSearchParams(window.location.search);
+    const collectionStatus = params.get("collection_status");
+
+    const raw = localStorage.getItem("pc_carrito_pendiente");
+    if (!raw) return;
+    const pendiente = JSON.parse(raw);
+    localStorage.removeItem("pc_carrito_pendiente");
+    window.history.replaceState({}, "", window.location.pathname);
+
+    if (collectionStatus === "approved") {
+      setCarritoPagoEstado({ status: "confirmando", ...pendiente });
+      let intentos = 0;
+      const poll = setInterval(async () => {
+        intentos++;
+        try {
+          const reservas = await getReservasAlumno(user.id);
+          const delCarrito = (reservas || []).filter(r => String(r.carrito_id) === String(pendiente.carrito_id));
+          const confirmadas = delCarrito.filter(r => r.estado === "confirmada").length;
+          if (confirmadas >= pendiente.cantidad) {
+            clearInterval(poll);
+            setCarritoPagoEstado(s => s ? { ...s, status: "aprobado", confirmadas } : s);
+            setReservasAlumno(reservas);
+            getAlumno(user.id).then(d => { if (d?.saldo !== undefined) setSaldo(d.saldo); }).catch(() => {});
+          } else if (intentos >= 20) {
+            clearInterval(poll);
+            // Puede haber quedado alguna huérfana (cupo lleno / TTL justo vencido)
+            // — no se afirma éxito total si no llegaron todas.
+            setCarritoPagoEstado(s => s ? { ...s, status: confirmadas > 0 ? "parcial" : "aprobado", confirmadas } : s);
+            setReservasAlumno(reservas);
+          }
+        } catch { /* retry */ }
+      }, 3000);
+      return () => clearInterval(poll);
+    } else {
+      setCarritoPagoEstado({ status: "fallido", ...pendiente });
+    }
+  }, [user]);
+
   const nav = [
     {id:"inicio",icon:"🏠",label:"Inicio"},
     {id:"reservar",icon:"📅",label:"Reservar"},
@@ -2349,6 +2548,43 @@ function AppAlumno({ user, onLogout }) {
               <h3 style={{margin:0,color:DK,fontSize:19}}>Pago no completado</h3>
               <p style={{margin:0,fontSize:14,color:"#64748b"}}>El pago no se completó. No se reservó la clase. Podés intentarlo de nuevo.</p>
               <Btn onClick={() => setReservaPagoEstado(null)}>Entendido</Btn>
+            </>)}
+          </div>
+        </div>
+      )}
+
+      {/* Modal carrito pagado con MP (Fase C) — confirmando / aprobado / parcial / fallido */}
+      {carritoPagoEstado && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:50,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+          <div style={{background:"#fff",borderRadius:20,padding:"28px 22px",maxWidth:360,width:"100%",textAlign:"center",display:"flex",flexDirection:"column",gap:14,alignItems:"center"}}>
+            {carritoPagoEstado.status === "confirmando" && (<>
+              <div style={{width:64,height:64,borderRadius:"50%",background:"#eff6ff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:34}}>⏳</div>
+              <h3 style={{margin:0,color:DK,fontSize:19}}>Estamos confirmando tu pago…</h3>
+              <p style={{margin:0,fontSize:14,color:"#64748b"}}>{carritoPagoEstado.cantidad} clase{carritoPagoEstado.cantidad===1?"":"s"} del carrito</p>
+              <p style={{margin:0,fontSize:13,color:"#94a3b8"}}>Esto puede tardar unos segundos. No cierres esta pantalla.</p>
+            </>)}
+            {carritoPagoEstado.status === "aprobado" && (<>
+              <div style={{width:64,height:64,borderRadius:"50%",background:"#dcfce7",display:"flex",alignItems:"center",justifyContent:"center",fontSize:34}}>✓</div>
+              <h3 style={{margin:0,color:DK,fontSize:19}}>¡Clases reservadas!</h3>
+              <p style={{margin:0,fontSize:14,color:"#64748b"}}>Se confirmaron las {carritoPagoEstado.cantidad} clases del carrito.</p>
+              <Badge bg="#dcfce7" col="#15803d">Pago confirmado por Mercado Pago</Badge>
+              <Btn onClick={() => { setCarritoPagoEstado(null); setScreen("historial"); }}>Ver mis clases</Btn>
+            </>)}
+            {carritoPagoEstado.status === "parcial" && (<>
+              <div style={{width:64,height:64,borderRadius:"50%",background:"#fefce8",display:"flex",alignItems:"center",justifyContent:"center",fontSize:34}}>⚠️</div>
+              <h3 style={{margin:0,color:DK,fontSize:19}}>Se confirmaron algunas clases</h3>
+              <p style={{margin:0,fontSize:14,color:"#64748b"}}>
+                {carritoPagoEstado.confirmadas} de {carritoPagoEstado.cantidad} clases quedaron confirmadas.
+                Alguna puede haberse quedado sin cupo mientras se procesaba el pago — revisá tu Historial
+                y escribinos si hace falta ajustar algo.
+              </p>
+              <Btn onClick={() => { setCarritoPagoEstado(null); setScreen("historial"); }}>Ver mis clases</Btn>
+            </>)}
+            {carritoPagoEstado.status === "fallido" && (<>
+              <div style={{width:64,height:64,borderRadius:"50%",background:"#fff5f5",display:"flex",alignItems:"center",justifyContent:"center",fontSize:34}}>✕</div>
+              <h3 style={{margin:0,color:DK,fontSize:19}}>Pago no completado</h3>
+              <p style={{margin:0,fontSize:14,color:"#64748b"}}>El pago no se completó. No se reservó ninguna clase del carrito. Podés intentarlo de nuevo.</p>
+              <Btn onClick={() => setCarritoPagoEstado(null)}>Entendido</Btn>
             </>)}
           </div>
         </div>
