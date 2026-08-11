@@ -1,5 +1,5 @@
 ﻿import { useState, useEffect, useRef } from "react";
-import { login, getUsuarioActual, onAuthChange, logout, getAlumno, getCompras, getReservasAlumno, getProfes, getProfesAdmin, getDisponibilidad, getReservasProfe, marcarReserva, cargarDevolucion, reprogramarReserva, reprogramarReservaAlumno, setBloque, borrarBloque, getAlumnos, getTodasLasReservas, getFinanzasPeriodo, actualizarAlumno, actualizarProfe, actualizarMiPerfilProfe, actualizarPerfil, crearReserva, unirseGrupo, getGrupoInfo, verificarBloqueOcupado, getReservasDelDia, getMisReservasDelDia, getMensajes, enviarMensaje, suscribirMensajes, registrarAlumno, registrarProfe, enviarRecuperacion, actualizarPassword, onPasswordRecovery, crearResenia, getConfig, updateConfig, getPacks, actualizarPack, devolverHoras, marcarCompraFallida, addHorasAdmin, crearPreferencia, crearPreferenciaReserva, crearPreferenciaCarrito, contarMensajesNuevosProfe, subirAvatar } from "./db";
+import { login, getUsuarioActual, onAuthChange, logout, getAlumno, getCompras, getReservasAlumno, getProfes, getProfesAdmin, getDisponibilidad, getReservasProfe, marcarReserva, cargarDevolucion, reprogramarReserva, reprogramarReservaAlumno, setBloque, borrarBloque, getAlumnos, getTodasLasReservas, getFinanzasPeriodo, actualizarAlumno, actualizarProfe, actualizarMiPerfilProfe, actualizarPerfil, crearReserva, getGrupoInfo, verificarBloqueOcupado, getReservasDelDia, getMisReservasDelDia, getMensajes, enviarMensaje, suscribirMensajes, registrarAlumno, registrarProfe, enviarRecuperacion, actualizarPassword, onPasswordRecovery, crearResenia, getConfig, updateConfig, getPacks, actualizarPack, devolverHoras, marcarCompraFallida, addHorasAdmin, crearPreferencia, crearPreferenciaReserva, crearPreferenciaCarrito, contarMensajesNuevosProfe, subirAvatar } from "./db";
 
 // ════════════════════════════════════════════════════════════════════════════
 // PUNTOCLASES — APP UNIFICADA
@@ -415,7 +415,7 @@ function Reservar({ saldo, onReservar, profes, alumnoId, onNav, cfg }) {
             <span style={{fontSize:28}}>👥</span>
             <div>
               <p style={{margin:0,fontWeight:700,fontSize:15,color:DK}}>Grupal</p>
-              <p style={{margin:"4px 0 0",fontSize:13,color:INK_SOFT}}>Compartís la clase con otros alumnos. 20% más barata en saldo.</p>
+              <p style={{margin:"4px 0 0",fontSize:13,color:INK_SOFT}}>Compartís la clase con otros alumnos. 20% más barata — se paga directo, no se descuenta de tu saldo.</p>
             </div>
           </button>
           <Btn onClick={() => setPaso(1)} variant="secondary">← Volver</Btn>
@@ -673,7 +673,11 @@ function Reservar({ saldo, onReservar, profes, alumnoId, onNav, cfg }) {
               <span>📅 {fecha ? fmtLarga(fecha) : ""}</span>
               <span>🕐 {horaInicio} → {horaInicio ? t2str(tmins(horaInicio) + duracionHoras * 60) : ""} ({duracionHoras} hora{duracionHoras===1?"":"s"})</span>
               <span>📍 {modalidad} · Clase {tipo}</span>
-              <span style={{fontWeight:700,color:P}}>⏱ {costo===1?"Se descuenta":"Se descuentan"} {costo} hora{costo===1?"":"s"} de tu saldo (si alcanza)</span>
+              {tipo === "grupal" ? (
+                <span style={{fontWeight:700,color:P}}>💰 Se paga directo por Mercado Pago (no se descuenta de tu saldo)</span>
+              ) : (
+                <span style={{fontWeight:700,color:P}}>⏱ {costo===1?"Se descuenta":"Se descuentan"} {costo} hora{costo===1?"":"s"} de tu saldo (si alcanza)</span>
+              )}
             </div>
           </Card>
           <Card style={{background:"#fefce8",border:"1.5px solid #fde68a",padding:12}}>
@@ -755,11 +759,9 @@ function Reservar({ saldo, onReservar, profes, alumnoId, onNav, cfg }) {
                   try {
                     const hoy = toISO(new Date().getFullYear(), new Date().getMonth(), new Date().getDate());
                     if (fecha < hoy) { setErrorReserva("No podés reservar en una fecha pasada."); return; }
-                    if (tipo === "grupal") {
-                      await unirseGrupo({ profeId, materia, fecha, hora: horaInicio, horas: duracion, modalidad, necesidad });
-                    } else {
-                      await crearReserva({ profeId, materia, fecha, hora: horaInicio, horas: duracion, modalidad, tipo, alumnosGrupo: null, necesidad });
-                    }
+                    // Este botón solo se muestra para tipo !== "grupal" (ver el && de arriba) —
+                    // grupal siempre paga por MP, ver el botón de abajo. Regla 2026-08-11.
+                    await crearReserva({ profeId, materia, fecha, hora: horaInicio, horas: duracion, modalidad, tipo, alumnosGrupo: null, necesidad });
                     onReservar(costo);
                     setPaso(9);
                   } catch (err) {
@@ -1207,7 +1209,7 @@ function Comprar({ onComprar, onVolver, compras, cfg: cfgProp, packsDB }) {
           <p style={{margin:"0 0 6px",fontWeight:700,fontSize:13,color:"#15803d"}}>💡 ¿Cómo funciona el saldo?</p>
           <div style={{fontSize:12,color:"#374151",lineHeight:1.7}}>
             <div>• Clase <strong>individual</strong>: descuenta <strong>1 hs</strong> de saldo (${cfgEfectiva.precioInd.toLocaleString("es-AR")}/hs)</div>
-            <div>• Clase <strong>grupal</strong>: descuenta <strong>{cfgEfectiva.factorGrupal} hs</strong> de saldo — pagás ${precioGrpHora(cfgEfectiva).toLocaleString("es-AR")} en lugar de ${cfgEfectiva.precioInd.toLocaleString("es-AR")} ✓</div>
+            <div>• Clase <strong>grupal</strong>: se paga directo por Mercado Pago (no usa saldo) — ${precioGrpHora(cfgEfectiva).toLocaleString("es-AR")} en lugar de ${cfgEfectiva.precioInd.toLocaleString("es-AR")} ✓</div>
             <div>• Las horas vencen a los <strong>{cfgEfectiva.vencimiento||cfgEfectiva.vencimientoDias||CFG.vencimientoDias} días</strong> — el residual de grupales se acumula y no vence</div>
           </div>
         </div>
@@ -6231,7 +6233,7 @@ function OnboardingRegistroAlumno({ onTerminar }) {
             <p style={{margin:0,fontSize:14,color:"#64748b"}}>Revisá cómo funciona y aceptá los términos para crear tu cuenta.</p>
             <div style={{background:"#fff",borderRadius:12,padding:16,fontSize:13,color:"#374151",lineHeight:1.6,boxShadow:"0 1px 6px rgba(0,0,0,0.05)",display:"flex",flexDirection:"column",gap:8}}>
               <p style={{margin:0}}>• Comprás <strong>packs de horas</strong> que se descuentan de tu saldo al reservar.</p>
-              <p style={{margin:0}}>• Clase individual descuenta 1hs · grupal {CFG.factorGrupal}hs.</p>
+              <p style={{margin:0}}>• Clase individual descuenta 1hs de tu saldo · grupal se paga directo por Mercado Pago (no usa saldo).</p>
               <p style={{margin:0}}>• Las horas vencen a los <strong>{CFG.vencimientoDias} días</strong>.</p>
               <p style={{margin:0}}>• Cancelación con menos de 24hs: se retiene el <strong>{CFG.penalizacionPct}%</strong> de la hora.</p>
               <p style={{margin:0}}>• Las clases virtuales son individuales; las grupales son presenciales.</p>
