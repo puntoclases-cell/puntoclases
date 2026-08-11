@@ -97,3 +97,39 @@ solo cierra un hueco de API directa.
 | Alumno intenta editar el `profiles` de otro usuario | 0 filas (ya bloqueado antes por `auth.uid()=id` en `USING`, confirmado que sigue) |
 
 ---
+
+## FASE E — Editor de packs en Finanzas ✅ deploy directo
+
+**Commit**: `5030f0c` (migración `20260810000007_grant_packs_update_admin.sql`, aplicada).
+
+**Causa raíz confirmada antes de tocar nada**: `normCfg()` (línea ~4286) tenía
+el comentario "packs vienen de tabla separada (getPacks)" pero después
+asignaba `packs: CONFIG_INIT.packs` — el fallback hardcodeado, nunca los
+reales. Y `AppAdminMain` nunca llamaba `getPacks()` en absoluto (solo
+`AppAlumno` lo hacía, para `Comprar()`). Sumado a que `authenticated` no
+tenía ningún `GRANT` de escritura sobre `packs` — ni siquiera para admin — el
+botón "Guardar cambios" de esa sección literalmente no tenía ningún camino
+posible hacia la DB.
+
+**Fix**:
+- `GRANT UPDATE (descuento) ON packs TO authenticated` — columna mínima
+  (mismo criterio que `reservas`/`alumnos`), protegido por `packs_admin`
+  (ya existía, `mi_rol()='admin'` en `USING` y `WITH CHECK`, sin cambios).
+- `db.js`: nueva `actualizarPack(packId, cambios)` — invalida el cache de
+  `getPacks()` al guardar, para que `Comprar()` del alumno vea el precio
+  nuevo sin esperar el TTL de 5min.
+- `AppAdminMain`: ahora carga packs reales con `getPacks({skipCache:true})`
+  en vez de depender del fallback.
+- `Finanzas.guardar()`: además de `updateConfig`, persiste el `descuento` de
+  cada pack en paralelo (`Promise.allSettled`), avisa si alguno falla sin
+  romper el resto.
+
+### Rollback test
+
+| Caso | Resultado |
+|---|---|
+| Admin cambia `descuento` de un pack | ✅ persiste (confirmado leyendo la tabla real después) |
+| Admin intenta cambiar otra columna (`activo`) | 🔒 `permission denied` — no está en el `GRANT` |
+| Alumno intenta cambiar `descuento` | 🔒 0 filas (bloqueado por `packs_admin`) |
+
+---
