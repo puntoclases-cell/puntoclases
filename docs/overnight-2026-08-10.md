@@ -255,3 +255,58 @@ through completo del wizard en un navegador. Eso queda para tu prueba local.
    front no mande un carrito gigante a MP) — cambialo si te parece mal.
 
 ---
+
+## FASE F — Limpieza de compras pendientes colgadas ✅ deploy directo (opcional, hecha igual)
+
+**Commit**: `788c9e9` (migración `20260810000009_marcar_compra_fallida.sql`, aplicada).
+
+Ya documentado en CLAUDE.md ("A futuro"): cada pago que terminaba en
+`pending`/`failure` dejaba una fila en `compras` con `estado_pago='pendiente'`
+que nunca se actualizaba — no rompía nada (`getCompras` filtra `'aprobado'`),
+pero acumulaba basura.
+
+**Fix**: RPC `marcar_compra_fallida(p_compra_id)`, `SECURITY DEFINER` — valida
+dueño, solo transiciona `pendiente → fallido` (nunca pisa un `aprobado` real,
+por si el webhook ganó la carrera con el redirect del alumno). `crearPreferencia()`
+ahora guarda `compra_id` en `pc_compra_pendiente` (localStorage) antes de
+redirigir a MP — antes solo guardaba `horas`/`precio`. Al volver con `failure`
+real (no con `pending` — todavía puede aprobarse después) se llama la RPC.
+Solo higiene, no cambia comportamiento de negocio ni toca saldo.
+
+### Rollback test
+
+| Caso | Resultado |
+|---|---|
+| Dueño marca su compra `pendiente` como fallida | ✅ pasa a `fallido` |
+| Otro alumno intenta marcar una compra ajena | 🔒 `No autorizado.` |
+| Intentar marcar una ya `aprobado` como fallida | ✅ no la toca, sigue `aprobado` |
+| `compra_id` inexistente | ✅ no tira error (idempotente) |
+| `anon`/`PUBLIC` no pueden ejecutar la RPC | ✅ confirmado |
+
+---
+
+## Resumen de la noche
+
+| Fase | Estado | Dónde |
+|---|---|---|
+| B — reprogramar del alumno | ✅ en prod | `main`, migración aplicada |
+| D — `profiles.mail`/`creado_en` | ✅ en prod | `main`, migración aplicada |
+| E — editor de packs persiste | ✅ en prod | `main`, migración aplicada |
+| C — carrito de reservas múltiples | 🚧 WIP, para revisar | `feature/carrito` (pusheada, no mergeada), nada en prod |
+| F — limpieza de compras colgadas | ✅ en prod | `main`, migración aplicada |
+
+Todo lo marcado ✅ pasó por `ROLLBACK` test contra prod real antes de
+aplicarse, y se verificó post-apply contra el estado real ya aplicado (no
+solo simulado) en B, D y E — el detalle de cada verificación está en su
+sección de arriba y en `CLAUDE.md`. Fase C es la única que no tocó nada de
+producción — motivo explícito del pedido ("queda para que yo revise antes de
+que toque producción real").
+
+Nada quedó "genuinamente destructivo o ambiguo" sin marcar — las decisiones
+de negocio sin resolver (todas dentro de Fase C, ver arriba) están anotadas,
+no adivinadas. No hubo ningún punto donde me haya bloqueado por completo:
+cuando encontré el bug del `CREATE OR REPLACE` con parámetro nuevo (Fase C),
+lo diagnostiqué con el propio `ROLLBACK` test, lo corregí, y seguí.
+
+Buen día — quedo atento a tu revisión de `feature/carrito` y a las 3 dudas de
+negocio de esa fase.
